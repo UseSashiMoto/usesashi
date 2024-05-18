@@ -18,3 +18,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     });
   }
 });
+chrome.runtime.onInstalled.addListener(() => {
+  console.log('Extension Installed');
+});

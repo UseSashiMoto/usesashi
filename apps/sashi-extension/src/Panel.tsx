@@ -1,19 +1,11 @@
 import React, { ReactElement, useEffect, useState } from 'react';
 import { APP_COLLAPSE_WIDTH, APP_EXTEND_WIDTH, URLS } from './const';
 import classNames from 'classnames';
-import Button from './Button';
+import Button from './components/Button';
 
-export default function Panel({
-  onWidthChange,
-  initialEnabled,
-}: {
-  onWidthChange: (value: number) => void;
-  initialEnabled: boolean;
-}): ReactElement {
+export default function Panel({ onWidthChange, initialEnabled }: { onWidthChange: (value: number) => void, initialEnabled: boolean }): ReactElement {
   const [enabled, setEnabled] = useState(initialEnabled);
-  const [sidePanelWidth, setSidePanelWidth] = useState(
-    enabled ? APP_EXTEND_WIDTH : APP_COLLAPSE_WIDTH
-  );
+  const [sidePanelWidth, setSidePanelWidth] = useState(enabled ? APP_EXTEND_WIDTH: APP_COLLAPSE_WIDTH);
   const [tabIndex, setTabIndex] = useState(0);
 
   function handleOnToggle(enabled: boolean) {
@@ -21,7 +13,7 @@ export default function Panel({
     setSidePanelWidth(value);
     onWidthChange(value);
 
-    window['chrome'].storage?.local.set({ enabled });
+    window['chrome'].storage?.local.set({enabled});
   }
 
   function openPanel(force?: boolean) {
@@ -39,24 +31,18 @@ export default function Panel({
       className="absolute top-0 right-0 bottom-0 z-max bg-[#F5F8FA] ease-in-out duration-300 overflow-hidden"
     >
       <iframe
-        className={classNames(
-          'absolute w-full h-full border-none ease-linear overflow-hidden',
-          {
-            'opacity-0': !enabled,
-            '-z-10': !enabled,
-          }
-        )}
+        className={classNames('absolute w-full h-full border-none ease-linear overflow-hidden', {
+          'opacity-0': !enabled,
+          '-z-10': !enabled,
+        })}
         title={URLS[tabIndex].name}
         src={URLS[tabIndex].url}
       />
       <div
-        className={classNames(
-          'absolute h-full flex border-none flex-col ease-linear w-[50px] space-y-3 p-1',
-          {
-            'opacity-0': enabled,
-            '-z-10': enabled,
-          }
-        )}
+        className={classNames('absolute h-full flex border-none flex-col ease-linear w-[50px] space-y-3 p-1', {
+          'opacity-0': enabled,
+          '-z-10': enabled,
+        })}
       >
         {URLS.map(({ name, image }, _index) => {
           function onMenuClick(index: number) {
@@ -64,11 +50,7 @@ export default function Panel({
             openPanel(true);
           }
           return (
-            <Button
-              active={_index === tabIndex}
-              onClick={() => onMenuClick(_index)}
-              className="py-2"
-            >
+            <Button active={_index === tabIndex} onClick={() => onMenuClick(_index)} className="py-2">
               <img src={image} className="w-full" />
             </Button>
           );

@@ -2,7 +2,7 @@ import 'react-app-polyfill/ie11';
 
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import Panel from './App';
+import Panel from './Panel';
 import { APP_COLLAPSE_WIDTH, APP_EXTEND_WIDTH } from './const';
 
 async function loadChromeStorage() {
@@ -21,24 +21,19 @@ async function loadChromeStorage() {
 }
 
 async function init() {
-  console.log('sachi extension loaded');
   const initialEnabled = await loadChromeStorage();
 
   // Create html tag wrapper
   const htmlWrapper = document.querySelectorAll('html')[0];
   htmlWrapper.id = 'original-html-wrapper';
-  //@ts-ignore
-  htmlWrapper.style['margin-right'] =
-    `${initialEnabled ? APP_EXTEND_WIDTH : APP_COLLAPSE_WIDTH}px`;
-
+  htmlWrapper.style['margin-right'] = `${initialEnabled ? APP_EXTEND_WIDTH : APP_COLLAPSE_WIDTH}px`;
   htmlWrapper.className = 'ease-in-out duration-300';
 
   // Create div wrapper
   const body = document.body;
   const bodyWrapper = document.createElement('div');
   bodyWrapper.id = 'original-body-wrapper';
-  bodyWrapper.className =
-    'h-full w-full overflow-auto relative ease-in-out duration-300';
+  bodyWrapper.className = 'h-full w-full overflow-auto relative ease-in-out duration-300';
 
   // Move the body's children into this wrapper
   while (body.firstChild) {
@@ -56,30 +51,18 @@ async function init() {
   // create react app
   const app = document.createElement('div');
   app.id = 'side-bar-extension-root';
-  app.className =
-    'z-max p-0 m-0 ease-in-out duration-300 fixed flex top-0 right-0 bottom-0 flex-1 overflow-hidden';
-  //@ts-ignore
-
-  app.style['max-width'] =
-    `${initialEnabled ? APP_EXTEND_WIDTH : APP_COLLAPSE_WIDTH}px`;
+  app.className = 'z-max p-0 m-0 ease-in-out duration-300 fixed flex top-0 right-0 bottom-0 flex-1 overflow-hidden';
+  app.style['max-width'] = `${initialEnabled ? APP_EXTEND_WIDTH : APP_COLLAPSE_WIDTH}px`;
 
   body.appendChild(app);
-  const root = createRoot(app);
+  const root = createRoot(app!);
 
-  //@ts-ignore
-  function onSidePanelWidthChange(value) {
-    //@ts-ignore
+  function onSidePanelWidthChange(value: number) {
     app.style['max-width'] = `${value}px`;
-    //@ts-ignore
     htmlWrapper.style['margin-right'] = `${value}px`;
   }
 
-  root.render(
-    <Panel
-      onWidthChange={onSidePanelWidthChange}
-      initialEnabled={initialEnabled}
-    />
-  );
+  root.render(<Panel onWidthChange={onSidePanelWidthChange} initialEnabled={initialEnabled} />);
 }
 
 init();
