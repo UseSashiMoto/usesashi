@@ -9,7 +9,7 @@ const PATHS = require('./paths.js');
 const config = (env, argv) =>
   merge(common, {
     entry: {
-      sidepanel: PATHS.src + '/sidepanel.ts',
+      sidepanel: PATHS.src + 'frontend/index.tsx',
       background: PATHS.src + '/background.ts',
     },
     devtool: argv.mode === 'production' ? false : 'source-map',

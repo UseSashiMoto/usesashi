@@ -2,6 +2,7 @@
 
 const CopyWebpackPlugin = require('copy-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
+const path = require("path");
 
 const PATHS = require('./paths');
 
@@ -69,7 +70,8 @@ const common = {
   },
   resolve: {
     // Help webpack resolve these extensions in order
-    extensions: ['.ts', '.js'],
+    modules: [path.resolve(__dirname, "src"), "node_modules"],
+    extensions: ['.ts', '.js', '.tsx', '.jsx'],
   },
   plugins: [
     // Copy static assets from `public` folder to `build` folder
