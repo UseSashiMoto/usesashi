@@ -1,0 +1,36 @@
+{
+  "name": "sashi-react-hooks",
+  "version": "1.0.0",
+  "description": "",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/dynamic-hooks.git"
+  },
+  "keywords": [
+    "react",
+    "hooks",
+    "dynamic",
+    "real-time",
+    "extension"
+  ],
+  "author": "Your Name <your.email@example.com>",
+  "license": "MIT",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublish": "yarn build"
+  },
+  "peerDependencies": {
+    "react": "^17.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^4.0.0",
+    "axios": "^0.21.1",
+    "@types/react": "^17.0.0",
+    "@types/node": "^14.0.0"
+  }
+}
