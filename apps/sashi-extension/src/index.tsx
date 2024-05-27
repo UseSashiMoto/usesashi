@@ -5,6 +5,9 @@ import { createRoot } from 'react-dom/client';
 import Panel from './Panel';
 import { APP_COLLAPSE_WIDTH, APP_EXTEND_WIDTH } from './const';
 
+
+/// <reference types="chrome" />
+
 async function loadChromeStorage() {
   let initialEnabled = true;
   try {
@@ -19,6 +22,58 @@ async function loadChromeStorage() {
 
   return initialEnabled;
 }
+
+
+function sendMessageToBackgroundScript(message:string | Record<string, any>) {
+  if (chrome && chrome.runtime && chrome.runtime.sendMessage) {
+    chrome.runtime.sendMessage({}, (response) => {
+      console.log("Response from background script:", response);
+    });
+  } else {
+    console.error("chrome.runtime.sendMessage is not available");
+  }
+}
+
+const secretKey = 'your-secret-key';
+
+// Function to validate the signed key
+function validateSignedKey(key: string, signature: string) {
+  //@ts-ignore
+  const crypto = window.crypto || window.msCrypto; // for IE11
+  const encoder = new TextEncoder();
+  const keyData = encoder.encode(secretKey);
+  return crypto.subtle.importKey('raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+    .then(cryptoKey => {
+      const data = encoder.encode(key);
+      return crypto.subtle.sign('HMAC', cryptoKey, data);
+    })
+    .then(signatureArrayBuffer => {
+      const signatureHex = Array.from(new Uint8Array(signatureArrayBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+      return signatureHex === signature;
+    });
+}
+
+
+
+window.onload = async () => {
+  const scriptTag = document.querySelector('script[src*="usesashi.com/start.js"]');
+  if (scriptTag) {
+    const url = new URL(scriptTag.src);
+
+    const key = url.searchParams.get('key');
+    const signature = url.searchParams.get('signature');
+    console.log("Query parameter key:", key);
+    console.log("Query parameter signature:", signature);
+    if (key && signature) {
+      const isValid = await validateSignedKey(key, signature)
+      if(isValid) {
+        sendMessageToBackgroundScript({action: 'get-config'})
+        init();
+      }
+    }
+  }
+};
+
 
 async function init() {
   const initialEnabled = await loadChromeStorage();
@@ -65,4 +120,4 @@ async function init() {
   root.render(<Panel onWidthChange={onSidePanelWidthChange} initialEnabled={initialEnabled} />);
 }
 
-init();
+//init();
