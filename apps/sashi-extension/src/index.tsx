@@ -5,7 +5,6 @@ import { createRoot } from 'react-dom/client';
 import Panel from './Panel';
 import { APP_COLLAPSE_WIDTH, APP_EXTEND_WIDTH } from './const';
 
-
 /// <reference types="chrome" />
 
 async function loadChromeStorage() {
