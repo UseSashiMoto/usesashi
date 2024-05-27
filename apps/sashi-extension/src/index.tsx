@@ -25,6 +25,16 @@ async function loadChromeStorage() {
 }
 
 
+function sendMessageToBackgroundScript(message:string | Record<string, any>) {
+  if (chrome && chrome.runtime && chrome.runtime.sendMessage) {
+    chrome.runtime.sendMessage({}, (response) => {
+      console.log("Response from background script:", response);
+    });
+  } else {
+    console.error("chrome.runtime.sendMessage is not available");
+  }
+}
+
 const secretKey = 'your-secret-key';
 
 // Function to validate the signed key
@@ -59,11 +69,10 @@ window.onload = async () => {
     console.log("Query parameter key:", key);
     console.log("Query parameter signature:", signature);
     if (key && signature) {
-
       const isValid = await validateSignedKey(key, signature)
       if(isValid) {
+        sendMessageToBackgroundScript({action: 'get-config'})
         init();
-
       }
     }
   }
