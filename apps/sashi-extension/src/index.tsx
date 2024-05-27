@@ -6,7 +6,6 @@ import Panel from './Panel';
 import { APP_COLLAPSE_WIDTH, APP_EXTEND_WIDTH } from './const';
 
 
-console.log("WTF WHERE IS THIS")
 /// <reference types="chrome" />
 
 async function loadChromeStorage() {
@@ -57,12 +56,9 @@ function validateSignedKey(key: string, signature: string) {
 
 
 window.onload = async () => {
-  console.log("Window onload event fired");
   const scriptTag = document.querySelector('script[src*="usesashi.com/start.js"]');
-  console.log("scriptTag", scriptTag);
   if (scriptTag) {
     const url = new URL(scriptTag.src);
-    console.log("Window onload url", url);
 
     const key = url.searchParams.get('key');
     const signature = url.searchParams.get('signature');
