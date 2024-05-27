@@ -8,7 +8,11 @@ const port = 3000
 app.use(express.json())
 
 // Use sashi-middleware
-app.use("/api", sashiMiddleware())
+app.use("/api", sashiMiddleware({
+    databaseUrl: "",
+    redisUrl: "",
+    accountIdHeader: ""
+}))
 
 // Simple route to check server is running
 app.get("/", (req, res) => {

@@ -1,36 +1,22 @@
 # Sashi starter
 
-This is an official starter Turborepo.
+Admin tools for developers
 
-## Using this example
+## Features
 
-Run the following command:
+- Control runtime variables 
 
-```sh
-npx create-turbo@latest
-```
-
-## What's inside?
-
-This Turborepo includes the following packages/apps:
 
 ### Apps and Packages
 
 - `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
+- `sashi-extension`: chrome extension to admin app
+- `sashi-react-hooks`: react hooks to embed runtime variables, these can be control via the chrome extension and middleware
+- `sashi-server`: server for distrbuting admin control commands and runtime configs
+
 
 Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
 
-### Utilities
-
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
 
 ### Build
 
@@ -38,7 +24,7 @@ To build all apps and packages, run the following command:
 
 ```
 cd my-turborepo
-pnpm build
+yarn build
 ```
 
 ### Develop
@@ -47,5 +33,28 @@ To develop all apps and packages, run the following command:
 
 ```
 cd my-turborepo
-pnpm dev
+yarn dev
 ```
+
+### How to Use This Middleware in an Application
+
+To use this middleware in an application, the consumer would set it up as follows:
+
+```typescript
+import express from 'express';
+import { PrismaClient } from '@prisma/client';
+import createMiddleware from './path/to/middleware';
+
+const prismaClient = new PrismaClient();
+const app = express();
+const port = 3000;
+
+app.use('/api', createMiddleware({
+    prismaClient: prismaClient,
+    redisUrl: 'redis://localhost:6379',
+    accountIdHeader: 'x-account-id'
+}));
+
+app.listen(port, () => {
+    console.log(`Server running at http://localhost:${port}`);
+});

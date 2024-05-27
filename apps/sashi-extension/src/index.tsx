@@ -5,6 +5,10 @@ import { createRoot } from 'react-dom/client';
 import Panel from './Panel';
 import { APP_COLLAPSE_WIDTH, APP_EXTEND_WIDTH } from './const';
 
+
+console.log("WTF WHERE IS THIS")
+/// <reference types="chrome" />
+
 async function loadChromeStorage() {
   let initialEnabled = true;
   try {
@@ -19,6 +23,52 @@ async function loadChromeStorage() {
 
   return initialEnabled;
 }
+
+
+const secretKey = 'your-secret-key';
+
+// Function to validate the signed key
+function validateSignedKey(key: string, signature: string) {
+  //@ts-ignore
+  const crypto = window.crypto || window.msCrypto; // for IE11
+  const encoder = new TextEncoder();
+  const keyData = encoder.encode(secretKey);
+  return crypto.subtle.importKey('raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+    .then(cryptoKey => {
+      const data = encoder.encode(key);
+      return crypto.subtle.sign('HMAC', cryptoKey, data);
+    })
+    .then(signatureArrayBuffer => {
+      const signatureHex = Array.from(new Uint8Array(signatureArrayBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+      return signatureHex === signature;
+    });
+}
+
+
+
+window.onload = async () => {
+  console.log("Window onload event fired");
+  const scriptTag = document.querySelector('script[src*="usesashi.com/start.js"]');
+  console.log("scriptTag", scriptTag);
+  if (scriptTag) {
+    const url = new URL(scriptTag.src);
+    console.log("Window onload url", url);
+
+    const key = url.searchParams.get('key');
+    const signature = url.searchParams.get('signature');
+    console.log("Query parameter key:", key);
+    console.log("Query parameter signature:", signature);
+    if (key && signature) {
+
+      const isValid = await validateSignedKey(key, signature)
+      if(isValid) {
+        init();
+
+      }
+    }
+  }
+};
+
 
 async function init() {
   const initialEnabled = await loadChromeStorage();
@@ -65,4 +115,4 @@ async function init() {
   root.render(<Panel onWidthChange={onSidePanelWidthChange} initialEnabled={initialEnabled} />);
 }
 
-init();
+//init();
