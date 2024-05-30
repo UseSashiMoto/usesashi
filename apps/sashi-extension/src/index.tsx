@@ -1,11 +1,10 @@
 import 'react-app-polyfill/ie11';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import Panel from './Panel';
 import { APP_COLLAPSE_WIDTH, APP_EXTEND_WIDTH } from './const';
 import { secretKey } from './configs/configs';
-import '@park-ui/tailwind-plugin/preset.css'
 
 console.log("Sashi Extension Loaded");
 /// <reference types="chrome" />
@@ -26,18 +25,6 @@ async function loadChromeStorage() {
 }
 
 
-function sendMessageToBackgroundScript(message:string | Record<string, any>) {
-  if (chrome && chrome.runtime && chrome.runtime.sendMessage) {
-    chrome.runtime.sendMessage(message, (response) => {
-      console.log("Response from background script:", response);
-      if(response?.action === 'set-config') {
-        // Do something with the response
-      }
-    });
-  } else {
-    console.error("chrome.runtime.sendMessage is not available");
-  }
-}
 
 
 // Function to validate the signed key
@@ -60,7 +47,21 @@ function validateSignedKey(key: string, signature: string) {
 
 
 window.onload = async () => {
+  if(await validateScriptTag()){
+
+    const url = new URL(scriptTag.src);
+
+    const key = url.searchParams.get('key');
+    const signature = url.searchParams.get('signature');
+    init(key, signature);
+
+  }
+};
+
+
+async function validateScriptTag() {
   const scriptTag = document.querySelector('script[src*="usesashi.com/start.js"]');
+
   if (scriptTag) {
     const url = new URL(scriptTag.src);
 
@@ -69,16 +70,41 @@ window.onload = async () => {
     console.log("Query parameter key:", key);
     console.log("Query parameter signature:", signature);
     if (key && signature) {
-      const isValid = await validateSignedKey(key, signature)
-      if(isValid) {
-        
-        sendMessageToBackgroundScript({action: 'get-config', payload: {key, signature}})
-        init(key, signature);
-      }
+      const isValid = await validateSignedKey(key, signature);
+
+      return isValid
+      
     }
   }
-};
 
+  return false
+}
+
+const App = ({ sashiKey, sashiSignature, initialEnabled, onSidePanelWidthChange }: { onSidePanelWidthChange: (value: number) => void, initialEnabled: boolean, sashiSignature: string, sashiKey:string }) => {
+  const [enabled, setEnabled] = useState(initialEnabled);
+
+  useEffect(() => {
+    const handleMessage = (message: any) => {
+      if (message.action === 'disable') {
+        setEnabled(false);
+      }
+    };
+
+    chrome.runtime.onMessage.addListener(handleMessage);
+
+    return () => {
+      chrome.runtime.onMessage.removeListener(handleMessage);
+    };
+  }, []);
+
+  if (!enabled) {
+    return null; // Or any other logic to stop rendering components
+  }
+
+  return (
+    <Panel sashiKey={sashiKey} sashiSignature={sashiSignature} onWidthChange={onSidePanelWidthChange} initialEnabled={initialEnabled} />
+  );
+};
 
 async function init(key: string, signature: string) {
   const initialEnabled = await loadChromeStorage();
@@ -122,7 +148,7 @@ async function init(key: string, signature: string) {
     htmlWrapper.style['margin-right'] = `${value}px`;
   }
 
-  root.render(<Panel sashiKey={key} sashiSignature={signature} onWidthChange={onSidePanelWidthChange} initialEnabled={initialEnabled} />);
+  root.render(<App sashiKey={key} sashiSignature={signature} onSidePanelWidthChange={onSidePanelWidthChange} initialEnabled={initialEnabled} />);
 }
 
 //init();
