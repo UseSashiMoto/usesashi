@@ -1,0 +1,15 @@
+{
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": "explicit",
+    "source.fixAll.eslint": "explicit"
+  },
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "i18n-ally.localesPaths": ["public/locales"],
+  "i18n-ally.keystyle": "nested",
+  "[prisma]": {
+    "editor.defaultFormatter": "Prisma.prisma"
+  },
+  "eslint.rules.customizations": [{ "rule": "*", "severity": "warn" }],
+  "typescript.tsdk": "node_modules/typescript/lib"
+}

@@ -1,6 +1,10 @@
 {
   "name": "usesashi_app",
   "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
@@ -16,9 +20,6 @@
   "engines": {
     "node": ">=18"
   },
-  "packageManager": "yarn@1.22.19",
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ]
+  "packageManager": "yarn@1.22.19"
+ 
 }

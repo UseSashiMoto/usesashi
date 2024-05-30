@@ -4,7 +4,10 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import Panel from './Panel';
 import { APP_COLLAPSE_WIDTH, APP_EXTEND_WIDTH } from './const';
+import { secretKey } from './configs/configs';
+import '@park-ui/tailwind-plugin/preset.css'
 
+console.log("Sashi Extension Loaded");
 /// <reference types="chrome" />
 
 async function loadChromeStorage() {
@@ -25,15 +28,17 @@ async function loadChromeStorage() {
 
 function sendMessageToBackgroundScript(message:string | Record<string, any>) {
   if (chrome && chrome.runtime && chrome.runtime.sendMessage) {
-    chrome.runtime.sendMessage({}, (response) => {
+    chrome.runtime.sendMessage(message, (response) => {
       console.log("Response from background script:", response);
+      if(response?.action === 'set-config') {
+        // Do something with the response
+      }
     });
   } else {
     console.error("chrome.runtime.sendMessage is not available");
   }
 }
 
-const secretKey = 'your-secret-key';
 
 // Function to validate the signed key
 function validateSignedKey(key: string, signature: string) {
@@ -66,15 +71,16 @@ window.onload = async () => {
     if (key && signature) {
       const isValid = await validateSignedKey(key, signature)
       if(isValid) {
-        sendMessageToBackgroundScript({action: 'get-config'})
-        init();
+        
+        sendMessageToBackgroundScript({action: 'get-config', payload: {key, signature}})
+        init(key, signature);
       }
     }
   }
 };
 
 
-async function init() {
+async function init(key: string, signature: string) {
   const initialEnabled = await loadChromeStorage();
 
   // Create html tag wrapper
@@ -116,7 +122,7 @@ async function init() {
     htmlWrapper.style['margin-right'] = `${value}px`;
   }
 
-  root.render(<Panel onWidthChange={onSidePanelWidthChange} initialEnabled={initialEnabled} />);
+  root.render(<Panel sashiKey={key} sashiSignature={signature} onWidthChange={onSidePanelWidthChange} initialEnabled={initialEnabled} />);
 }
 
 //init();

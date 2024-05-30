@@ -3,10 +3,17 @@ import { APP_COLLAPSE_WIDTH, APP_EXTEND_WIDTH, URLS } from './const';
 import classNames from 'classnames';
 import Button from './components/Button';
 
-export default function Panel({ onWidthChange, initialEnabled }: { onWidthChange: (value: number) => void, initialEnabled: boolean }): ReactElement {
+interface Config {
+  key: string;
+  value: string;
+  accountid: string;
+}
+
+export default function Panel({ onWidthChange, initialEnabled, sashiKey, sashiSignature }: { onWidthChange: (value: number) => void, initialEnabled: boolean, sashiSignature: string, sashiKey:string }): ReactElement {
   const [enabled, setEnabled] = useState(initialEnabled);
   const [sidePanelWidth, setSidePanelWidth] = useState(enabled ? APP_EXTEND_WIDTH: APP_COLLAPSE_WIDTH);
   const [tabIndex, setTabIndex] = useState(0);
+  const [config, setConfig] = useState<Config[]>([]);
 
   function handleOnToggle(enabled: boolean) {
     const value = enabled ? APP_EXTEND_WIDTH : APP_COLLAPSE_WIDTH;
@@ -21,6 +28,30 @@ export default function Panel({ onWidthChange, initialEnabled }: { onWidthChange
     setEnabled(newValue);
     handleOnToggle(newValue);
   }
+
+  function sendMessageToBackgroundScript(message:string | Record<string, any>) {
+    return new Promise<Record<string, any> >(resolve => {
+      if (chrome && chrome.runtime && chrome.runtime.sendMessage) {
+        chrome.runtime.sendMessage(message, (response: Record<string, any>) => {
+          console.log("Response from background script:", response);
+          resolve(response);
+        });
+      } else {
+        console.error("chrome.runtime.sendMessage is not available");
+      }
+    })
+
+  }
+
+  useEffect(() => {
+    const getConfig = async () => {
+      const response = await sendMessageToBackgroundScript({action: 'get-config', payload: {key: sashiKey, signature: sashiSignature}})
+      setConfig(response?.payload?.config ?? [])
+    }
+
+    getConfig()
+
+  },[])
 
   return (
     <div
@@ -44,17 +75,11 @@ export default function Panel({ onWidthChange, initialEnabled }: { onWidthChange
           '-z-10': enabled,
         })}
       >
-        {URLS.map(({ name, image }, _index) => {
-          function onMenuClick(index: number) {
-            setTabIndex(index);
-            openPanel(true);
-          }
-          return (
-            <Button active={_index === tabIndex} onClick={() => onMenuClick(_index)} className="py-2">
-              <img src={image} className="w-full" />
-            </Button>
-          );
-        })}
+        {enabled && (
+          <div className='w-full border-'>
+
+          </div>
+        )}
       </div>
       <div className="absolute bottom-0 left-0 w-[50px] z-10 flex justify-center items-center p-1">
         <Button active={enabled} onClick={() => openPanel()}>
