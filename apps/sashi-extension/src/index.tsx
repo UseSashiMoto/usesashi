@@ -1,12 +1,12 @@
 import 'react-app-polyfill/ie11';
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { createRoot } from 'react-dom/client';
-import Panel from './Panel';
-import { APP_COLLAPSE_WIDTH, APP_EXTEND_WIDTH } from './const';
+import { App } from './App';
 import { secretKey } from './configs/configs';
+import { APP_COLLAPSE_WIDTH, APP_EXTEND_WIDTH } from './const';
 
-console.log("Sashi Extension Loaded");
+console.log('Sashi Extension Loaded');
 /// <reference types="chrome" />
 
 async function loadChromeStorage() {
@@ -24,40 +24,42 @@ async function loadChromeStorage() {
   return initialEnabled;
 }
 
-
-
-
 // Function to validate the signed key
 function validateSignedKey(key: string, signature: string) {
   //@ts-ignore
   const crypto = window.crypto || window.msCrypto; // for IE11
   const encoder = new TextEncoder();
   const keyData = encoder.encode(secretKey);
-  return crypto.subtle.importKey('raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
-    .then(cryptoKey => {
+  return crypto.subtle
+    .importKey('raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+    .then((cryptoKey) => {
       const data = encoder.encode(key);
       return crypto.subtle.sign('HMAC', cryptoKey, data);
     })
-    .then(signatureArrayBuffer => {
-      const signatureHex = Array.from(new Uint8Array(signatureArrayBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+    .then((signatureArrayBuffer) => {
+      const signatureHex = Array.from(new Uint8Array(signatureArrayBuffer))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
       return signatureHex === signature;
     });
 }
 
+chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
+  console.log('Message received in Content Script', message);
+  if (message.action === 'activate') {
+    console.log('Content script is running on the active tab!');
+    // Your content script logic here
+    if (await validateScriptTag()) {
+      const scriptTag = document.querySelector('script[src*="usesashi.com/start.js"]');
 
+      const url = new URL(scriptTag.src);
 
-window.onload = async () => {
-  if(await validateScriptTag()){
-
-    const url = new URL(scriptTag.src);
-
-    const key = url.searchParams.get('key');
-    const signature = url.searchParams.get('signature');
-    init(key, signature);
-
+      const key = url.searchParams.get('key') as string;
+      const signature = url.searchParams.get('signature') as string;
+      init(key, signature);
+    }
   }
-};
-
+});
 
 async function validateScriptTag() {
   const scriptTag = document.querySelector('script[src*="usesashi.com/start.js"]');
@@ -67,44 +69,17 @@ async function validateScriptTag() {
 
     const key = url.searchParams.get('key');
     const signature = url.searchParams.get('signature');
-    console.log("Query parameter key:", key);
-    console.log("Query parameter signature:", signature);
+    console.log('Query parameter key:', key);
+    console.log('Query parameter signature:', signature);
     if (key && signature) {
       const isValid = await validateSignedKey(key, signature);
 
-      return isValid
-      
+      return isValid;
     }
   }
 
-  return false
+  return false;
 }
-
-const App = ({ sashiKey, sashiSignature, initialEnabled, onSidePanelWidthChange }: { onSidePanelWidthChange: (value: number) => void, initialEnabled: boolean, sashiSignature: string, sashiKey:string }) => {
-  const [enabled, setEnabled] = useState(initialEnabled);
-
-  useEffect(() => {
-    const handleMessage = (message: any) => {
-      if (message.action === 'disable') {
-        setEnabled(false);
-      }
-    };
-
-    chrome.runtime.onMessage.addListener(handleMessage);
-
-    return () => {
-      chrome.runtime.onMessage.removeListener(handleMessage);
-    };
-  }, []);
-
-  if (!enabled) {
-    return null; // Or any other logic to stop rendering components
-  }
-
-  return (
-    <Panel sashiKey={sashiKey} sashiSignature={sashiSignature} onWidthChange={onSidePanelWidthChange} initialEnabled={initialEnabled} />
-  );
-};
 
 async function init(key: string, signature: string) {
   const initialEnabled = await loadChromeStorage();
@@ -148,7 +123,7 @@ async function init(key: string, signature: string) {
     htmlWrapper.style['margin-right'] = `${value}px`;
   }
 
-  root.render(<App sashiKey={key} sashiSignature={signature} onSidePanelWidthChange={onSidePanelWidthChange} initialEnabled={initialEnabled} />);
+  root.render(
+    <App sashiKey={key} sashiSignature={signature} onWidthChange={onSidePanelWidthChange} initialEnabled={true} />
+  );
 }
-
-//init();

@@ -1,9 +1,9 @@
-import React, { ReactElement, useEffect, useState } from 'react';
-import { APP_COLLAPSE_WIDTH, APP_EXTEND_WIDTH } from './const';
 import classNames from 'classnames';
-import Button from './components/Button';
+import React, { ReactElement, useEffect, useState } from 'react';
 import KeyValueList from './KeyValueList';
-import '@park-ui/tailwind-plugin/preset.css'
+import Button from './components/Button';
+import { APP_COLLAPSE_WIDTH, APP_EXTEND_WIDTH } from './const';
+//import '@park-ui/tailwind-plugin/preset.css'
 
 interface Config {
   key: string;
@@ -11,9 +11,19 @@ interface Config {
   accountid: string;
 }
 
-export default function Panel({ onWidthChange, initialEnabled, sashiKey, sashiSignature }: { onWidthChange: (value: number) => void, initialEnabled: boolean, sashiSignature: string, sashiKey:string }): ReactElement {
+export default function Panel({
+  onWidthChange,
+  initialEnabled,
+  sashiKey,
+  sashiSignature,
+}: {
+  onWidthChange: (value: number) => void;
+  initialEnabled: boolean;
+  sashiSignature: string;
+  sashiKey: string;
+}): ReactElement {
   const [enabled, setEnabled] = useState(initialEnabled);
-  const [sidePanelWidth, setSidePanelWidth] = useState(enabled ? APP_EXTEND_WIDTH: APP_COLLAPSE_WIDTH);
+  const [sidePanelWidth, setSidePanelWidth] = useState(enabled ? APP_EXTEND_WIDTH : APP_COLLAPSE_WIDTH);
   const [tabIndex, setTabIndex] = useState(0);
   const [configs, setConfig] = useState<Config[]>([]);
 
@@ -22,7 +32,7 @@ export default function Panel({ onWidthChange, initialEnabled, sashiKey, sashiSi
     setSidePanelWidth(value);
     onWidthChange(value);
 
-    window['chrome'].storage?.local.set({enabled});
+    window['chrome'].storage?.local.set({ enabled });
   }
 
   function openPanel(force?: boolean) {
@@ -31,20 +41,22 @@ export default function Panel({ onWidthChange, initialEnabled, sashiKey, sashiSi
     handleOnToggle(newValue);
   }
 
-  function sendMessageToBackgroundScript(message:string | Record<string, any>) {
+  function sendMessageToBackgroundScript(message: string | Record<string, any>) {
     return new Promise<Record<string, any>>((resolve, reject) => {
       if (chrome && chrome.runtime && chrome.runtime.sendMessage) {
+        console.log('Sending message to background script:', message);
         chrome.runtime.sendMessage(message, (response: Record<string, any>) => {
+          console.log;
           if (chrome.runtime.lastError) {
-            console.error("Error sending message to background script:", chrome.runtime.lastError);
+            console.error('Error sending message to background script:', chrome.runtime.lastError);
             reject(chrome.runtime.lastError);
           } else {
-            console.log("Response from background script:", response);
+            console.log('Response from background script:', response);
             resolve(response);
           }
         });
       } else {
-        const error = new Error("chrome.runtime.sendMessage is not available");
+        const error = new Error('chrome.runtime.sendMessage is not available');
         console.error(error);
         reject(error);
       }
@@ -53,17 +65,24 @@ export default function Panel({ onWidthChange, initialEnabled, sashiKey, sashiSi
 
   useEffect(() => {
     const getConfig = async () => {
-      const response = await sendMessageToBackgroundScript({action: 'get-config', payload: {key: sashiKey, signature: sashiSignature}})
-      console.log("config response", response)
-      setConfig(response?.payload?.config ?? [])
-    }
+      try {
+        const response = await sendMessageToBackgroundScript({
+          action: 'get-config',
+          payload: { key: sashiKey, signature: sashiSignature },
+        });
+        console.log('config response', response);
+        setConfig(response?.payload?.configs ?? []);
+      } catch (e) {
+        console.error('Error fetching configs:', e);
+      }
+    };
 
-    getConfig()
+    getConfig();
+  }, []);
 
-  },[])
+  console.log('configs', configs);
 
-  console.log("Configs here", configs)
-
+  console.log('Configs here', configs, enabled);
   return (
     <div
       style={{
@@ -72,16 +91,15 @@ export default function Panel({ onWidthChange, initialEnabled, sashiKey, sashiSi
       }}
       className="absolute top-0 right-0 bottom-0 z-max bg-[#F5F8FA] ease-in-out duration-300 overflow-hidden"
     >
-
       <div
-        className={classNames('absolute h-full flex border-none flex-col ease-linear w-[50px] space-y-3 p-1', {
-          'opacity-0': enabled,
-          '-z-10': enabled,
+        className={classNames('absolute w-full h-full flex items-center justify-center text-xl font-bold', {
+          'opacity-0': !enabled,
+          '-z-10': !enabled,
         })}
       >
-        {enabled && (
-          <KeyValueList pairs={configs} onUpdate={()=>{}} />
-        )}
+        Panel Title
+        <p>help</p>
+        <KeyValueList pairs={configs} onUpdate={() => {}} />
       </div>
       <div className="absolute bottom-0 left-0 w-[50px] z-10 flex justify-center items-center p-1">
         <Button active={enabled} onClick={() => openPanel()}>
