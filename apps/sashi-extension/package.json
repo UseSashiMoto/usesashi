@@ -17,11 +17,16 @@
     "@ark-ui/react": "^3.0.2",
     "@park-ui/tailwind-plugin": "^0.20.1",
     "axios": "^1.7.2",
+    "class-variance-authority": "^0.7.0",
     "classnames": "^2.3.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.390.0",
     "react": "^18.2.0",
     "react-app-polyfill": "^3.0.0",
     "react-dom": "^18.2.0",
-    "react-frame-component": "^5.2.3"
+    "react-frame-component": "^5.2.3",
+    "tailwind-merge": "^2.3.0",
+    "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
     "@parcel/config-webextension": "^2.12.0",
