@@ -13,8 +13,12 @@
       "resolveJsonModule": true,              // Include modules imported with '.json' extension
       "isolatedModules": true,                // Ensure each file can be safely transpiled
       "noEmit": true,                         // Do not emit outputs
-      "jsx": "react"                          // Specify JSX code generation (use "react-jsx" for React 17+)
+      "jsx": "react",                          // Specify JSX code generation (use "react-jsx" for React 17+)
+      "baseUrl": ".",
+      "paths": {
+        "~/*": ["./src/*"]
+      }
     },
-    "include": ["src"]
+    "include": ["src", "styled-system"]
   }
   

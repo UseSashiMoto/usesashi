@@ -2,9 +2,11 @@ import 'react-app-polyfill/ie11';
 
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import Panel from './Panel';
+import { App } from './App';
+import { secretKey } from './configs/configs';
 import { APP_COLLAPSE_WIDTH, APP_EXTEND_WIDTH } from './const';
 
+console.log('Sashi Extension Loaded');
 /// <reference types="chrome" />
 
 async function loadChromeStorage() {
@@ -22,59 +24,64 @@ async function loadChromeStorage() {
   return initialEnabled;
 }
 
-
-function sendMessageToBackgroundScript(message:string | Record<string, any>) {
-  if (chrome && chrome.runtime && chrome.runtime.sendMessage) {
-    chrome.runtime.sendMessage({}, (response) => {
-      console.log("Response from background script:", response);
-    });
-  } else {
-    console.error("chrome.runtime.sendMessage is not available");
-  }
-}
-
-const secretKey = 'your-secret-key';
-
 // Function to validate the signed key
 function validateSignedKey(key: string, signature: string) {
   //@ts-ignore
   const crypto = window.crypto || window.msCrypto; // for IE11
   const encoder = new TextEncoder();
   const keyData = encoder.encode(secretKey);
-  return crypto.subtle.importKey('raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
-    .then(cryptoKey => {
+  return crypto.subtle
+    .importKey('raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+    .then((cryptoKey) => {
       const data = encoder.encode(key);
       return crypto.subtle.sign('HMAC', cryptoKey, data);
     })
-    .then(signatureArrayBuffer => {
-      const signatureHex = Array.from(new Uint8Array(signatureArrayBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+    .then((signatureArrayBuffer) => {
+      const signatureHex = Array.from(new Uint8Array(signatureArrayBuffer))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
       return signatureHex === signature;
     });
 }
 
+chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
+  console.log('Message received in Content Script', message);
+  if (message.action === 'activate') {
+    console.log('Content script is running on the active tab!');
+    // Your content script logic here
+    if (await validateScriptTag()) {
+      const scriptTag = document.querySelector('script[src*="usesashi.com/start.js"]');
 
+      const url = new URL(scriptTag.src);
 
-window.onload = async () => {
+      const key = url.searchParams.get('key') as string;
+      const signature = url.searchParams.get('signature') as string;
+      init(key, signature);
+    }
+  }
+});
+
+async function validateScriptTag() {
   const scriptTag = document.querySelector('script[src*="usesashi.com/start.js"]');
+
   if (scriptTag) {
     const url = new URL(scriptTag.src);
 
     const key = url.searchParams.get('key');
     const signature = url.searchParams.get('signature');
-    console.log("Query parameter key:", key);
-    console.log("Query parameter signature:", signature);
+    console.log('Query parameter key:', key);
+    console.log('Query parameter signature:', signature);
     if (key && signature) {
-      const isValid = await validateSignedKey(key, signature)
-      if(isValid) {
-        sendMessageToBackgroundScript({action: 'get-config'})
-        init();
-      }
+      const isValid = await validateSignedKey(key, signature);
+
+      return isValid;
     }
   }
-};
 
+  return false;
+}
 
-async function init() {
+async function init(key: string, signature: string) {
   const initialEnabled = await loadChromeStorage();
 
   // Create html tag wrapper
@@ -116,7 +123,7 @@ async function init() {
     htmlWrapper.style['margin-right'] = `${value}px`;
   }
 
-  root.render(<Panel onWidthChange={onSidePanelWidthChange} initialEnabled={initialEnabled} />);
+  root.render(
+    <App sashiKey={key} sashiSignature={signature} onWidthChange={onSidePanelWidthChange} initialEnabled={true} />
+  );
 }
-
-//init();
