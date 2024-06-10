@@ -1,18 +1,13 @@
+const { fontFamily } = require("tailwindcss/defaultTheme")
+
 /** @type {import('tailwindcss').Config} */
-import { parkwindPlugin } from '@park-ui/tailwind-plugin'
-
 module.exports = {
-  content: ["./src/**/*.{html,js,jsx,ts,tsx}", "components/**/*.{ts,tsx}", "./src/components/**/*.{ts,tsx}"],
-
-  plugins: [parkwindPlugin],
-  parkUI: {
-    accentColor: 'crimson',
-    grayColor: 'mauve',
-    borderRadius: 'lg',
-  },
-  darkMode: ['class'],
+  darkMode: 'class',
+  content: [
+    './components/**/*.{ts,tsx}',
+    './src/**/*.{ts,tsx}',
+  ],
   theme: {
-
     container: {
       center: true,
       padding: "2rem",
@@ -21,9 +16,6 @@ module.exports = {
       },
     },
     extend: {
-      zIndex: {
-        'max': 2147483647
-      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -60,12 +52,9 @@ module.exports = {
         },
       },
       borderRadius: {
-        lg: `var(--radius)`,
-        md: `calc(var(--radius) - 2px)`,
+        lg: "var(--radius)",
+        md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
-      },
-      fontFamily: {
-        sans: ["var(--font-sans)", ...fontFamily.sans],
       },
       keyframes: {
         "accordion-down": {

@@ -1,9 +1,11 @@
 import classNames from 'classnames';
 import React, { ReactElement, useEffect, useState } from 'react';
-import KeyValueList from './KeyValueList';
-import Button from './components/Button';
 import { APP_COLLAPSE_WIDTH, APP_EXTEND_WIDTH } from './const';
 //import '@park-ui/tailwind-plugin/preset.css'
+import { Input } from '@/components/ui/input';
+import { Blocks, Bolt } from 'lucide-react';
+import ExpButton from './components/Button';
+import { Button } from './components/ui/button';
 
 interface Config {
   key: string;
@@ -83,26 +85,70 @@ export default function Panel({
   console.log('configs', configs);
 
   console.log('Configs here', configs, enabled);
+  const [activePage, setActivePage] = useState('page1');
+
   return (
     <div
       style={{
         width: sidePanelWidth - 5,
         boxShadow: '0px 0px 5px #0000009e',
       }}
-      className="absolute top-0 right-0 bottom-0 z-max bg-[#F5F8FA] ease-in-out duration-300 overflow-hidden"
+      className="dark  bg-background absolute top-0 right-0 bottom-0 z-max  ease-in-out duration-300 overflow-hidden"
     >
       <div
-        className={classNames('absolute w-full h-full flex items-center justify-center text-xl font-bold', {
-          'opacity-0': !enabled,
-          '-z-10': !enabled,
-        })}
+        className={classNames(
+          '  text-foreground absolute w-full h-full justify-center text-xl font-bold items-center flex flex-col',
+          {
+            'opacity-0': !enabled,
+            '-z-10': !enabled,
+          }
+        )}
       >
-        Panel Title
-        <p>help</p>
-        <KeyValueList pairs={configs} onUpdate={() => {}} />
+        <div className={classNames('w-full', 'p-2')}>
+          <Input className="rounded-full" type="search" placeholder="Search..." />
+        </div>
+
+        <div className="w-full flex justify-around p-1 border-b border-t border-gray-700">
+          {['page1', 'page2'].map((page) => {
+            if (page === 'page2') {
+              return (
+                <Button
+                  className={`${activePage === page ? 'text-indigo-500' : 'text-gray-400'}`}
+                  onClick={() => setActivePage('page2')}
+                  variant="ghost"
+                  size="icon"
+                >
+                  <Bolt className="h-3 w-3" />
+                </Button>
+              );
+            }
+
+            if (page === 'page1') {
+              return (
+                <Button
+                  className={`${activePage === page ? 'text-indigo-500' : 'text-gray-400'}`}
+                  onClick={() => setActivePage('page1')}
+                  variant="ghost"
+                  size="icon"
+                >
+                  <Blocks className="h-3 w-3" />
+                </Button>
+              );
+            }
+            return <></>;
+          })}
+        </div>
+
+        <div className="p-4 flex-1 overflow-auto">
+          {activePage === 'page1' && <Page title="Page 1" content="Content for page 1..." />}
+          {activePage === 'page2' && <Page title="Page 2" content="Content for page 2..." />}
+          {activePage === 'page3' && <Page title="Page 3" content="Content for page 3..." />}
+          {activePage === 'page4' && <Page title="Page 4" content="Content for page 4..." />}
+          {activePage === 'page5' && <Page title="Page 5" content="Content for page 5..." />}
+        </div>
       </div>
       <div className="absolute bottom-0 left-0 w-[50px] z-10 flex justify-center items-center p-1">
-        <Button active={enabled} onClick={() => openPanel()}>
+        <ExpButton active={enabled} onClick={() => openPanel()}>
           <span>
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -123,8 +169,17 @@ export default function Panel({
               />
             </svg>
           </span>
-        </Button>
+        </ExpButton>
       </div>
+    </div>
+  );
+}
+
+function Page({ title, content }: { title: string; content: string }) {
+  return (
+    <div>
+      <h2 className="text-lg font-bold">{title}</h2>
+      <p>{content}</p>
     </div>
   );
 }
