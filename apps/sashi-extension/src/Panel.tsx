@@ -3,9 +3,10 @@ import React, { ReactElement, useEffect, useState } from 'react';
 import { APP_COLLAPSE_WIDTH, APP_EXTEND_WIDTH } from './const';
 //import '@park-ui/tailwind-plugin/preset.css'
 import { Input } from '@/components/ui/input';
-import { Blocks, Bolt } from 'lucide-react';
+import { Blocks, Bolt, Edit3, Save, Trash2 } from 'lucide-react';
 import ExpButton from './components/Button';
 import { Button } from './components/ui/button';
+import IconButton from './components/ui/iconbutton';
 
 interface Config {
   key: string;
@@ -26,7 +27,6 @@ export default function Panel({
 }): ReactElement {
   const [enabled, setEnabled] = useState(initialEnabled);
   const [sidePanelWidth, setSidePanelWidth] = useState(enabled ? APP_EXTEND_WIDTH : APP_COLLAPSE_WIDTH);
-  const [tabIndex, setTabIndex] = useState(0);
   const [configs, setConfig] = useState<Config[]>([]);
 
   function handleOnToggle(enabled: boolean) {
@@ -65,6 +65,10 @@ export default function Panel({
     });
   }
 
+  console.log('configs', configs);
+
+  console.log('Configs here', configs, enabled);
+
   useEffect(() => {
     const getConfig = async () => {
       try {
@@ -72,19 +76,15 @@ export default function Panel({
           action: 'get-config',
           payload: { key: sashiKey, signature: sashiSignature },
         });
-        console.log('config response', response);
+        console.log('config response 2', response);
         setConfig(response?.payload?.configs ?? []);
       } catch (e) {
-        console.error('Error fetching configs:', e);
+        console.error('Error fetching configs 2:', e);
       }
     };
 
     getConfig();
-  }, []);
-
-  console.log('configs', configs);
-
-  console.log('Configs here', configs, enabled);
+  }, [sashiKey, sashiSignature]);
   const [activePage, setActivePage] = useState('page1');
 
   return (
@@ -140,7 +140,7 @@ export default function Panel({
         </div>
 
         <div className="p-4 flex-1 overflow-auto">
-          {activePage === 'page1' && <Page title="Page 1" content="Content for page 1..." />}
+          {activePage === 'page1' && <ConfigPage defaultConfigs={configs} />}
           {activePage === 'page2' && <Page title="Page 2" content="Content for page 2..." />}
           {activePage === 'page3' && <Page title="Page 3" content="Content for page 3..." />}
           {activePage === 'page4' && <Page title="Page 4" content="Content for page 4..." />}
@@ -171,6 +171,65 @@ export default function Panel({
           </span>
         </ExpButton>
       </div>
+    </div>
+  );
+}
+
+function ConfigPage({ defaultConfigs }: { defaultConfigs: Config[] }) {
+  const [configs, setConfigs] = useState<Config[]>([]);
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [editedValue, setEditedValue] = useState<string>('');
+
+  useEffect(() => setConfigs(defaultConfigs), [defaultConfigs]);
+
+  function handleEditClick(key: string, value: string) {
+    setEditingKey(key);
+    setEditedValue(value);
+  }
+
+  function handleSaveClick(key: string) {
+    const updatedConfigs = configs.map((config) => (config.key === key ? { ...config, value: editedValue } : config));
+    setConfigs(updatedConfigs);
+    setEditingKey(null);
+  }
+
+  function handleDeleteClick(key: string) {
+    const updatedConfigs = configs.filter((config) => config.key !== key);
+    setConfigs(updatedConfigs);
+  }
+
+  return (
+    <div className="flex flex-col space-y-4">
+      {configs.map((config) => (
+        <div key={config.key} className="flex flex-col space-y-2 bg-card dark:bg-card p-4 rounded-lg shadow-md">
+          <div className="flex justify-between items-center">
+            <div className="flex flex-col">
+              <span className="font-bold text-card-foreground dark:text-card-foreground">{config.key}</span>
+              {editingKey === config.key ? (
+                <Input
+                  type="text"
+                  value={editedValue}
+                  onChange={(e) => setEditedValue(e.target.value)}
+                  className="mt-2"
+                />
+              ) : (
+                <span className="mt-1 text-card-foreground dark:text-card-foreground">{config.value}</span>
+              )}
+            </div>
+            <div className="flex space-x-2">
+              {editingKey === config.key ? (
+                <IconButton onClick={() => handleSaveClick(config.key)} icon={<Save className="h-5 w-5" />} />
+              ) : (
+                <IconButton
+                  onClick={() => handleEditClick(config.key, config.value)}
+                  icon={<Edit3 className="h-5 w-5" />}
+                />
+              )}
+              <IconButton onClick={() => handleDeleteClick(config.key)} icon={<Trash2 className="h-5 w-5" />} />
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
