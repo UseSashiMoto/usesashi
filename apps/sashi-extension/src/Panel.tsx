@@ -1,11 +1,10 @@
 import { Input } from '@/components/ui/input';
 import classNames from 'classnames';
-import { Blocks, Bolt, Edit3, PlusCircle, Save, Trash2 } from 'lucide-react';
+import { Blocks, Bolt } from 'lucide-react';
 import React, { ReactElement, useEffect, useState } from 'react';
+import ConfigPage from './ConfigPage';
 import ExpButton from './components/Button';
 import { Button } from './components/ui/button';
-import IconButton from './components/ui/iconbutton';
-import { Switch } from './components/ui/switch'; // Assuming you have a Switch component
 import { APP_COLLAPSE_WIDTH, APP_EXTEND_WIDTH } from './const';
 
 interface Config {
@@ -168,106 +167,6 @@ export default function Panel({
             </svg>
           </span>
         </ExpButton>
-      </div>
-    </div>
-  );
-}
-
-function ConfigPage({ defaultConfigs }: { defaultConfigs: Config[] }) {
-  const [configs, setConfigs] = useState<Config[]>([]);
-  const [editingKey, setEditingKey] = useState<string | null>(null);
-  const [editedValue, setEditedValue] = useState<string>('');
-  const [newConfig, setNewConfig] = useState<Config>({ key: '', value: '', accountid: '', editable: true });
-
-  useEffect(() => setConfigs(defaultConfigs), [defaultConfigs]);
-
-  function handleEditClick(key: string, value: string) {
-    setEditingKey(key);
-    setEditedValue(value);
-  }
-
-  function handleSaveClick(key: string) {
-    const updatedConfigs = configs.map((config) => (config.key === key ? { ...config, value: editedValue } : config));
-    setConfigs(updatedConfigs);
-    setEditingKey(null);
-  }
-
-  function handleDeleteClick(key: string) {
-    const updatedConfigs = configs.filter((config) => config.key !== key);
-    setConfigs(updatedConfigs);
-  }
-
-  function handleToggleEditable(key: string) {
-    const updatedConfigs = configs.map((config) =>
-      config.key === key ? { ...config, editable: !config.editable } : config
-    );
-    setConfigs(updatedConfigs);
-  }
-
-  function handleAddConfig() {
-    if (newConfig.key && newConfig.value) {
-      setConfigs([...configs, newConfig]);
-      setNewConfig({ key: '', value: '', accountid: '', editable: true });
-    }
-  }
-
-  return (
-    <div className="flex flex-col space-y-4">
-      {configs.map((config) => (
-        <div key={config.key} className="flex flex-col space-y-2 bg-card dark:bg-card p-4 rounded-lg shadow-md">
-          <div className="flex justify-between items-center">
-            <div className="flex flex-col">
-              <span className="font-bold text-card-foreground dark:text-card-foreground">{config.key}</span>
-              {editingKey === config.key ? (
-                <Input
-                  type="text"
-                  value={editedValue}
-                  onChange={(e) => setEditedValue(e.target.value)}
-                  className="mt-2"
-                />
-              ) : (
-                <span className="mt-1 text-card-foreground dark:text-card-foreground">{config.value}</span>
-              )}
-            </div>
-            <div className="flex space-x-2 items-center">
-              <Switch checked={config.editable} onChange={() => handleToggleEditable(config.key)} className="mr-2" />
-              {editingKey === config.key ? (
-                <IconButton onClick={() => handleSaveClick(config.key)} icon={<Save className="h-5 w-5" />} />
-              ) : (
-                <IconButton
-                  onClick={() => handleEditClick(config.key, config.value)}
-                  icon={<Edit3 className="h-5 w-5" />}
-                  disabled={!config.editable}
-                />
-              )}
-              <IconButton onClick={() => handleDeleteClick(config.key)} icon={<Trash2 className="h-5 w-5" />} />
-            </div>
-          </div>
-        </div>
-      ))}
-
-      <div className="flex flex-col space-y-2 bg-card dark:bg-card p-4 rounded-lg shadow-md">
-        <div className="flex justify-between items-center">
-          <div className="flex flex-col">
-            <Input
-              type="text"
-              value={newConfig.key}
-              onChange={(e) => setNewConfig({ ...newConfig, key: e.target.value })}
-              placeholder="Key"
-              className="mt-2 bg-background text-foreground border-0 rounded-lg"
-            />
-            <Input
-              type="text"
-              value={newConfig.value}
-              onChange={(e) => setNewConfig({ ...newConfig, value: e.target.value })}
-              placeholder="Value"
-              className="mt-2 bg-background text-foreground border-0 rounded-lg"
-            />
-          </div>
-          <div className="flex space-x-2 items-center">
-            <IconButton onClick={handleAddConfig} icon={<PlusCircle className="h-6 w-6 text-indigo-500" />} />
-          </div>
-        </div>
       </div>
     </div>
   );
