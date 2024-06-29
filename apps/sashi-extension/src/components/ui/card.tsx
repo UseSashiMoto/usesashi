@@ -1,33 +1,79 @@
-import { type HTMLArkProps, ark } from '@ark-ui/react/factory'
-import { type VariantProps, tv } from 'tailwind-variants'
-import { createStyleContext } from '~/lib/create-style-context'
+import * as React from "react"
 
-const card = tv(
-  {
-    base: 'card',
-    slots: {
-      root: 'card__root',
-      header: 'card__header',
-      body: 'card__body',
-      footer: 'card__footer',
-      title: 'card__title',
-      description: 'card__description',
-    },
-    variants: {},
-  },
-  { twMerge: false },
-)
-const { withProvider, withContext } = createStyleContext(card)
+import { cn } from "@/lib/utils"
 
-export interface RootProps extends HTMLArkProps<'div'>, VariantProps<typeof card> {}
-export const Root = withProvider<HTMLDivElement, RootProps>(ark.div, 'root')
+const Card = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div
+    ref={ref}
+    className={cn(
+      "rounded-lg border bg-card text-card-foreground shadow-sm",
+      className
+    )}
+    {...props}
+  />
+))
+Card.displayName = "Card"
 
-export const Body = withContext<HTMLDivElement, HTMLArkProps<'div'>>(ark.div, 'body')
+const CardHeader = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div
+    ref={ref}
+    className={cn("flex flex-col space-y-1.5 p-6", className)}
+    {...props}
+  />
+))
+CardHeader.displayName = "CardHeader"
 
-export const Description = withContext<HTMLDivElement, HTMLArkProps<'div'>>(ark.div, 'description')
+const CardTitle = React.forwardRef<
+  HTMLParagraphElement,
+  React.HTMLAttributes<HTMLHeadingElement>
+>(({ className, ...props }, ref) => (
+  <h3
+    ref={ref}
+    className={cn(
+      "text-2xl font-semibold leading-none tracking-tight",
+      className
+    )}
+    {...props}
+  />
+))
+CardTitle.displayName = "CardTitle"
 
-export const Footer = withContext<HTMLDivElement, HTMLArkProps<'div'>>(ark.div, 'footer')
+const CardDescription = React.forwardRef<
+  HTMLParagraphElement,
+  React.HTMLAttributes<HTMLParagraphElement>
+>(({ className, ...props }, ref) => (
+  <p
+    ref={ref}
+    className={cn("text-sm text-muted-foreground", className)}
+    {...props}
+  />
+))
+CardDescription.displayName = "CardDescription"
 
-export const Header = withContext<HTMLDivElement, HTMLArkProps<'div'>>(ark.div, 'header')
+const CardContent = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div ref={ref} className={cn("p-6 pt-0", className)} {...props} />
+))
+CardContent.displayName = "CardContent"
 
-export const Title = withContext<HTMLHeadingElement, HTMLArkProps<'h3'>>(ark.h3, 'title')
+const CardFooter = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div
+    ref={ref}
+    className={cn("flex items-center p-6 pt-0", className)}
+    {...props}
+  />
+))
+CardFooter.displayName = "CardFooter"
+
+export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent }

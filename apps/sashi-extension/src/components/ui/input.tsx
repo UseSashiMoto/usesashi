@@ -1,33 +1,25 @@
-import { type HTMLArkProps, ark } from '@ark-ui/react/factory'
-import { forwardRef } from 'react'
-import { type VariantProps, tv } from 'tailwind-variants'
+import * as React from "react"
 
-export interface InputProps extends InputVariantProps, Omit<HTMLArkProps<'input'>, 'size'> {}
+import { cn } from "@/lib/utils"
 
-export const Input = forwardRef<HTMLInputElement, InputProps>((props, ref) => {
-  const { size, className, ...rest } = props
-  return <ark.input className={input({ size, className })} ref={ref} {...rest} />
-})
+export interface InputProps
+  extends React.InputHTMLAttributes<HTMLInputElement> {}
 
-Input.displayName = 'Input'
-
-type InputVariantProps = VariantProps<typeof input>
-
-const input = tv(
-  {
-    base: 'input',
-    defaultVariants: { size: 'md' },
-    variants: {
-      size: {
-        '2xs': 'input--size_2xs',
-        xs: 'input--size_xs',
-        sm: 'input--size_sm',
-        md: 'input--size_md',
-        lg: 'input--size_lg',
-        xl: 'input--size_xl',
-        '2xl': 'input--size_2xl',
-      },
-    },
-  },
-  { twMerge: false },
+const Input = React.forwardRef<HTMLInputElement, InputProps>(
+  ({ className, type, ...props }, ref) => {
+    return (
+      <input
+        type={type}
+        className={cn(
+          "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+          className
+        )}
+        ref={ref}
+        {...props}
+      />
+    )
+  }
 )
+Input.displayName = "Input"
+
+export { Input }

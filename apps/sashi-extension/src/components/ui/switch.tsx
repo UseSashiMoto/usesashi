@@ -1,60 +1,27 @@
-import { Switch as ArkSwitch, type SwitchRootProps } from '@ark-ui/react/switch'
-import { forwardRef } from 'react'
-import { type VariantProps, tv } from 'tailwind-variants'
+import * as React from "react"
+import * as SwitchPrimitives from "@radix-ui/react-switch"
 
-export interface SwitchProps extends SwitchRootProps, SwitchRecipeVariantProps {}
+import { cn } from "@/lib/utils"
 
-export const Switch = forwardRef<HTMLLabelElement, SwitchProps>((props, ref) => {
-  const { children, className, size, ...rootProps } = props
-  const { root, control, thumb, label } = styles({ size })
+const Switch = React.forwardRef<
+  React.ElementRef<typeof SwitchPrimitives.Root>,
+  React.ComponentPropsWithoutRef<typeof SwitchPrimitives.Root>
+>(({ className, ...props }, ref) => (
+  <SwitchPrimitives.Root
+    className={cn(
+      "peer inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=unchecked]:bg-input",
+      className
+    )}
+    {...props}
+    ref={ref}
+  >
+    <SwitchPrimitives.Thumb
+      className={cn(
+        "pointer-events-none block h-5 w-5 rounded-full bg-background shadow-lg ring-0 transition-transform data-[state=checked]:translate-x-5 data-[state=unchecked]:translate-x-0"
+      )}
+    />
+  </SwitchPrimitives.Root>
+))
+Switch.displayName = SwitchPrimitives.Root.displayName
 
-  return (
-    <ArkSwitch.Root ref={ref} className={root({ className })} {...rootProps}>
-      <ArkSwitch.Control className={control()}>
-        <ArkSwitch.Thumb className={thumb()} />
-      </ArkSwitch.Control>
-      {children && <ArkSwitch.Label className={label()}>{children}</ArkSwitch.Label>}
-      <ArkSwitch.HiddenInput />
-    </ArkSwitch.Root>
-  )
-})
-
-Switch.displayName = 'Switch'
-
-type SwitchRecipeVariantProps = VariantProps<typeof styles>
-
-const styles = tv(
-  {
-    base: 'switchRecipe',
-    defaultVariants: { size: 'md' },
-    slots: {
-      root: 'switchRecipe__root',
-      label: 'switchRecipe__label',
-      control: 'switchRecipe__control',
-      thumb: 'switchRecipe__thumb',
-    },
-    variants: {
-      size: {
-        sm: {
-          root: 'switchRecipe__root--size_sm',
-          label: 'switchRecipe__label--size_sm',
-          control: 'switchRecipe__control--size_sm',
-          thumb: 'switchRecipe__thumb--size_sm',
-        },
-        md: {
-          root: 'switchRecipe__root--size_md',
-          label: 'switchRecipe__label--size_md',
-          control: 'switchRecipe__control--size_md',
-          thumb: 'switchRecipe__thumb--size_md',
-        },
-        lg: {
-          root: 'switchRecipe__root--size_lg',
-          label: 'switchRecipe__label--size_lg',
-          control: 'switchRecipe__control--size_lg',
-          thumb: 'switchRecipe__thumb--size_lg',
-        },
-      },
-    },
-  },
-  { twMerge: false },
-)
+export { Switch }

@@ -1,179 +1,158 @@
-import { Select } from '@ark-ui/react/select'
-import { type VariantProps, tv } from 'tailwind-variants'
-import { createStyleContext } from '~/lib/create-style-context'
+import * as React from "react"
+import * as SelectPrimitive from "@radix-ui/react-select"
+import { Check, ChevronDown, ChevronUp } from "lucide-react"
 
-const select = tv(
-  {
-    base: 'select',
-    defaultVariants: { size: 'md', variant: 'outline' },
-    slots: {
-      label: 'select__label',
-      positioner: 'select__positioner',
-      trigger: 'select__trigger',
-      indicator: 'select__indicator',
-      clearTrigger: 'select__clearTrigger',
-      item: 'select__item',
-      itemText: 'select__itemText',
-      itemIndicator: 'select__itemIndicator',
-      itemGroup: 'select__itemGroup',
-      itemGroupLabel: 'select__itemGroupLabel',
-      content: 'select__content',
-      root: 'select__root',
-      control: 'select__control',
-      valueText: 'select__valueText',
-    },
-    variants: {
-      variant: {
-        outline: {
-          label: 'select__label--variant_outline',
-          positioner: 'select__positioner--variant_outline',
-          trigger: 'select__trigger--variant_outline',
-          indicator: 'select__indicator--variant_outline',
-          clearTrigger: 'select__clearTrigger--variant_outline',
-          item: 'select__item--variant_outline',
-          itemText: 'select__itemText--variant_outline',
-          itemIndicator: 'select__itemIndicator--variant_outline',
-          itemGroup: 'select__itemGroup--variant_outline',
-          itemGroupLabel: 'select__itemGroupLabel--variant_outline',
-          content: 'select__content--variant_outline',
-          root: 'select__root--variant_outline',
-          control: 'select__control--variant_outline',
-          valueText: 'select__valueText--variant_outline',
-        },
-        ghost: {
-          label: 'select__label--variant_ghost',
-          positioner: 'select__positioner--variant_ghost',
-          trigger: 'select__trigger--variant_ghost',
-          indicator: 'select__indicator--variant_ghost',
-          clearTrigger: 'select__clearTrigger--variant_ghost',
-          item: 'select__item--variant_ghost',
-          itemText: 'select__itemText--variant_ghost',
-          itemIndicator: 'select__itemIndicator--variant_ghost',
-          itemGroup: 'select__itemGroup--variant_ghost',
-          itemGroupLabel: 'select__itemGroupLabel--variant_ghost',
-          content: 'select__content--variant_ghost',
-          root: 'select__root--variant_ghost',
-          control: 'select__control--variant_ghost',
-          valueText: 'select__valueText--variant_ghost',
-        },
-      },
-      size: {
-        sm: {
-          label: 'select__label--size_sm',
-          positioner: 'select__positioner--size_sm',
-          trigger: 'select__trigger--size_sm',
-          indicator: 'select__indicator--size_sm',
-          clearTrigger: 'select__clearTrigger--size_sm',
-          item: 'select__item--size_sm',
-          itemText: 'select__itemText--size_sm',
-          itemIndicator: 'select__itemIndicator--size_sm',
-          itemGroup: 'select__itemGroup--size_sm',
-          itemGroupLabel: 'select__itemGroupLabel--size_sm',
-          content: 'select__content--size_sm',
-          root: 'select__root--size_sm',
-          control: 'select__control--size_sm',
-          valueText: 'select__valueText--size_sm',
-        },
-        md: {
-          label: 'select__label--size_md',
-          positioner: 'select__positioner--size_md',
-          trigger: 'select__trigger--size_md',
-          indicator: 'select__indicator--size_md',
-          clearTrigger: 'select__clearTrigger--size_md',
-          item: 'select__item--size_md',
-          itemText: 'select__itemText--size_md',
-          itemIndicator: 'select__itemIndicator--size_md',
-          itemGroup: 'select__itemGroup--size_md',
-          itemGroupLabel: 'select__itemGroupLabel--size_md',
-          content: 'select__content--size_md',
-          root: 'select__root--size_md',
-          control: 'select__control--size_md',
-          valueText: 'select__valueText--size_md',
-        },
-        lg: {
-          label: 'select__label--size_lg',
-          positioner: 'select__positioner--size_lg',
-          trigger: 'select__trigger--size_lg',
-          indicator: 'select__indicator--size_lg',
-          clearTrigger: 'select__clearTrigger--size_lg',
-          item: 'select__item--size_lg',
-          itemText: 'select__itemText--size_lg',
-          itemIndicator: 'select__itemIndicator--size_lg',
-          itemGroup: 'select__itemGroup--size_lg',
-          itemGroupLabel: 'select__itemGroupLabel--size_lg',
-          content: 'select__content--size_lg',
-          root: 'select__root--size_lg',
-          control: 'select__control--size_lg',
-          valueText: 'select__valueText--size_lg',
-        },
-      },
-    },
-  },
-  { twMerge: false },
-)
-const { withProvider, withContext } = createStyleContext(select)
+import { cn } from "@/lib/utils"
 
-export interface RootProps
-  extends Select.RootProps<Select.CollectionItem>,
-    VariantProps<typeof select> {}
-export const Root = withProvider<undefined, RootProps>(Select.Root, 'root')
+const Select = SelectPrimitive.Root
 
-export const ClearTrigger = withContext<HTMLButtonElement, Select.ClearTriggerProps>(
-  Select.ClearTrigger,
-  'clearTrigger',
-)
+const SelectGroup = SelectPrimitive.Group
 
-export const Content = withContext<HTMLDivElement, Select.ContentProps>(Select.Content, 'content')
+const SelectValue = SelectPrimitive.Value
 
-export const Control = withContext<HTMLDivElement, Select.ControlProps>(Select.Control, 'control')
+const SelectTrigger = React.forwardRef<
+  React.ElementRef<typeof SelectPrimitive.Trigger>,
+  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>
+>(({ className, children, ...props }, ref) => (
+  <SelectPrimitive.Trigger
+    ref={ref}
+    className={cn(
+      "flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
+      className
+    )}
+    {...props}
+  >
+    {children}
+    <SelectPrimitive.Icon asChild>
+      <ChevronDown className="h-4 w-4 opacity-50" />
+    </SelectPrimitive.Icon>
+  </SelectPrimitive.Trigger>
+))
+SelectTrigger.displayName = SelectPrimitive.Trigger.displayName
 
-export const Indicator = withContext<HTMLDivElement, Select.IndicatorProps>(
-  Select.Indicator,
-  'indicator',
-)
+const SelectScrollUpButton = React.forwardRef<
+  React.ElementRef<typeof SelectPrimitive.ScrollUpButton>,
+  React.ComponentPropsWithoutRef<typeof SelectPrimitive.ScrollUpButton>
+>(({ className, ...props }, ref) => (
+  <SelectPrimitive.ScrollUpButton
+    ref={ref}
+    className={cn(
+      "flex cursor-default items-center justify-center py-1",
+      className
+    )}
+    {...props}
+  >
+    <ChevronUp className="h-4 w-4" />
+  </SelectPrimitive.ScrollUpButton>
+))
+SelectScrollUpButton.displayName = SelectPrimitive.ScrollUpButton.displayName
 
-export const ItemGroupLabel = withContext<HTMLDivElement, Select.ItemGroupLabelProps>(
-  Select.ItemGroupLabel,
-  'itemGroupLabel',
-)
+const SelectScrollDownButton = React.forwardRef<
+  React.ElementRef<typeof SelectPrimitive.ScrollDownButton>,
+  React.ComponentPropsWithoutRef<typeof SelectPrimitive.ScrollDownButton>
+>(({ className, ...props }, ref) => (
+  <SelectPrimitive.ScrollDownButton
+    ref={ref}
+    className={cn(
+      "flex cursor-default items-center justify-center py-1",
+      className
+    )}
+    {...props}
+  >
+    <ChevronDown className="h-4 w-4" />
+  </SelectPrimitive.ScrollDownButton>
+))
+SelectScrollDownButton.displayName =
+  SelectPrimitive.ScrollDownButton.displayName
 
-export const ItemGroup = withContext<HTMLDivElement, Select.ItemGroupProps>(
-  Select.ItemGroup,
-  'itemGroup',
-)
+const SelectContent = React.forwardRef<
+  React.ElementRef<typeof SelectPrimitive.Content>,
+  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content>
+>(({ className, children, position = "popper", ...props }, ref) => (
+  <SelectPrimitive.Portal>
+    <SelectPrimitive.Content
+      ref={ref}
+      className={cn(
+        "relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+        position === "popper" &&
+          "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
+        className
+      )}
+      position={position}
+      {...props}
+    >
+      <SelectScrollUpButton />
+      <SelectPrimitive.Viewport
+        className={cn(
+          "p-1",
+          position === "popper" &&
+            "h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)]"
+        )}
+      >
+        {children}
+      </SelectPrimitive.Viewport>
+      <SelectScrollDownButton />
+    </SelectPrimitive.Content>
+  </SelectPrimitive.Portal>
+))
+SelectContent.displayName = SelectPrimitive.Content.displayName
 
-export const ItemIndicator = withContext<HTMLDivElement, Select.ItemIndicatorProps>(
-  Select.ItemIndicator,
-  'itemIndicator',
-)
+const SelectLabel = React.forwardRef<
+  React.ElementRef<typeof SelectPrimitive.Label>,
+  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Label>
+>(({ className, ...props }, ref) => (
+  <SelectPrimitive.Label
+    ref={ref}
+    className={cn("py-1.5 pl-8 pr-2 text-sm font-semibold", className)}
+    {...props}
+  />
+))
+SelectLabel.displayName = SelectPrimitive.Label.displayName
 
-export const Item = withContext<HTMLDivElement, Select.ItemProps>(Select.Item, 'item')
+const SelectItem = React.forwardRef<
+  React.ElementRef<typeof SelectPrimitive.Item>,
+  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item>
+>(({ className, children, ...props }, ref) => (
+  <SelectPrimitive.Item
+    ref={ref}
+    className={cn(
+      "relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      className
+    )}
+    {...props}
+  >
+    <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+      <SelectPrimitive.ItemIndicator>
+        <Check className="h-4 w-4" />
+      </SelectPrimitive.ItemIndicator>
+    </span>
 
-export const ItemText = withContext<HTMLDivElement, Select.ItemTextProps>(
-  Select.ItemText,
-  'itemText',
-)
+    <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+  </SelectPrimitive.Item>
+))
+SelectItem.displayName = SelectPrimitive.Item.displayName
 
-export const Label = withContext<HTMLLabelElement, Select.LabelProps>(Select.Label, 'label')
-
-export const Positioner = withContext<HTMLDivElement, Select.PositionerProps>(
-  Select.Positioner,
-  'positioner',
-)
-
-export const Trigger = withContext<HTMLButtonElement, Select.TriggerProps>(
-  Select.Trigger,
-  'trigger',
-)
-
-export const ValueText = withContext<HTMLSpanElement, Select.ValueTextProps>(
-  Select.ValueText,
-  'valueText',
-)
+const SelectSeparator = React.forwardRef<
+  React.ElementRef<typeof SelectPrimitive.Separator>,
+  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Separator>
+>(({ className, ...props }, ref) => (
+  <SelectPrimitive.Separator
+    ref={ref}
+    className={cn("-mx-1 my-1 h-px bg-muted", className)}
+    {...props}
+  />
+))
+SelectSeparator.displayName = SelectPrimitive.Separator.displayName
 
 export {
-  SelectContext as Context,
-  SelectHiddenSelect as HiddenSelect,
-  type SelectContextProps as ContextProps,
-  type SelectHiddenSelectProps as HiddenSelectProps,
-} from '@ark-ui/react/select'
+  Select,
+  SelectGroup,
+  SelectValue,
+  SelectTrigger,
+  SelectContent,
+  SelectLabel,
+  SelectItem,
+  SelectSeparator,
+  SelectScrollUpButton,
+  SelectScrollDownButton,
+}
