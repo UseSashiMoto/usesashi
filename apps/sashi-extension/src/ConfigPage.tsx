@@ -1,8 +1,19 @@
-import { Input } from '@/components/ui/input';
-import { Edit3, Save, Trash2 } from 'lucide-react';
+import {
+  Box,
+  Button,
+  Flex,
+  FormControl,
+  FormLabel,
+  Heading,
+  HStack,
+  IconButton,
+  Input,
+  Text,
+  VStack,
+} from '@chakra-ui/react';
+import { Edit3 } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
-import Button from './components/Button';
-import IconButton from './components/ui/iconbutton';
+import { useSettingStore } from './store/use-setting.store';
 
 interface Config {
   key: string;
@@ -35,48 +46,48 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ defaultConfigs }) => {
     setEditingConfig(null);
   };
 
-  const handleDeleteClick = (key: string) => {
-    const updatedConfigs = configs.filter((config) => config.key !== key);
-    setConfigs(updatedConfigs);
-  };
-
-  const handleToggleEditable = (key: string) => {
-    const updatedConfigs = configs.map((config) =>
-      config.key === key ? { ...config, editable: !config.editable } : config
-    );
-    setConfigs(updatedConfigs);
-  };
-
   const handleAddConfig = () => {
-    if (newConfig.key && newConfig.value) {
-      setConfigs([...configs, newConfig]);
-      setNewConfig({ key: '', value: '', accountid: '', editable: true });
-    }
+    console.log('handleAddConfig', newConfig);
+    console.log('newConfig', newConfig);
+    setEditingConfig({ key: '', value: '', accountid: '', editable: true });
   };
+
+  const { accountId } = useSettingStore();
 
   if (editingConfig) {
     console.log('showing editingConfig', editingConfig);
     return <EditConfigPage config={editingConfig} onSave={handleSaveClick} onCancel={() => setEditingConfig(null)} />;
   }
 
+  console.log('configs', configs);
+
   return (
-    <div className="flex flex-col space-y-4">
+    <VStack spacing={4}>
+      <VStack justifyContent={'flex-start'} alignItems={'flex-start'} textAlign={'left'}>
+        <Heading>Config List</Heading>
+        <Text fontSize="xs">account ID: {accountId}</Text>
+      </VStack>
+
       {configs.map((config) => (
-        <div key={config.key} className="bg-card dark:bg-card p-4 rounded-lg shadow-md">
-          <div className="flex justify-between items-center">
-            <div className="flex flex-col">
-              <span className="font-bold text-card-foreground dark:text-card-foreground">{config.key}</span>
-              <span className="mt-1 text-card-foreground dark:text-card-foreground">{config.value}</span>
-            </div>
-            <div className="flex space-x-2 items-center">
-              <IconButton onClick={() => handleEditClick(config)} icon={<Edit3 className="h-5 w-5" />} />
-            </div>
-          </div>
-        </div>
+        <Box width={'100%'} key={config.key} bg="card" p={4} rounded="lg" shadow="md">
+          <Flex justify="space-between" align="center">
+            <Box>
+              <Text fontWeight="bold" color="card-foreground">
+                {config.key}
+              </Text>
+              <Text mt={1} color="card-foreground">
+                {config.value}
+              </Text>
+            </Box>
+            <Flex>
+              <IconButton aria-label="Edit" onClick={() => handleEditClick(config)} icon={<Edit3 size={20} />} />
+            </Flex>
+          </Flex>
+        </Box>
       ))}
 
       <Button onClick={handleAddConfig}>Add Config</Button>
-    </div>
+    </VStack>
   );
 };
 
@@ -95,27 +106,24 @@ const EditConfigPage: React.FC<EditConfigPageProps> = ({ config, onSave, onCance
   };
 
   return (
-    <div className="flex flex-col space-y-4 p-4 bg-card dark:bg-card rounded-lg shadow-md">
-      <h2 className="text-xl font-bold">Edit Configuration</h2>
-      <Input
-        type="text"
-        value={key}
-        onChange={(e) => setKey(e.target.value)}
-        placeholder="Key"
-        className="bg-background text-foreground border-0 rounded-lg"
-      />
-      <Input
-        type="text"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        placeholder="Value"
-        className="bg-background text-foreground border-0 rounded-lg"
-      />
-      <div className="flex space-x-2 items-center mt-4">
-        <IconButton onClick={handleSaveClick} icon={<Save className="h-6 w-6 text-indigo-500" />} />
-        <IconButton onClick={onCancel} icon={<Trash2 className="h-6 w-6 text-red-500" />} />
-      </div>
-    </div>
+    <VStack spacing={4} p={4} bg="card" rounded="lg" shadow="md">
+      <Text fontSize="xl" fontWeight="bold">
+        Edit Configuration
+      </Text>
+
+      <FormControl>
+        <FormLabel>Key</FormLabel>
+        <Input type="text" value={key} onChange={(e) => setKey(e.target.value)} />
+      </FormControl>
+      <FormControl>
+        <FormLabel>Value</FormLabel>
+        <Input type="text" value={value} onChange={(e) => setValue(e.target.value)} />
+      </FormControl>
+      <HStack width={'100%'} mt={4} gap={4} spacing={8}>
+        <Button onClick={handleSaveClick}>Save</Button>
+        <Button onClick={onCancel}>Cancel</Button>
+      </HStack>
+    </VStack>
   );
 };
 
