@@ -1,5 +1,5 @@
 // ConfigPage.tsx
-import { Box, FormControl, FormHelperText, FormLabel, Input, VStack } from '@chakra-ui/react';
+import { FormControl, FormHelperText, FormLabel, Heading, Input, VStack } from '@chakra-ui/react';
 import React from 'react';
 import { useSettingStore } from './store/use-setting.store';
 
@@ -9,14 +9,13 @@ const SettingPage: React.FC<SettingPageProps> = ({}) => {
   const { accountId, setAccountId } = useSettingStore();
 
   return (
-    <VStack spacing={4} align="flex-start">
-      <Box>
-        <FormControl>
-          <FormLabel>Account ID:</FormLabel>
-          <Input value={accountId} onChange={(e) => setAccountId(e.target.value)} />
-          <FormHelperText>Enter your account ID</FormHelperText>
-        </FormControl>
-      </Box>
+    <VStack width={'100%'} spacing={4} align="flex-start">
+      <Heading>Settings</Heading>
+      <FormControl>
+        <FormLabel>Account ID:</FormLabel>
+        <Input value={accountId} onChange={(e) => setAccountId(e.target.value)} />
+        <FormHelperText>Enter your account ID</FormHelperText>
+      </FormControl>
     </VStack>
   );
 };

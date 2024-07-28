@@ -14,7 +14,21 @@ const config: ThemeConfig = {
 };
 
 // 3. extend the theme
-const theme = extendTheme({ config });
+const theme = extendTheme({
+  config,
+  styles: {
+    global: (props: { colorMode: string }) => ({
+      'html, body': {
+        fontSize: 'sm',
+        color: props.colorMode === 'dark' ? 'white' : 'gray.600',
+        lineHeight: 'tall',
+      },
+      a: {
+        color: props.colorMode === 'dark' ? 'teal.300' : 'teal.500',
+      },
+    }),
+  },
+});
 
 interface Config {
   key: string;
@@ -93,12 +107,11 @@ export default function Panel({
   }, [sashiKey, sashiSignature, accountId]);
 
   return (
-    <ChakraProvider theme={theme}>
+    <ChakraProvider disableGlobalStyle cssVarsRoot="#componentRootStart" resetCSS={false} theme={theme}>
       <Box
         maxW={`${sidePanelWidth - 5}px`}
         w={`${sidePanelWidth - 5}px`}
         boxShadow="0px 0px 5px #0000009e"
-        bg="background"
         pos="absolute"
         top={0}
         right={0}
@@ -119,7 +132,7 @@ export default function Panel({
           className={!enabled ? 'opacity-0 -z-10' : ''}
         >
           <Box w="full" p={2}>
-            <Input rounded="full" type="search" placeholder="Search..." />
+            <Input variant={'filled'} type="search" placeholder="Search..." />
           </Box>
 
           <Flex w="full" justify="space-around" p={1} borderBottom="1px" borderTop="1px" borderColor="gray.700">
