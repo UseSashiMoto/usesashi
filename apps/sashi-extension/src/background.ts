@@ -37,7 +37,7 @@ chrome.runtime.onMessage.addListener(
               Authorization: 'Bearer your_token_here',
               'account-key': message.payload.key,
               'account-signature': message.payload.signature,
-              'account-id': 'test_account_id_header',
+              'account-id': message.payload.accountId,
             },
           });
 
