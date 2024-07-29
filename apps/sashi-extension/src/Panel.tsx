@@ -112,6 +112,7 @@ export default function Panel({
         maxW={`${sidePanelWidth - 5}px`}
         w={`${sidePanelWidth - 5}px`}
         boxShadow="0px 0px 5px #0000009e"
+        bg="background"
         pos="absolute"
         top={0}
         right={0}
