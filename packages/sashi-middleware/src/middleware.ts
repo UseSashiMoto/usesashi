@@ -4,7 +4,7 @@ import {Request, Response, Router} from "express"
 import Redis from "ioredis"
 import {validateSignedKey} from "./generate-token"
 import {init} from "./init"
-import {getAllConfigs, getConfig} from "./manage-config"
+import {getAllConfigs, getConfig, setConfig} from "./manage-config"
 
 interface MiddlewareOptions {
     databaseUrl: string // Connection string for the database
