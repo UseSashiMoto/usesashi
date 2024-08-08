@@ -155,14 +155,11 @@ const checkStatusAndPrintMessages = async (threadId: string, runId: string) => {
     }
 }
 
+registerFunctionIntoAI("add", AddFunction)
+registerFunctionIntoAI("subtract", SubtractObjectFunction)
 for (const [key, value] of getFunctionRegistry()) {
     console.log(key, value)
 }
-
-registerFunctionIntoAI("add", AddFunction)
-registerFunctionIntoAI("subtract", SubtractObjectFunction)
-
-console.log("function length", getFunctionRegistry().size)
 // Example usage
 askOpenAI("Please add 3 and 5.")
-//askOpenAI("Please subtract 3 and 5.")
+askOpenAI("Please subtract 3 and 5.")
