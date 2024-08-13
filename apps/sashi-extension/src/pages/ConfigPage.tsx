@@ -13,7 +13,7 @@ import {
 } from '@chakra-ui/react';
 import { Edit3 } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
-import { useSettingStore } from './store/use-setting.store';
+import { useSettingStore } from '../store/use-setting.store';
 
 interface Config {
   key: string;

@@ -29,7 +29,11 @@ class Settings {
 
         createDatabaseClient(this.config.databaseUrl)
         const redisClient = new Redis(this.config.redisUrl)
-        redisClient.connect()
+        try {
+            //redisClient.connect()
+        } catch (e) {
+            console.log("redis already connected")
+        }
         return this.config
     }
 }

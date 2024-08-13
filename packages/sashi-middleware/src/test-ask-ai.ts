@@ -6,8 +6,7 @@ import {
     AIFunction,
     AIObject,
     callFunctionFromRegistryFromObject,
-    getFunctionRegistry,
-    registerFunctionIntoAI
+    getFunctionRegistry
 } from "./ai-function-loader"
 
 import {AssistantTool} from "openai/resources/beta/assistants"
@@ -68,15 +67,20 @@ const SubtractObjectFunction = new AIFunction(
         return addObject.a - addObject.b
     })
 
-const openai = new OpenAI({apiKey: process.env.OPENAI_API_KEY})
-
-let intervalId: NodeJS.Timeout
-export async function askOpenAI(question: string) {
+const convertToOpenAIFunction = () => {
     const functions: AssistantTool[] = Array.from(
         getFunctionRegistry().values()
     ).map((func) => {
         return func.description() as AssistantTool
     })
+
+    return functions
+}
+const openai = new OpenAI({apiKey: process.env.OPENAI_API_KEY})
+
+let intervalId: NodeJS.Timeout
+async function askOpenAI(question: string) {
+    const functions = convertToOpenAIFunction()
 
     console.log("functions printing", JSON.stringify(functions))
     const assistent = await openai.beta.assistants.create({
@@ -155,11 +159,37 @@ const checkStatusAndPrintMessages = async (threadId: string, runId: string) => {
     }
 }
 
-registerFunctionIntoAI("add", AddFunction)
-registerFunctionIntoAI("subtract", SubtractObjectFunction)
-for (const [key, value] of getFunctionRegistry()) {
-    console.log(key, value)
+export async function chatCompletion({
+    model = "gpt-3.5-turbo-1106",
+    max_tokens = 2048,
+    temperature = 0,
+    messages
+}: {
+    model?: string
+    max_tokens?: number
+    temperature?: number
+    messages: any[]
+}) {
+    let options = {messages, model, temperature, max_tokens} as any // Cast to any to allow dynamic properties
+
+    options.tools = convertToOpenAIFunction()
+
+    try {
+        const result = await openai.chat.completions.create(options)
+
+        console.log(result)
+
+        return result.choices[0]
+    } catch (error: any) {
+        console.log(error.name, error.message)
+
+        throw error
+    }
 }
+
+//registerFunctionIntoAI("add", AddFunction)
+//registerFunctionIntoAI("subtract", SubtractObjectFunction)
+
 // Example usage
-askOpenAI("Please add 3 and 5.")
-askOpenAI("Please subtract 3 and 5.")
+//askOpenAI("Please add 3 and 5.")
+//askOpenAI("Please subtract 3 and 5.")

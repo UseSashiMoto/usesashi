@@ -50,6 +50,7 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
     console.log('Content script is running on the active tab!');
     // Your content script logic here
     if (await validateScriptTag()) {
+      console.log('validateScriptTag is true');
       const scriptTag = document.querySelector('script[src*="usesashi.com/start.js"]');
 
       const url = new URL(scriptTag.src);
