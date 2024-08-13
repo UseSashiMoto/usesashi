@@ -9,7 +9,6 @@ const port = 3000
 // Optional: Use JSON middleware if your middleware or routes need it
 app.use(express.json())
 
-console.log("databaseUrl", process.env.DATABASE_URL)
 
 // Function to list all routes
 const listRoutes = (app: Express) => {
