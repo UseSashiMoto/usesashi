@@ -1,10 +1,11 @@
 import { Box, ChakraProvider, Flex, IconButton, Input, ThemeConfig, VStack, extendTheme } from '@chakra-ui/react';
-import { Blocks, Bolt } from 'lucide-react';
+import { Blocks, Bolt, Bot } from 'lucide-react';
 import React, { ReactElement, useEffect, useState } from 'react';
 import ExpButton from './components/Button';
-import ConfigPage from './ConfigPage';
 import { APP_COLLAPSE_WIDTH, APP_EXTEND_WIDTH } from './const';
-import SettingPage from './SettingPage';
+import AdminBotPage from './pages/AdminBotPage';
+import ConfigPage from './pages/ConfigPage';
+import SettingPage from './pages/SettingPage';
 import { useSettingStore } from './store/use-setting.store';
 
 // 2. Add your color mode config
@@ -51,7 +52,7 @@ export default function Panel({
   const [enabled, setEnabled] = useState(initialEnabled);
   const [sidePanelWidth, setSidePanelWidth] = useState(enabled ? APP_EXTEND_WIDTH : APP_COLLAPSE_WIDTH);
   const [configs, setConfig] = useState<Config[]>([]);
-  const [activePage, setActivePage] = useState('page1');
+  const [activePage, setActivePage] = useState('adminbot_page');
 
   function handleOnToggle(enabled: boolean) {
     const value = enabled ? APP_EXTEND_WIDTH : APP_COLLAPSE_WIDTH;
@@ -106,6 +107,15 @@ export default function Panel({
     getConfig();
   }, [sashiKey, sashiSignature, accountId]);
 
+  const getIcon = (page: string) => {
+    if (page === 'adminbot_page') {
+      return <Bot size={16} />;
+    }
+    if (page === 'config_page') {
+      return <Bolt size={16} />;
+    }
+    return <Blocks size={16} />;
+  };
   return (
     <ChakraProvider disableGlobalStyle cssVarsRoot="#componentRootStart" resetCSS={false} theme={theme}>
       <Box
@@ -137,11 +147,11 @@ export default function Panel({
           </Box>
 
           <Flex w="full" justify="space-around" p={1} borderBottom="1px" borderTop="1px" borderColor="gray.700">
-            {['page1', 'page2'].map((page) => (
+            {['adminbot_page', 'config_page', 'setting_page'].map((page) => (
               <IconButton
                 key={page}
                 aria-label={page}
-                icon={page === 'page2' ? <Bolt size={16} /> : <Blocks size={16} />}
+                icon={getIcon(page)}
                 color={activePage === page ? 'indigo.500' : 'gray.400'}
                 variant="ghost"
                 size="icon"
@@ -150,9 +160,10 @@ export default function Panel({
             ))}
           </Flex>
 
-          <Box p={4} flex="1" overflowY="auto">
-            {activePage === 'page1' && <ConfigPage defaultConfigs={configs} />}
-            {activePage === 'page2' && <SettingPage />}
+          <Box width={'100%'} p={4} flex="1" overflowY="auto">
+            {activePage === 'adminbot_page' && <AdminBotPage />}
+            {activePage === 'config_page' && <ConfigPage defaultConfigs={configs} />}
+            {activePage === 'setting_page' && <SettingPage />}
           </Box>
         </VStack>
         <Flex pos="absolute" bottom={0} left={0} w="50px" zIndex="overlay" justify="center" align="center" p={1}>
@@ -181,16 +192,5 @@ export default function Panel({
         </Flex>
       </Box>
     </ChakraProvider>
-  );
-}
-
-function Page({ title, content }: { title: string; content: string }) {
-  return (
-    <Box>
-      <Box as="h2" fontSize="lg" fontWeight="bold">
-        {title}
-      </Box>
-      <Box>{content}</Box>
-    </Box>
   );
 }

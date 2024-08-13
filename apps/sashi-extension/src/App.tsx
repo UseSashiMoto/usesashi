@@ -39,6 +39,12 @@ export const App = ({
     };
   }, []);
 
+  useEffect(() => {
+    chrome.runtime.sendMessage({ type: 'GET_TAB_INFO' }, (response) => {
+      console.log('Tab Info:', response);
+    });
+  }, []);
+
   console.log('Enabled', enabled);
   if (!enabled) {
     return null; // Or any other logic to stop rendering components

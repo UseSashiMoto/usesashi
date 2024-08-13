@@ -1,7 +1,7 @@
 // ConfigPage.tsx
 import { FormControl, FormHelperText, FormLabel, Heading, Input, VStack } from '@chakra-ui/react';
 import React from 'react';
-import { useSettingStore } from './store/use-setting.store';
+import { useSettingStore } from '../store/use-setting.store';
 
 interface SettingPageProps {}
 
