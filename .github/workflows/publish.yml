@@ -25,7 +25,7 @@ jobs:
                   node-version: 20.x
                   cache: "yarn"
 
-            - run: pnpm install --frozen-lockfile
+            - run: yarn install --frozen-lockfile
             - name: Create Release Pull Request or Publish
               id: changesets
               uses: changesets/action@v1
