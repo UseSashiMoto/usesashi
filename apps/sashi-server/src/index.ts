@@ -1,6 +1,6 @@
 import express from "express"
 import {Express} from "express-serve-static-core"
-import {createMiddleware} from "sashi-middleware"
+import {createMiddleware} from "sashi-lib"
 require("dotenv").config()
 
 const app = express()
