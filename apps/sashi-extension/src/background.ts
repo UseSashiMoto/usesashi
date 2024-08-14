@@ -39,8 +39,6 @@ chrome.runtime.onMessage.addListener(
     }
 
     if (isObject(message) && message.action === 'get-config') {
-      console.log('Getting configs', message.payload);
-
       const fetchConfigs = async () => {
         try {
           const response = await axios.get(`${serverAddress}/s-controls/configs`, {
@@ -58,12 +56,10 @@ chrome.runtime.onMessage.addListener(
             sendResponse({ error: 'Failed to retrieve configs' });
           } else {
             const configs = response.data;
-            console.log('Configs retrieved', configs);
             sendResponse({ action: 'set-config', payload: { configs: configs } });
             chrome.runtime.sendMessage({ action: 'set-config', payload: { configs: configs } });
           }
         } catch (error) {
-          console.error('Error fetching configs:', error);
           sendResponse({ error: 'Error fetching configs' });
         }
       };

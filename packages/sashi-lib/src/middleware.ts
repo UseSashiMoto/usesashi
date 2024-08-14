@@ -3,10 +3,10 @@ import cors from "cors"
 import {Request, Response, Router} from "express"
 import Redis from "ioredis"
 import {callFunctionFromRegistryFromObject} from "./ai-function-loader"
-import {chatCompletion} from "./test-ask-ai"
 import {validateSignedKey} from "./generate-token"
 import {init} from "./init"
 import {getAllConfigs, getConfig, setConfig} from "./manage-config"
+import {chatCompletion} from "./test-ask-ai"
 
 export const isEven = (n: number) => {
     return n % 2 == 0
@@ -54,7 +54,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         "/s-controls/configs/:key",
         async (req: Request, res: Response) => {
             const key: string = req.params.key
-            console.log("Getting configs", key)
 
             const accountkey: string | undefined = req.headers[
                 "account-key"
@@ -87,8 +86,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     )
 
     router.get("/s-controls/configs", async (req: Request, res: Response) => {
-        console.log("Getting configs", "all")
-
         const accountkey: string | undefined = req.headers[
             "account-key"
         ] as string
@@ -169,7 +166,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     })
 
     router.post("/s-controls/chat", async (req, res) => {
-        console.log("/s-controls/chat", req.body)
         const {tools, previous, type} = req.body
 
         if (type === "/chat/function") {
@@ -178,8 +174,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                     status: 400
                 })
             }
-
-            console.log("tool_calls", tools, new Date().toLocaleTimeString())
 
             let tools_output = []
 
@@ -201,8 +195,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                     content: JSON.stringify(tool_output, null, 2)
                 })
             }
-
-            console.log("tools-api-output", tools_output)
 
             let context = trim_array(previous, 20)
 
@@ -239,8 +231,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                     messages
                 })
 
-                console.log("chat-summary", result)
-
                 result_message = result.message
                 res.json({
                     output: result_message
@@ -253,8 +243,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
         if (type === "/chat/message") {
             const {inquiry, previous} = await req.body
-
-            console.log("user", inquiry, new Date().toLocaleTimeString())
 
             let context = trim_array(previous, 20)
 
@@ -286,8 +274,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                     temperature: 0.3,
                     messages
                 })
-
-                console.log("function-calling", result)
 
                 result_message = result.message
 
