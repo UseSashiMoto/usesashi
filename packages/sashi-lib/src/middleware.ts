@@ -53,7 +53,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     router.get(
         "/s-controls/configs/:key",
         async (req: Request, res: Response) => {
-            const key: string = req.params.key
+            const key: string = req.params.key as string
 
             const accountkey: string | undefined = req.headers[
                 "account-key"
@@ -122,7 +122,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     router.post(
         "/s-controls/configs/:key",
         async (req: Request, res: Response) => {
-            const key: string = req.params.key
+            const key: string = req.params.key as string
 
             const accountkey: string | undefined = req.headers[
                 "account-key"
@@ -231,7 +231,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                     messages
                 })
 
-                result_message = result.message
+                result_message = result?.message
                 res.json({
                     output: result_message
                 })
@@ -275,7 +275,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                     messages
                 })
 
-                result_message = result.message
+                result_message = result?.message
 
                 res.json({
                     output: result_message
