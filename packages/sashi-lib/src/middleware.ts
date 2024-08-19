@@ -159,7 +159,9 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
     // Endpoint to validate the key and signed key
     router.post("/s-controls/validate-key", (req, res) => {
-        const {key, signature} = req.body
+        const key = req.headers["account-key"] as string
+        const signature = req.headers["account-signature"] as string
+        console.log("validate-key headers", req.headers, req.body)
         const validated = validateSignedKey(key, signature, secretKey)
 
         res.json({valid: validated})

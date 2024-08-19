@@ -12,15 +12,11 @@ const config: ThemeConfig = {
 // 3. extend the theme
 const theme = extendTheme({ config });
 export const App = ({
-  sashiKey,
-  sashiSignature,
   initialEnabled,
   onWidthChange,
 }: {
   onWidthChange: (value: number) => void;
   initialEnabled: boolean;
-  sashiSignature: string;
-  sashiKey: string;
 }) => {
   const [enabled, setEnabled] = useState(initialEnabled);
 
@@ -50,12 +46,5 @@ export const App = ({
     return null; // Or any other logic to stop rendering components
   }
 
-  return (
-    <Panel
-      sashiKey={sashiKey}
-      sashiSignature={sashiSignature}
-      onWidthChange={onWidthChange}
-      initialEnabled={initialEnabled}
-    />
-  );
+  return <Panel onWidthChange={onWidthChange} initialEnabled={initialEnabled} />;
 };
