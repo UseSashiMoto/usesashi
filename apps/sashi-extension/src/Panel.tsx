@@ -3,6 +3,7 @@ import { Blocks, Bolt, Bot } from 'lucide-react';
 import React, { ReactElement, useEffect, useState } from 'react';
 import ExpButton from './components/Button';
 import { APP_COLLAPSE_WIDTH, APP_EXTEND_WIDTH } from './const';
+import { sendMessageToBackgroundScript } from './lib/backgroundMessaging';
 import AdminBotPage from './pages/AdminBotPage';
 import ConfigPage from './pages/ConfigPage';
 import SettingPage from './pages/SettingPage';
@@ -21,7 +22,7 @@ const theme = extendTheme({
     global: (props: { colorMode: string }) => ({
       'html, body': {
         fontSize: 'sm',
-        color: props.colorMode === 'dark' ? 'white' : 'gray.600',
+        color: props.colorMode === 'dark' ? '' : 'gray.600',
         lineHeight: 'tall',
       },
       a: {
@@ -41,18 +42,23 @@ interface Config {
 export default function Panel({
   onWidthChange,
   initialEnabled,
-  sashiKey,
-  sashiSignature,
 }: {
   onWidthChange: (value: number) => void;
   initialEnabled: boolean;
-  sashiSignature: string;
-  sashiKey: string;
 }): ReactElement {
   const [enabled, setEnabled] = useState(initialEnabled);
   const [sidePanelWidth, setSidePanelWidth] = useState(enabled ? APP_EXTEND_WIDTH : APP_COLLAPSE_WIDTH);
   const [configs, setConfig] = useState<Config[]>([]);
   const [activePage, setActivePage] = useState('adminbot_page');
+  const [validKey, setValidKey] = useState(false);
+
+  useEffect(() => {
+    if (!validKey) {
+      setActivePage('setting_page');
+    } else {
+      setActivePage('adminbot_page');
+    }
+  }, [validKey]);
 
   function handleOnToggle(enabled: boolean) {
     const value = enabled ? APP_EXTEND_WIDTH : APP_COLLAPSE_WIDTH;
@@ -68,35 +74,15 @@ export default function Panel({
     handleOnToggle(newValue);
   }
 
-  function sendMessageToBackgroundScript(message: string | Record<string, any>) {
-    return new Promise<Record<string, any>>((resolve, reject) => {
-      if (chrome && chrome.runtime && chrome.runtime.sendMessage) {
-        console.log('Sending message to background script:', message);
-        chrome.runtime.sendMessage(message, (response: Record<string, any>) => {
-          if (chrome.runtime.lastError) {
-            console.error('Error sending message to background script:', chrome.runtime.lastError);
-            reject(chrome.runtime.lastError);
-          } else {
-            console.log('Response from background script:', response);
-            resolve(response);
-          }
-        });
-      } else {
-        const error = new Error('chrome.runtime.sendMessage is not available');
-        console.error(error);
-        reject(error);
-      }
-    });
-  }
-
-  const { accountId } = useSettingStore();
+  const { accountId, accountKey, accountSignature, serverAddress } = useSettingStore();
 
   useEffect(() => {
     const getConfig = async () => {
+      if (!validKey) return;
       try {
         const response = await sendMessageToBackgroundScript({
           action: 'get-config',
-          payload: { key: sashiKey, signature: sashiSignature, accountId: accountId },
+          payload: { key: accountKey, signature: accountSignature, accountId: accountId, serverAddress: serverAddress },
         });
         setConfig(response?.payload?.configs ?? []);
       } catch (e) {
@@ -105,7 +91,28 @@ export default function Panel({
     };
 
     getConfig();
-  }, [sashiKey, sashiSignature, accountId]);
+  }, [accountSignature, accountKey, accountId, validKey]);
+
+  useEffect(() => {
+    const validateKeys = async () => {
+      if (!accountSignature || !accountKey || !accountId) return;
+
+      console.log('validateKeys', accountSignature, accountKey, accountId, serverAddress);
+      const response = await sendMessageToBackgroundScript({
+        action: 'validate-key',
+        payload: { key: accountKey, signature: accountSignature, accountId: accountId, serverAddress: serverAddress },
+      });
+
+      console.log('response', response);
+
+      if (response?.valid) {
+        setValidKey(true);
+      } else {
+        setValidKey(false);
+      }
+    };
+    validateKeys();
+  }, [accountSignature, accountKey, accountId, serverAddress]);
 
   const getIcon = (page: string) => {
     if (page === 'adminbot_page') {
@@ -116,13 +123,21 @@ export default function Panel({
     }
     return <Blocks size={16} />;
   };
+
+  const getPages = () => {
+    if (validKey) {
+      return ['adminbot_page', 'config_page', 'setting_page'];
+    } else {
+      return ['setting_page'];
+    }
+  };
   return (
     <ChakraProvider disableGlobalStyle cssVarsRoot="#componentRootStart" resetCSS={false} theme={theme}>
       <Box
         maxW={`${sidePanelWidth - 5}px`}
         w={`${sidePanelWidth - 5}px`}
         boxShadow="0px 0px 5px #0000009e"
-        bg="background"
+        bg="gray.600"
         pos="absolute"
         top={0}
         right={0}
@@ -147,7 +162,7 @@ export default function Panel({
           </Box>
 
           <Flex w="full" justify="space-around" p={1} borderBottom="1px" borderTop="1px" borderColor="gray.700">
-            {['adminbot_page', 'config_page', 'setting_page'].map((page) => (
+            {getPages().map((page) => (
               <IconButton
                 key={page}
                 aria-label={page}

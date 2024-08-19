@@ -76,10 +76,12 @@ const convertToOpenAIFunction = () => {
 
     return functions
 }
-const openai = new OpenAI({apiKey: process.env.OPENAI_API_KEY})
+
+//
 
 let intervalId: NodeJS.Timeout
 async function askOpenAI(question: string) {
+    const openai = new OpenAI({apiKey: process.env.OPENAI_API_KEY})
     const functions = convertToOpenAIFunction()
 
     console.log("functions printing", JSON.stringify(functions))
@@ -105,6 +107,7 @@ async function askOpenAI(question: string) {
 
 // Function to check run status and print messages
 const checkStatusAndPrintMessages = async (threadId: string, runId: string) => {
+    const openai = new OpenAI({apiKey: process.env.OPENAI_API_KEY})
     let runStatus = await openai.beta.threads.runs.retrieve(threadId, runId)
     if (runStatus.status === "completed") {
         let messages = await openai.beta.threads.messages.list(threadId)
@@ -170,6 +173,7 @@ export async function chatCompletion({
     temperature?: number
     messages: any[]
 }) {
+    const openai = new OpenAI({apiKey: process.env.OPENAI_API_KEY})
     let options = {messages, model, temperature, max_tokens} as any // Cast to any to allow dynamic properties
 
     options.tools = convertToOpenAIFunction()
@@ -193,4 +197,3 @@ export async function chatCompletion({
 // Example usage
 //askOpenAI("Please add 3 and 5.")
 //askOpenAI("Please subtract 3 and 5.")
-        

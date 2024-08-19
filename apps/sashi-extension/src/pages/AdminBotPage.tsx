@@ -414,7 +414,7 @@ const AdminBotPage: React.FC<SettingPageProps> = ({}) => {
   };
   return (
     <VStack width={'100%'} height={'100%'} spacing={4} align="flex-start">
-      <Heading>Admin Bots</Heading>
+      <Heading>Admin Bot</Heading>
 
       <div style={styles.main}>
         <div ref={messageRef} style={styles.messages}>

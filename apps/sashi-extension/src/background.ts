@@ -1,5 +1,4 @@
 import axios from 'axios';
-import { serverAddress } from './configs/configs';
 import { PayloadObject } from './models/PayloadObject';
 
 function isObject(value: any): value is PayloadObject {
@@ -38,9 +37,44 @@ chrome.runtime.onMessage.addListener(
       return true; // Indicates that sendResponse will be called asynchronously
     }
 
+    if (isObject(message) && message.action === 'validate-key') {
+      console.log('validate-key', message);
+      const { serverAddress } = message.payload;
+
+      const validating = async () => {
+        const response = await axios.post(
+          `${serverAddress}/s-controls/validate-key`,
+          {},
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: 'Bearer your_token_here',
+              'account-key': message.payload.key,
+              'account-signature': message.payload.signature,
+            },
+          }
+        );
+        console.log('valid response.data', response.data);
+
+        if (response.status !== 200) {
+          console.error('Non-200 response status:', response.status);
+          sendResponse({ valid: false });
+        } else {
+          const isValid = response.data;
+          sendResponse({ valid: isValid });
+        }
+
+        return true;
+      };
+      validating();
+
+      return true;
+    }
     if (isObject(message) && message.action === 'get-config') {
       const fetchConfigs = async () => {
         try {
+          const { serverAddress } = message.payload;
+
           const response = await axios.get(`${serverAddress}/s-controls/configs`, {
             headers: {
               'Content-Type': 'application/json',
@@ -70,6 +104,8 @@ chrome.runtime.onMessage.addListener(
     }
 
     if (isObject(message) && message.action === 'send-message') {
+      const { serverAddress } = message.payload;
+
       axios
         .post(`${serverAddress}/s-controls/chat`, message.payload)
         .then((response) => {

@@ -1,6 +1,6 @@
 {
-    "name": "usesashi_app",
     "private": true,
+    "name": "usesashi_app",
     "workspaces": [
         "apps/*",
         "packages/*"
@@ -20,5 +20,9 @@
     "engines": {
         "node": ">=18"
     },
-    "packageManager": "yarn@1.22.19"
+    "publishConfig": {
+        "access": "public"
+    },
+    "packageManager": "yarn@1.22.19",
+    "version": "1.0.0"
 }
