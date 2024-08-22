@@ -69,6 +69,7 @@ const listRoutes = (app: Express) => {
 app.use(
     "/control-panel",
     createMiddleware({
+        openAIKey: process.env.OPENAI_API_KEY || "",
         databaseUrl: process.env.DATABASE_URL || "",
         redisUrl: process.env.REDIS_URL || "",
         accountId: "account-id",

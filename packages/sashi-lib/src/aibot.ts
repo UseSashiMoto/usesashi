@@ -1,6 +1,6 @@
 import OpenAI from "openai"
-import { AssistantTool } from "openai/resources/beta/assistants"
-import { getFunctionRegistry } from "./ai-function-loader"
+import {AssistantTool} from "openai/resources/beta/assistants"
+import {getFunctionRegistry} from "./ai-function-loader"
 
 export class AIBot {
     private _apiKey: string
@@ -15,11 +15,11 @@ export class AIBot {
         ).map((func) => {
             return func.description() as AssistantTool
         })
-    
+
         return functions
     }
 
-     chatCompletion = async ({
+    chatCompletion = async ({
         model = "gpt-3.5-turbo-1106",
         max_tokens = 2048,
         temperature = 0,
@@ -29,23 +29,22 @@ export class AIBot {
         max_tokens?: number
         temperature?: number
         messages: any[]
-    }) {
+    }) => {
         const openai = new OpenAI({apiKey: this._apiKey})
         let options = {messages, model, temperature, max_tokens} as any // Cast to any to allow dynamic properties
-    
+
         options.tools = this.convertToOpenAIFunction()
-    
+
         try {
             const result = await openai.chat.completions.create(options)
-    
+
             console.log(result)
-    
+
             return result.choices[0]
         } catch (error: any) {
             console.log(error.name, error.message)
-    
+
             throw error
         }
     }
 }
-
