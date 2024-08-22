@@ -1,17 +1,7 @@
 //@ts-ignore
 import "openai/shims/node"
 
-import OpenAI from "openai"
-import {
-    AIFunction,
-    AIObject,
-    callFunctionFromRegistryFromObject,
-    getFunctionRegistry
-} from "./ai-function-loader"
-
-import {AssistantTool} from "openai/resources/beta/assistants"
-
-const AddFunction = new AIFunction("add", "Adds two numbers")
+/*const AddFunction = new AIFunction("add", "Adds two numbers")
     .args(
         {
             name: "a",
@@ -190,6 +180,8 @@ export async function chatCompletion({
         throw error
     }
 }
+
+*/
 
 //registerFunctionIntoAI("add", AddFunction)
 //registerFunctionIntoAI("subtract", SubtractObjectFunction)
