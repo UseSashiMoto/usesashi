@@ -9,7 +9,6 @@ const port = 3000
 // Optional: Use JSON middleware if your middleware or routes need it
 app.use(express.json())
 
-
 // Function to list all routes
 const listRoutes = (app: Express) => {
     const routes: any[] = []
@@ -59,7 +58,7 @@ const listRoutes = (app: Express) => {
         }
     })
 
-    console.log("Routes:")
+    console.log("Routes:", process.env.NODE_ENV)
     routes.forEach((route) => {
         console.log(route)
     })

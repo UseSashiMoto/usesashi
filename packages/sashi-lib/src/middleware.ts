@@ -1,12 +1,14 @@
 import bodyParser from "body-parser"
 import cors from "cors"
-import {Request, Response, Router} from "express"
+import express, {Request, Response, Router} from "express"
 import Redis from "ioredis"
 import {callFunctionFromRegistryFromObject} from "./ai-function-loader"
 import {validateSignedKey} from "./generate-token"
 import {init} from "./init"
 import {getAllConfigs, getConfig, setConfig} from "./manage-config"
 import {chatCompletion} from "./test-ask-ai"
+
+var path = require("path")
 
 export const isEven = (n: number) => {
     return n % 2 == 0
@@ -45,7 +47,13 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     router.use(cors())
     router.use(bodyParser.json())
 
-    router.get("/s-controls/sanity-check", (req, res) => {
+    console.log("route info", path.join(__dirname, "../dist/client"))
+    router.use(
+        "/client",
+        express.static(path.join(__dirname, "../dist/client"))
+    )
+
+    router.get("/s-controls/sanity-check", (_req, res) => {
         res.json({message: "Sashi Middleware is running"})
         return
     })
@@ -288,6 +296,10 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                 console.log(error.name, error.message)
             }
         }
+    })
+
+    router.get("/", async (_req, res) => {
+        res.sendFile(path.join(__dirname, "../public/index.html"))
     })
 
     return router
