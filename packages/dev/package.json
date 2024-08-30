@@ -3,7 +3,7 @@
     "version": "1.0.0",
     "private": true,
     "scripts": {
-        "dev": "ts-node-dev --respawn --transpile-only -O \"{\\\"module\\\":\\\"commonjs\\\"}\" utils/worker.ts & next dev",
+        "dev": "next dev",
         "build-next": "next build",
         "start": "next start",
         "lint": "next lint"

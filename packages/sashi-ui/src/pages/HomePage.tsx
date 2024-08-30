@@ -1,20 +1,19 @@
+import axios from "axios"
 import {Bot, SettingsIcon, UserRound} from "lucide-react"
-import React, {useEffect, useState} from "react"
+import React, {useEffect} from "react"
 import useAppStore from "src/store/chat-store"
 import {Layout} from "../components/Layout"
-
 function getUniqueId() {
     return (
         Math.random().toString(36).substring(2) +
         new Date().getTime().toString(36)
     )
 }
-export const HomePage = () => {
+export const HomePage = ({apiUrl}: {apiUrl: string}) => {
     const storedMessages = useAppStore(
         (state: {messages: any}) => state.messages
     )
     const storedMode = useAppStore((state: {mode: any}) => state.mode)
-    const setMode = useAppStore((state: {setMode: any}) => state.setMode)
     const addMessage = useAppStore(
         (state: {addMessage: any}) => state.addMessage
     )
@@ -38,8 +37,6 @@ export const HomePage = () => {
 
     const [funcType, setFuncType] = React.useState(0)
 
-    const [isDialogShown, setDialogShown] = React.useState(false)
-    const [selFuncType, setSelFuncType] = React.useState(0)
     useEffect(() => {
         setMounted(true)
     }, [])
@@ -79,15 +76,23 @@ export const HomePage = () => {
         }
     }
 
-    const sendMessage = async (payload: {
-        tools?: any[]
-        inquiry?: string
-        previous: any
-        type: string
-    }) => {}
+    const sendMessage = async ({
+        payload
+    }: {
+        payload: {
+            tools?: any[]
+            inquiry?: string
+            previous: any
+            type: string
+        }
+    }) => {
+        const response = await axios.post(`${apiUrl}/chat`, payload)
+
+        return response.data
+    }
 
     const submitChatCompletion = async () => {
-        console.log("submitChatCompletion")
+        console.log("submitChatCompletion", inputText)
 
         setLoading(true)
 
@@ -121,9 +126,6 @@ export const HomePage = () => {
 
         try {
             do {
-                const url: string =
-                    result_tools.length > 0 ? "/chat/function" : "/chat/message"
-
                 const payload: {
                     tools?: any[]
                     inquiry?: string
@@ -138,7 +140,7 @@ export const HomePage = () => {
                           }
                         : {inquiry: text, previous, type: "/chat/message"}
 
-                const result: any = await sendMessage(payload)
+                const result = await sendMessage({payload})
 
                 console.log("admin-bot-response", result)
 
@@ -284,7 +286,7 @@ export const HomePage = () => {
     const handleSubmit = async (e: {preventDefault: () => void}) => {
         console.log("handleSubmit", e)
         e.preventDefault()
-
+        console.log("function type", funcType)
         if (funcType > 0) {
             submitAssistant()
         } else {
@@ -300,18 +302,7 @@ export const HomePage = () => {
         }, 100)
     }
 
-    const handleClearMessages = async () => {
-        if (funcType > 0 && threadId) {
-            await deleteThread()
-        }
-
-        setMessageItems([])
-        clearMessages()
-    }
-
-    const [input, setInput] = useState<string>("")
-
-    console.log("messages", messageItems, input)
+    console.log("messages", messageItems, inputText)
 
     return (
         <Layout>
@@ -367,7 +358,7 @@ export const HomePage = () => {
                                     content={input}
                                 />
                             ])*/
-                            setInput("")
+                            setInputText("")
 
                             //const response: ReactNode = await sendMessage(input)
                             //setMessages((messages) => [...messages, response])
@@ -377,13 +368,13 @@ export const HomePage = () => {
                             ref={inputRef}
                             className="bg-zinc-100 rounded-md px-2 py-1.5 w-full outline-none dark:bg-zinc-700 text-zinc-800 dark:text-zinc-300 md:max-w-[500px] max-w-[calc(100dvw-32px)]"
                             placeholder="Send a message..."
-                            value={input}
+                            value={inputText}
                             onChange={(event) => {
                                 console.log(
                                     "message on change",
                                     event.target.value
                                 )
-                                setInput(event.target.value)
+                                setInputText(event.target.value)
                             }}
                         />
                     </form>

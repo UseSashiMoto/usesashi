@@ -1,6 +1,6 @@
 import bodyParser from "body-parser"
 import cors from "cors"
-import express, {Request, Response, Router} from "express"
+import {Request, Response, Router} from "express"
 import Redis from "ioredis"
 import {callFunctionFromRegistryFromObject} from "./ai-function-loader"
 import {validateSignedKey} from "./generate-token"
@@ -48,52 +48,45 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     router.use(bodyParser.json())
 
     console.log("route info", path.join(__dirname, "../dist/client"))
-    router.use(
-        "/client",
-        express.static(path.join(__dirname, "../dist/client"))
-    )
 
-    router.get("/s-controls/sanity-check", (_req, res) => {
+    router.get("/sanity-check", (_req, res) => {
         res.json({message: "Sashi Middleware is running"})
         return
     })
     // Get data endpoint
-    router.get(
-        "/s-controls/configs/:key",
-        async (req: Request, res: Response) => {
-            const key: string = req.params.key as string
+    router.get("/configs/:key", async (req: Request, res: Response) => {
+        const key: string = req.params.key as string
 
-            const accountkey: string | undefined = req.headers[
-                "account-key"
-            ] as string
+        const accountkey: string | undefined = req.headers[
+            "account-key"
+        ] as string
 
-            const accountSignature: string | undefined = req.headers[
-                "account-signature"
-            ] as string
+        const accountSignature: string | undefined = req.headers[
+            "account-signature"
+        ] as string
 
-            if (!validateSignedKey(accountkey, accountSignature, secretKey)) {
-                res.sendStatus(401).send("Unauthorized")
-                return
-            }
-
-            if (!accountId) {
-                return res
-                    .status(400)
-                    .json({message: "Account ID is required in headers"})
-            }
-            try {
-                const {value} = await getConfig(key)
-                res.json({key, value})
-            } catch (error: any) {
-                res.status(500).json({
-                    message: "Failed to retrieve data",
-                    error: error.message
-                })
-            }
+        if (!validateSignedKey(accountkey, accountSignature, secretKey)) {
+            res.sendStatus(401).send("Unauthorized")
+            return
         }
-    )
 
-    router.get("/s-controls/configs", async (req: Request, res: Response) => {
+        if (!accountId) {
+            return res
+                .status(400)
+                .json({message: "Account ID is required in headers"})
+        }
+        try {
+            const {value} = await getConfig(key)
+            res.json({key, value})
+        } catch (error: any) {
+            res.status(500).json({
+                message: "Failed to retrieve data",
+                error: error.message
+            })
+        }
+    })
+
+    router.get("/configs", async (req: Request, res: Response) => {
         const accountkey: string | undefined = req.headers[
             "account-key"
         ] as string
@@ -127,46 +120,43 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     })
 
     // Set data endpoint
-    router.post(
-        "/s-controls/configs/:key",
-        async (req: Request, res: Response) => {
-            const key: string = req.params.key as string
+    router.post("/configs/:key", async (req: Request, res: Response) => {
+        const key: string = req.params.key as string
 
-            const accountkey: string | undefined = req.headers[
-                "account-key"
-            ] as string
+        const accountkey: string | undefined = req.headers[
+            "account-key"
+        ] as string
 
-            const accountSignature: string | undefined = req.headers[
-                "account-signature"
-            ] as string
+        const accountSignature: string | undefined = req.headers[
+            "account-signature"
+        ] as string
 
-            if (!validateSignedKey(accountkey, accountSignature, secretKey)) {
-                res.sendStatus(401).send("Unauthorized")
-                return
-            }
-
-            const {value} = req.body
-
-            if (!accountId) {
-                return res
-                    .status(400)
-                    .json({message: "Account ID is required in headers"})
-            }
-
-            try {
-                await setConfig(key, value)
-                res.json({key, value})
-            } catch (error: any) {
-                res.status(500).json({
-                    message: "Failed to store data",
-                    error: error.message
-                })
-            }
+        if (!validateSignedKey(accountkey, accountSignature, secretKey)) {
+            res.sendStatus(401).send("Unauthorized")
+            return
         }
-    )
+
+        const {value} = req.body
+
+        if (!accountId) {
+            return res
+                .status(400)
+                .json({message: "Account ID is required in headers"})
+        }
+
+        try {
+            await setConfig(key, value)
+            res.json({key, value})
+        } catch (error: any) {
+            res.status(500).json({
+                message: "Failed to store data",
+                error: error.message
+            })
+        }
+    })
 
     // Endpoint to validate the key and signed key
-    router.post("/s-controls/validate-key", (req, res) => {
+    router.post("/validate-key", (req, res) => {
         const key = req.headers["account-key"] as string
         const signature = req.headers["account-signature"] as string
         console.log("validate-key headers", req.headers, req.body)
@@ -175,7 +165,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         res.json({valid: validated})
     })
 
-    router.post("/s-controls/chat", async (req, res) => {
+    router.post("/chat", async (req, res) => {
         const {tools, previous, type} = req.body
 
         if (type === "/chat/function") {
@@ -299,7 +289,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     })
 
     router.get("/", async (_req, res) => {
-        res.sendFile(path.join(__dirname, "../public/index.html"))
+        res.send("Sashi Middleware is running")
     })
 
     return router

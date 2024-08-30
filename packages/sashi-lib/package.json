@@ -1,6 +1,6 @@
 {
     "name": "@sashi/lib",
-    "version": "2.0.0",
+    "version": "2.0.1",
     "description": "Tool to integrate AI admin tools into your application",
     "main": "dist/index.js",
     "module": "./dist/index.mjs",
@@ -17,7 +17,7 @@
         "dist/**"
     ],
     "scripts": {
-        "build": "echo 'Starting build...' && tsc && vite build && echo 'Build completed!' ",
+        "build": "echo 'Starting build...' && tsc && tsup src/index.ts --format cjs, esm --dts&& echo 'Build completed!' ",
         "prepublish": "yarn build",
         "dev": "NODE_ENV=development tsup --watch",
         "lint": "TIMING=1 eslint --fix",
@@ -54,7 +54,6 @@
     "dependencies": {
         "@changesets/cli": "^2.27.7",
         "@emotion/styled": "^11.13.0",
-        "@rollup/plugin-typescript": "^11.1.6",
         "body-parser": "^1.20.2",
         "classnames": "^2.5.1",
         "clsx": "^2.1.1",
@@ -70,8 +69,6 @@
         "openai": "^4.53.2",
         "pg": "^8.7.1",
         "react-markdown": "^9.0.1",
-        "rollup-plugin-typescript-paths": "^1.5.0",
-        "vite": "^5.4.2",
         "zod": "^3.23.8"
     },
     "prisma": {

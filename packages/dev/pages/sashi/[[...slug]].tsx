@@ -2,10 +2,10 @@ import {SashiApp} from "@sashi/ui"
 
 function getBaseUrl() {
     if (process.env.API_URL) {
-        return `https://${process.env.API_URL}/sashi/api`
+        return `https://${process.env.API_URL}`
     }
 
-    return `http://localhost:${process.env.PORT ?? 3000}/control-panel`
+    return `http://localhost:${process.env.API_PORT ?? 3002}/sashi`
 }
 
 const Pages = () => {

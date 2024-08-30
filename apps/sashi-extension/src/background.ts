@@ -43,7 +43,7 @@ chrome.runtime.onMessage.addListener(
 
       const validating = async () => {
         const response = await axios.post(
-          `${serverAddress}/s-controls/validate-key`,
+          `${serverAddress}/validate-key`,
           {},
           {
             headers: {
@@ -75,7 +75,7 @@ chrome.runtime.onMessage.addListener(
         try {
           const { serverAddress } = message.payload;
 
-          const response = await axios.get(`${serverAddress}/s-controls/configs`, {
+          const response = await axios.get(`${serverAddress}/configs`, {
             headers: {
               'Content-Type': 'application/json',
               Authorization: 'Bearer your_token_here',
@@ -107,7 +107,7 @@ chrome.runtime.onMessage.addListener(
       const { serverAddress } = message.payload;
 
       axios
-        .post(`${serverAddress}/s-controls/chat`, message.payload)
+        .post(`${serverAddress}/chat`, message.payload)
         .then((response) => {
           console.log('response', response.data);
           sendResponse(response.data);

@@ -2,7 +2,7 @@
   "name": "react-chrome-extension-template-side-panel",
   "version": "0.2.0",
   "license": "MIT",
-  "source": "./src/index.html",
+  "source": "",
   "browserslist": "> 0.5%, last 2 versions, not dead",
   "scripts": {
     "prestart": "yarn style",

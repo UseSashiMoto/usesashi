@@ -1,10 +1,10 @@
+import {createMiddleware} from "@sashi/lib"
 import express from "express"
 import {Express} from "express-serve-static-core"
-import {createMiddleware} from "sashi-lib"
 require("dotenv").config()
 
 const app = express()
-const port = 3000
+const port = 3002
 
 // Optional: Use JSON middleware if your middleware or routes need it
 app.use(express.json())
@@ -66,7 +66,7 @@ const listRoutes = (app: Express) => {
 
 // Use sashi-middleware
 app.use(
-    "/control-panel",
+    "/sashi",
     createMiddleware({
         databaseUrl: process.env.DATABASE_URL || "",
         redisUrl: process.env.REDIS_URL || "",
