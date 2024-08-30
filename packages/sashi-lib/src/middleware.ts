@@ -3,10 +3,10 @@ import cors from "cors"
 import {Request, Response, Router} from "express"
 import Redis from "ioredis"
 import {callFunctionFromRegistryFromObject} from "./ai-function-loader"
+import {AIBot} from "./aibot"
 import {validateSignedKey} from "./generate-token"
 import {init} from "./init"
 import {getAllConfigs, getConfig, setConfig} from "./manage-config"
-import {chatCompletion} from "./test-ask-ai"
 
 var path = require("path")
 
@@ -27,10 +27,11 @@ export const trim_array = (arr: string | any[], max_length = 20) => {
 }
 
 interface MiddlewareOptions {
-    databaseUrl: string // Connection string for the database
-    redisUrl: string
+    databaseUrl?: string // Connection string for the database
+    redisUrl?: string
     accountId: string // Header name to extract the account ID from request headers
     secretKey: string
+    openAIKey: string
 }
 
 export interface DatabaseClient {
@@ -38,11 +39,19 @@ export interface DatabaseClient {
 }
 
 export const createMiddleware = (options: MiddlewareOptions) => {
-    const {databaseUrl, redisUrl, accountId = "account-id", secretKey} = options
+    const {
+        databaseUrl,
+        redisUrl,
+        openAIKey,
+        accountId = "account-id",
+        secretKey
+    } = options
 
     init({accountId, databaseUrl, redisUrl})
     const redisClient = new Redis(redisUrl)
     const router = Router()
+
+    const aiBot = new AIBot(openAIKey)
 
     router.use(cors())
     router.use(bodyParser.json())
@@ -226,7 +235,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
             let result_message = null
 
             try {
-                let result = await chatCompletion({
+                let result = await aiBot.chatCompletion({
                     temperature: 0.3,
                     messages
                 })
@@ -270,7 +279,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
             let result_message = null
 
             try {
-                let result = await chatCompletion({
+                let result = await aiBot.chatCompletion({
                     temperature: 0.3,
                     messages
                 })
