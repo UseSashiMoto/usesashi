@@ -1,8 +1,8 @@
-import { defineConfig } from "vite";
 import typescript from "@rollup/plugin-typescript";
+import react from "@vitejs/plugin-react";
 import path from "path";
 import { typescriptPaths } from "rollup-plugin-typescript-paths";
-import react from "@vitejs/plugin-react";
+import { defineConfig } from "vite";
 
 export default defineConfig({
   plugins: [react()],
@@ -14,7 +14,7 @@ export default defineConfig({
     reportCompressedSize: true,
     lib: {
       entry: path.resolve(__dirname, "src/main.ts"),
-      name: "QueueDash App",
+      name: "Sashi UI",
       fileName: "main",
       formats: ["cjs", "es"],
     },

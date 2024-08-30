@@ -2,7 +2,7 @@
 const nextConfig = {
   reactStrictMode: true,
   experimental: {
-    transpilePackages: ["@queuedash/api", "@queuedash/ui"],
+    transpilePackages: [],
   },
   webpack: (config) => {
     config.node = {

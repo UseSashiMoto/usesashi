@@ -4,13 +4,13 @@ import {createBrowserRouter, RouterProvider} from "react-router-dom"
 import type {UserPreferences} from "./components/ThemeSwitcher"
 import {HomePage} from "./pages/HomePage"
 
-type QueueDashPagesProps = {
+type PagesProps = {
     // URL to the API
     apiUrl: string
     // Base path for the app
     basename: string
 }
-export const App = ({apiUrl, basename}: QueueDashPagesProps) => {
+export const App = ({apiUrl, basename}: PagesProps) => {
     const [ready, setReady] = useState(false)
     const [queryClient] = useState(() => new QueryClient())
 

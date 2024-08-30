@@ -54,8 +54,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     router.use(cors())
     router.use(bodyParser.json())
 
-    console.log("route info", path.join(__dirname, "../dist/client"))
-
     router.get("/sanity-check", (_req, res) => {
         res.json({message: "Sashi Middleware is running"})
         return
@@ -166,7 +164,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     router.post("/validate-key", (req, res) => {
         const key = req.headers["account-key"] as string
         const signature = req.headers["account-signature"] as string
-        console.log("validate-key headers", req.headers, req.body)
         const validated = validateSignedKey(key, signature, secretKey)
 
         res.json({valid: validated})

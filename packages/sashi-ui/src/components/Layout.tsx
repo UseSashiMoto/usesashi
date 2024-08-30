@@ -4,12 +4,12 @@ import type {FC, PropsWithChildren, ReactNode} from "react"
 import {NavLink} from "react-router-dom"
 import {ThemeSwitcher} from "./ThemeSwitcher"
 
-type QueueNavLinkProps = {
+type SashiLinkProps = {
     to: string
     label: string
     icon?: ReactNode
 }
-const QueueNavLink = ({to, label, icon}: QueueNavLinkProps) => {
+const SashiNavLink = ({to, label, icon}: SashiLinkProps) => {
     return (
         <NavLink
             to={to}
@@ -63,7 +63,7 @@ export const Layout: FC<PropsWithChildren> = ({children}) => {
                             </div>
 
                             <div className="w-full space-y-4">
-                                <QueueNavLink
+                                <SashiNavLink
                                     label="Overview"
                                     icon={
                                         <DashboardIcon

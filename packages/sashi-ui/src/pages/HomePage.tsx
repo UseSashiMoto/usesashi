@@ -21,9 +21,6 @@ export const HomePage = ({apiUrl}: {apiUrl: string}) => {
     const addMessage = useAppStore(
         (state: {addMessage: any}) => state.addMessage
     )
-    const clearMessages = useAppStore(
-        (state: {clearMessages: any}) => state.clearMessages
-    )
 
     const threadId = useAppStore((state: {threadId: any}) => state.threadId)
     const setThreadId = useAppStore(
@@ -51,34 +48,6 @@ export const HomePage = ({apiUrl}: {apiUrl: string}) => {
             setMessageItems(storedMessages)
         }
     }, [isMounted])
-
-    const deleteThread = async () => {
-        try {
-            setLoading(true)
-
-            const response = await fetch("/assistant/thread", {
-                method: "POST",
-                headers: {
-                    Accept: "application/json",
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({threadId: threadId})
-            })
-
-            if (!response.ok) {
-                console.log("Oops, an error occurred", response.status)
-            }
-
-            const result = await response.json()
-
-            console.log(result)
-        } catch (error: any) {
-            console.log(error.name, error.message)
-        } finally {
-            setLoading(false)
-            setThreadId("")
-        }
-    }
 
     const sendMessage = async ({
         payload
@@ -195,7 +164,6 @@ export const HomePage = ({apiUrl}: {apiUrl: string}) => {
     }
 
     const submitAssistant = async () => {
-        console.log("submitAssistant")
         setLoading(true)
 
         const text = inputText
@@ -217,8 +185,6 @@ export const HomePage = ({apiUrl}: {apiUrl: string}) => {
         resetScroll()
 
         try {
-            console.log("submit-assistant", threadId, text)
-
             const thread_id = threadId ? threadId : ""
 
             const response = await fetch("/assistant/message", {
@@ -239,8 +205,6 @@ export const HomePage = ({apiUrl}: {apiUrl: string}) => {
             }
 
             const result = await response.json()
-
-            console.log("assistant", result)
 
             setThreadId(result.threadId)
 
@@ -288,9 +252,7 @@ export const HomePage = ({apiUrl}: {apiUrl: string}) => {
     }
 
     const handleSubmit = async (e: {preventDefault: () => void}) => {
-        console.log("handleSubmit", e)
         e.preventDefault()
-        console.log("function type", funcType)
         if (funcType > 0) {
             submitAssistant()
         } else {
@@ -375,10 +337,6 @@ export const HomePage = ({apiUrl}: {apiUrl: string}) => {
                             placeholder="Send a message..."
                             value={inputText}
                             onChange={(event) => {
-                                console.log(
-                                    "message on change",
-                                    event.target.value
-                                )
                                 setInputText(event.target.value)
                             }}
                         />
