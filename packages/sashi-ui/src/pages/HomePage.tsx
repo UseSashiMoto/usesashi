@@ -1,7 +1,11 @@
 import axios from "axios"
-import {Bot, SettingsIcon, UserRound} from "lucide-react"
+import {motion} from "framer-motion"
 import React, {useEffect} from "react"
+import {Link} from "react-router-dom"
+import {MasonryIcon, VercelIcon} from "src/components/message-icons"
+import {Message} from "src/components/MessageComponent"
 import useAppStore from "src/store/chat-store"
+import {MessageItem} from "src/store/models"
 import {Layout} from "../components/Layout"
 function getUniqueId() {
     return (
@@ -108,7 +112,7 @@ export const HomePage = ({apiUrl}: {apiUrl: string}) => {
             }
         })
 
-        const newUserMessage = {
+        const newUserMessage: MessageItem = {
             id: getUniqueId(),
             created_at: new Date().toISOString(),
             role: "user",
@@ -147,7 +151,7 @@ export const HomePage = ({apiUrl}: {apiUrl: string}) => {
                 if (result.output.content) {
                     console.log(result.output.content)
 
-                    const newAssistantMessage = {
+                    const newAssistantMessage: MessageItem = {
                         id: getUniqueId(),
                         created_at: new Date().toISOString(),
                         role: "assistant",
@@ -201,7 +205,7 @@ export const HomePage = ({apiUrl}: {apiUrl: string}) => {
 
         const message_id = getUniqueId()
 
-        const newUserMessage = {
+        const newUserMessage: MessageItem = {
             id: getUniqueId(),
             created_at: new Date().toISOString(),
             role: "user",
@@ -308,37 +312,38 @@ export const HomePage = ({apiUrl}: {apiUrl: string}) => {
         <Layout>
             <div className="flex flex-row justify-center pb-20 h-dvh bg-white dark:bg-zinc-900">
                 <div className="flex flex-col justify-between gap-4">
+                    {messageItems.length === 0 && (
+                        <motion.div className="h-[350px] px-4 w-full md:w-[500px] md:px-0 pt-20">
+                            <div className="border rounded-lg p-6 flex flex-col gap-4 text-zinc-500 text-sm dark:text-zinc-400 dark:border-zinc-700">
+                                <p className="flex flex-row justify-center gap-4 items-center text-zinc-900 dark:text-zinc-50">
+                                    <VercelIcon size={16} />
+                                    <span>+</span>
+                                    <MasonryIcon />
+                                </p>
+                                <p>
+                                    Sashi Bot is a chatbot that can be used to
+                                    do administrative tasks on your application.
+                                    It can be integrated with your application
+                                    using the Sashi SDK.
+                                </p>
+                                <p>
+                                    {" "}
+                                    Learn more about the{" "}
+                                    <Link
+                                        className="text-blue-500 dark:text-blue-400"
+                                        to="https://sdk.vercel.ai/docs/ai-sdk-rsc/streaming-react-components"
+                                        target="_blank"
+                                    >
+                                        Sashi SDK
+                                    </Link>
+                                    from our website.
+                                </p>
+                            </div>
+                        </motion.div>
+                    )}
                     <div className="flex flex-col gap-3 h-full w-dvw items-center overflow-y-scroll">
                         {messageItems.map((item) => (
-                            <div
-                                key={item.id}
-                                style={{
-                                    padding: "1rem 1rem 0 1rem",
-                                    display: "flex"
-                                }}
-                            >
-                                {item.role === "assistant" && <Bot />}
-                                {item.role === "function" && <SettingsIcon />}
-                                <div
-                                    style={
-                                        item.role === "user"
-                                            ? {
-                                                  backgroundColor: "#ccf6ff",
-                                                  borderRadius: "12px",
-                                                  width: "100%",
-                                                  padding: "1rem",
-                                                  margin: 0
-                                                  // whiteSpace: 'pre-wrap',
-                                              }
-                                            : {
-                                                  backgroundColor: "#efefef"
-                                              }
-                                    }
-                                >
-                                    {item.content}
-                                </div>
-                                {item.role === "user" && <UserRound />}
-                            </div>
+                            <Message role={item.role} content={item.content} />
                         ))}
                         <div />
                     </div>

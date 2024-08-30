@@ -1,14 +1,9 @@
-import {create} from "zustand"
-import {createJSONStorage, persist} from "zustand/middleware"
+import { create } from "zustand"
+import { createJSONStorage, persist } from "zustand/middleware"
 
 export const APP_STORAGE_KEY = "openai-api-function-call-sample-storage"
 
-interface MessageItem {
-    id: string
-    created_at: string
-    role: string
-    content: string
-}
+
 interface MessageState {
     messages: MessageItem[]
     threadId: string

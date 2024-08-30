@@ -1,7 +1,6 @@
 import bodyParser from "body-parser"
 import cors from "cors"
 import {Request, Response, Router} from "express"
-import Redis from "ioredis"
 import {callFunctionFromRegistryFromObject} from "./ai-function-loader"
 import {AIBot} from "./aibot"
 import {validateSignedKey} from "./generate-token"
@@ -48,7 +47,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     } = options
 
     init({accountId, databaseUrl, redisUrl})
-    const redisClient = new Redis(redisUrl)
     const router = Router()
 
     const aiBot = new AIBot(openAIKey)
@@ -279,7 +277,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
             let result_message = null
 
             try {
-                let result = await aiBot.chatCompletion({
+                const result = await aiBot.chatCompletion({
                     temperature: 0.3,
                     messages
                 })
