@@ -1,7 +1,7 @@
 ---
-"@sashimo/client": major
 "@sashimo/lib": major
 "@sashimo/ui": major
+"@sashimo/client": major
 ---
 
-version deploy for bugs
+deploy to npm

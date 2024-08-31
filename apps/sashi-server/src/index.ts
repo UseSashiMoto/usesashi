@@ -1,4 +1,4 @@
-import {createMiddleware} from "@sashi/lib"
+import {createMiddleware} from "@sashimo/lib"
 import express from "express"
 import {Express} from "express-serve-static-core"
 require("dotenv").config()

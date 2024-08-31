@@ -1,5 +1,5 @@
 {
-    "name": "@sashi/ui",
+    "name": "@sashimo/ui",
     "version": "1.0.1",
     "description": "A stunning, sleek dashboard for Admin AI",
     "main": "./dist/main.js",

@@ -1,4 +1,4 @@
-import { SashiApp } from "@sashi/ui";
+import { SashiApp } from "@sashimo/ui";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
