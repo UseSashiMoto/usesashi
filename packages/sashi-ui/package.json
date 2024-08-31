@@ -13,7 +13,7 @@
         "build": "tsc && vite build && npx tailwindcss -i src/styles/global.css -o ./dist/styles.css",
         "dev": "pnpm run build --watch",
         "tailwind": "npx tailwindcss -i src/styles/global.css -o ./dist/styles.css --watch",
-        "lint": "eslint ./ --fix"
+        "lint": "eslint  --fix"
     },
     "dependencies": {
         "@monaco-editor/react": "^4.4.6",
