@@ -1,4 +1,3 @@
-// ConfigPage.tsx
 import { Heading, IconButton, Input, InputGroup, InputRightElement, VStack } from '@chakra-ui/react';
 import { Bot, SendHorizontal, SettingsIcon, UserRound, X } from 'lucide-react';
 import React, { CSSProperties } from 'react';
@@ -408,10 +407,6 @@ const AdminBotPage: React.FC<SettingPageProps> = ({}) => {
     clearMessages();
   };
 
-  const handleChangeFunction = (e: { target: { value: React.SetStateAction<number> } }) => {
-    setSelFuncType(e.target.value);
-    setDialogShown(true);
-  };
   return (
     <VStack width={'100%'} height={'100%'} spacing={4} align="flex-start">
       <Heading>Admin Bot</Heading>

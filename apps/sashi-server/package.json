@@ -7,15 +7,15 @@
     "scripts": {
         "start": "ts-node src/index.ts",
         "build": "tsc",
-        "serve": "node dist/index.js",
-        "dev": "nodemon src/index.ts",
+        "serve": " node dist/index.js",
+        "dev": "NODE_ENV=development nodemon src/index.ts",
         "generate:token": "ts-node src/generate-token.ts"
     },
     "devDependencies": {
         "@types/express": "^4.17.21",
         "@types/node": "^20.12.12",
         "nodemon": "^3.1.0",
-        "sashi-lib": "*",
+        "@sashi/lib": "*",
         "ts-node": "^10.9.2",
         "typescript": "^5.4.5"
     },

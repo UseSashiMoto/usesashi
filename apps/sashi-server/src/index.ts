@@ -1,14 +1,13 @@
+import {createMiddleware} from "@sashi/lib"
 import express from "express"
 import {Express} from "express-serve-static-core"
-import {createMiddleware} from "sashi-lib"
 require("dotenv").config()
 
 const app = express()
-const port = 3000
+const port = 3002
 
 // Optional: Use JSON middleware if your middleware or routes need it
 app.use(express.json())
-
 
 // Function to list all routes
 const listRoutes = (app: Express) => {
@@ -59,7 +58,7 @@ const listRoutes = (app: Express) => {
         }
     })
 
-    console.log("Routes:")
+    console.log("Routes:", process.env.NODE_ENV)
     routes.forEach((route) => {
         console.log(route)
     })
@@ -67,7 +66,7 @@ const listRoutes = (app: Express) => {
 
 // Use sashi-middleware
 app.use(
-    "/control-panel",
+    "/sashi",
     createMiddleware({
         openAIKey: process.env.OPENAI_API_KEY || "",
         databaseUrl: process.env.DATABASE_URL || "",
