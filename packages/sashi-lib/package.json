@@ -1,6 +1,6 @@
 {
     "name": "@sashi/lib",
-    "version": "2.0.1",
+    "version": "1.0.1",
     "description": "Tool to integrate AI admin tools into your application",
     "main": "dist/index.js",
     "module": "./dist/index.mjs",
