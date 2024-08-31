@@ -1,4 +1,4 @@
-import "@sashi/ui/dist/styles.css"
+import "@sashimo/ui/dist/styles.css"
 
 import type {AppType} from "next/app"
 

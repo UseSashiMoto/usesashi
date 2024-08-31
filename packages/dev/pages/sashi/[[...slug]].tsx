@@ -1,4 +1,4 @@
-import {SashiApp} from "@sashi/ui"
+import {SashiApp} from "@sashimo/ui"
 
 function getBaseUrl() {
     if (process.env.API_URL) {

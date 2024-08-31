@@ -1,6 +1,6 @@
 {
-    "name": "@sashi/ui",
-    "version": "2.0.0",
+    "name": "@sashimo/ui",
+    "version": "1.0.1",
     "description": "A stunning, sleek dashboard for Admin AI",
     "main": "./dist/main.js",
     "module": "./dist/main.mjs",

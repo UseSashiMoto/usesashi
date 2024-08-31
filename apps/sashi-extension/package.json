@@ -3,6 +3,7 @@
   "version": "0.2.0",
   "license": "MIT",
   "source": "",
+  "private": true,
   "browserslist": "> 0.5%, last 2 versions, not dead",
   "scripts": {
     "prestart": "yarn style",
