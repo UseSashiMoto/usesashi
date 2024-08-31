@@ -292,8 +292,19 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         }
     })
 
-    router.get("/", async (_req, res) => {
-        res.send("Sashi Middleware is running")
+    router.get("/", async (req, res) => {
+        const newPath = `${req.originalUrl.replace(/\/$/, "")}/bot`
+        console.log("newPath", newPath)
+        res.redirect(newPath)
+        res.redirect("bot")
+        return
+    })
+
+    router.get("/bot", async (req, res) => {
+        //res.type("text/html").send(createSashiHtml(req.baseUrl))
+        res.json({message: "Sashi Bot is running"})
+
+        return
     })
 
     return router
