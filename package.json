@@ -1,20 +1,16 @@
 {
     "name": "usesashi_app",
-    "workspaces": [
-        "apps/*",
-        "packages/*"
-    ],
     "scripts": {
-        "build": "turbo build",
-        "dev": "turbo dev",
-        "lint": "turbo lint",
-        "publish": "turbo publish",
+        "build": "turbo run build",
+        "dev": "turb run dev",
+        "lint": "turbo run lint",
+        "publish": "turbo run publish",
         "format": "prettier --write \"**/*.{ts,tsx,md}\"",
         "release": "yarn build && changeset publish"
     },
     "devDependencies": {
-        "@repo/eslint-config": "*",
-        "@repo/typescript-config": "*",
+        "@changesets/changelog-github": "^0.4.8",
+        "@changesets/cli": "^2.26.0",
         "prettier": "^3.2.5",
         "turbo": ">=2.1.0"
     },
