@@ -1,4 +1,6 @@
-import {version} from "../package.json"
+const packaging = require("../package.json")
+
+const version = packaging.version
 
 export const createSashiHtml = (baseUrl: string) => /* HTML */ `<!DOCTYPE html>
   <html lang="en">
