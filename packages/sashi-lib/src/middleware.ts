@@ -6,6 +6,7 @@ import {AIBot} from "./aibot"
 import {validateSignedKey} from "./generate-token"
 import {init} from "./init"
 import {getAllConfigs, getConfig, setConfig} from "./manage-config"
+import {createSashiHtml} from "./utils"
 
 var path = require("path")
 
@@ -292,8 +293,17 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         }
     })
 
-    router.get("/", async (_req, res) => {
-        res.send("Sashi Middleware is running")
+    router.get("/", async (req, res) => {
+        const newPath = `${req.originalUrl.replace(/\/$/, "")}/bot`
+
+        res.redirect(newPath)
+        return
+    })
+
+    router.get("/bot", async (req, res) => {
+        res.type("text/html").send(createSashiHtml(req.baseUrl))
+
+        return
     })
 
     return router
