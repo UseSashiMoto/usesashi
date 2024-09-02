@@ -32,6 +32,7 @@ interface MiddlewareOptions {
     accountId: string // Header name to extract the account ID from request headers
     secretKey: string
     openAIKey: string
+    sashiServerUrl?: string //where the sashi server is hosted if you can't find it automatically
 }
 
 export interface DatabaseClient {
@@ -44,6 +45,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         redisUrl,
         openAIKey,
         accountId = "account-id",
+        sashiServerUrl,
         secretKey
     } = options
 
@@ -294,14 +296,16 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     })
 
     router.get("/", async (req, res) => {
-        const newPath = `${req.originalUrl.replace(/\/$/, "")}/bot`
+        const newPath = `${sashiServerUrl ?? req.originalUrl.replace(/\/$/, "")}/bot`
 
         res.redirect(newPath)
         return
     })
 
     router.get("/bot", async (req, res) => {
-        res.type("text/html").send(createSashiHtml(req.baseUrl))
+        res.type("text/html").send(
+            createSashiHtml(sashiServerUrl ?? req.baseUrl)
+        )
 
         return
     })
