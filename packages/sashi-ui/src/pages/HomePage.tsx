@@ -14,6 +14,7 @@ function getUniqueId() {
     )
 }
 export const HomePage = ({apiUrl}: {apiUrl: string}) => {
+    console.log("HomePage", apiUrl)
     const storedMessages = useAppStore(
         (state: {messages: any}) => state.messages
     )
