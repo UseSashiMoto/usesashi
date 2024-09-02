@@ -1,5 +1,11 @@
 # @sashi/ui
 
+## 2.5.0
+
+### Minor Changes
+
+- a95ae70: debugging
+
 ## 2.4.0
 
 ### Minor Changes
