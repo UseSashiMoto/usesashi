@@ -1,5 +1,11 @@
 # sashi-lib
 
+## 2.8.0
+
+### Minor Changes
+
+- d4dd194: unminify
+
 ## 2.7.0
 
 ### Minor Changes
