@@ -17,6 +17,9 @@ export const createSashiHtml = (baseUrl: string) => /* HTML */ `<!DOCTYPE html>
           basename: "${baseUrl}/bot",
         };
       </script>
+          <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+
       <link
         rel="stylesheet"
         href="https://unpkg.com/@sashimo/ui@${version}/dist/styles.css"
@@ -24,6 +27,7 @@ export const createSashiHtml = (baseUrl: string) => /* HTML */ `<!DOCTYPE html>
       <script
         type="module"
         src="https://unpkg.com/@sashimo/client@${version}/dist/main.mjs"
+        crossorigin
       ></script>
     </body>
   </html>`
