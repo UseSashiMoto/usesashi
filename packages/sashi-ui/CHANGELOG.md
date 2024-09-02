@@ -1,5 +1,11 @@
 # @sashi/ui
 
+## 2.4.0
+
+### Minor Changes
+
+- 18fdb07: adding react libs to cdn script
+
 ## 2.3.0
 
 ### Minor Changes
