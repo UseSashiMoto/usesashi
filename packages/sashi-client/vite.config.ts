@@ -10,8 +10,12 @@ export default defineConfig({
         "process.env.NODE_ENV": JSON.stringify("production")
     },
     build: {
-        minify: true,
+        minify: false,
         reportCompressedSize: true,
+        terserOptions: {
+            compress: false,
+            mangle: false
+        },
         lib: {
             entry: path.resolve(__dirname, "src/main.tsx"),
             name: "Sashi Client",
@@ -24,7 +28,7 @@ export default defineConfig({
                     preserveExtensions: true
                 }),
                 typescript({
-                    sourceMap: false,
+                    sourceMap: true,
                     declaration: true,
                     outDir: "dist"
                 })
