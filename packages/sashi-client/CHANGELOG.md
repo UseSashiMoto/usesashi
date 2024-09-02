@@ -1,5 +1,11 @@
 # @sashi/client
 
+## 2.9.0
+
+### Minor Changes
+
+- 67bd9e3: debugging with csr
+
 ## 2.8.0
 
 ### Minor Changes
