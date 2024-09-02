@@ -57,8 +57,12 @@ export const App = ({apiUrl, basename}: PagesProps) => {
     )
 
     return (
-        <QueryClientProvider client={queryClient}>
-            <RouterProvider router={router} />
-        </QueryClientProvider>
+        <div>
+            <div>React App Loading</div>
+            <div>{basename}</div>
+            <QueryClientProvider client={queryClient}>
+                <RouterProvider router={router} />
+            </QueryClientProvider>
+        </div>
     )
 }
