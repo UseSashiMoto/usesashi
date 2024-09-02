@@ -1,5 +1,11 @@
 # sashi-lib
 
+## 2.3.0
+
+### Minor Changes
+
+- 12ff3cf: debugging
+
 ## 2.2.0
 
 ### Minor Changes
