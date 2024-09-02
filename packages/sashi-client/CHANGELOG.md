@@ -1,5 +1,11 @@
 # @sashi/client
 
+## 2.2.0
+
+### Minor Changes
+
+- 88712d9: added debugging for client
+
 ## 2.1.0
 
 ### Minor Changes
