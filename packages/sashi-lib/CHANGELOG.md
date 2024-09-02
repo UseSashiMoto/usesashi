@@ -1,5 +1,11 @@
 # sashi-lib
 
+## 2.6.0
+
+### Minor Changes
+
+- edee5cf: debugging
+
 ## 2.5.0
 
 ### Minor Changes
