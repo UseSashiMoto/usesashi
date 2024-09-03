@@ -1,5 +1,11 @@
 # @sashi/ui
 
+## 2.10.0
+
+### Minor Changes
+
+- 0a76d7d: remove router
+
 ## 2.9.0
 
 ### Minor Changes
