@@ -1,5 +1,11 @@
 # @sashi/ui
 
+## 2.11.0
+
+### Minor Changes
+
+- 3efacc0: removing browser navigation
+
 ## 2.10.0
 
 ### Minor Changes
