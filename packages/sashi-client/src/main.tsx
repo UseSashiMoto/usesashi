@@ -16,8 +16,6 @@ console.log("Initial state:", window.__INITIAL_STATE__)
 
 createRoot(document.getElementById("root")!).render(
     <StrictMode>
-        <div>React App Loaded</div>
-
         <SashiApp
             apiUrl={window.__INITIAL_STATE__.apiUrl}
             basename={window.__INITIAL_STATE__.basename}
