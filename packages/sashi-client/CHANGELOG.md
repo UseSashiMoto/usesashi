@@ -1,5 +1,11 @@
 # @sashi/client
 
+## 2.12.0
+
+### Minor Changes
+
+- e399b06: added AI function classes for loading local functions
+
 ## 2.11.0
 
 ### Minor Changes
