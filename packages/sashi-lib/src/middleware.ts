@@ -302,10 +302,11 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         return
     })
 
-    router.get("/bot", async (req, res) => {
+    router.use("/bot", async (req, res, next) => {
         res.type("text/html").send(
             createSashiHtml(sashiServerUrl ?? req.baseUrl)
         )
+        next()
 
         return
     })
