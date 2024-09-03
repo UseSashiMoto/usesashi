@@ -1,6 +1,6 @@
-import {QueryClient, QueryClientProvider} from "@tanstack/react-query"
+import {QueryClient} from "@tanstack/react-query"
 import {useEffect, useState} from "react"
-import {createBrowserRouter, RouterProvider} from "react-router-dom"
+import {createBrowserRouter} from "react-router-dom"
 import type {UserPreferences} from "./components/ThemeSwitcher"
 import {HomePage} from "./pages/HomePage"
 
@@ -60,9 +60,12 @@ export const App = ({apiUrl, basename}: PagesProps) => {
         <div>
             <div>React App Loading</div>
             <div>{basename}</div>
+            <HomePage apiUrl={apiUrl} />
+            {/*
             <QueryClientProvider client={queryClient}>
                 <RouterProvider router={router} />
             </QueryClientProvider>
+            */}
         </div>
     )
 }
