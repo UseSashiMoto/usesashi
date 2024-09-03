@@ -1,7 +1,6 @@
 import {DashboardIcon, GitHubLogoIcon} from "@radix-ui/react-icons"
 import * as Toast from "@radix-ui/react-toast"
 import type {FC, PropsWithChildren, ReactNode} from "react"
-import {NavLink} from "react-router-dom"
 import {ThemeSwitcher} from "./ThemeSwitcher"
 
 type SashiLinkProps = {
@@ -9,7 +8,7 @@ type SashiLinkProps = {
     label: string
     icon?: ReactNode
 }
-const SashiNavLink = ({to, label, icon}: SashiLinkProps) => {
+/*const SashiNavLink = ({to, label, icon}: SashiLinkProps) => {
     return (
         <NavLink
             to={to}
@@ -25,7 +24,7 @@ const SashiNavLink = ({to, label, icon}: SashiLinkProps) => {
             <span className="block truncate">{label}</span>
         </NavLink>
     )
-}
+}*/
 
 export const Layout: FC<PropsWithChildren> = ({children}) => {
     return (
@@ -63,7 +62,12 @@ export const Layout: FC<PropsWithChildren> = ({children}) => {
                             </div>
 
                             <div className="w-full space-y-4">
-                                <SashiNavLink
+                                <DashboardIcon
+                                    className="mb-0.5"
+                                    height={16}
+                                    width={16}
+                                />
+                                {/*<SashiNavLink
                                     label="Overview"
                                     icon={
                                         <DashboardIcon
@@ -73,7 +77,7 @@ export const Layout: FC<PropsWithChildren> = ({children}) => {
                                         />
                                     }
                                     to={`../`}
-                                />
+                                />*/}
                                 <div className="h-px w-full bg-slate-100 dark:bg-slate-700" />
                                 <div className="w-full space-y-1"></div>
                             </div>

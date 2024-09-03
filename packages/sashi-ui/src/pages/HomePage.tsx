@@ -1,7 +1,6 @@
 import axios from "axios"
 import {motion} from "framer-motion"
 import React, {useEffect} from "react"
-import {Link} from "react-router-dom"
 import {MasonryIcon, VercelIcon} from "src/components/message-icons"
 import {Message} from "src/components/MessageComponent"
 import useAppStore from "src/store/chat-store"
@@ -292,13 +291,13 @@ export const HomePage = ({apiUrl}: {apiUrl: string}) => {
                                 <p>
                                     {" "}
                                     Learn more about the{" "}
-                                    <Link
+                                    <a
                                         className="text-blue-500 dark:text-blue-400"
-                                        to="https://sdk.vercel.ai/docs/ai-sdk-rsc/streaming-react-components"
+                                        href="https://sdk.vercel.ai/docs/ai-sdk-rsc/streaming-react-components"
                                         target="_blank"
                                     >
                                         Sashi SDK
-                                    </Link>
+                                    </a>
                                     from our website.
                                 </p>
                             </div>
