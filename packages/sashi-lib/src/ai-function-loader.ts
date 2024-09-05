@@ -4,6 +4,7 @@ type AllowedTypes =
     | "string"
     | "number"
     | "boolean"
+    | "array"
     | AIField<string | number | boolean>[]
 
 export type AIField<T> = {
@@ -55,19 +56,60 @@ export class AIObject {
         | z.ZodNumber
         | z.ZodBoolean
         | z.ZodArray<z.ZodTypeAny, "many">
+        | z.ZodEffects<z.ZodString, any, any>
+        | z.ZodUnion<[z.ZodEffects<z.ZodString, any, any>, z.ZodNumber]> // This handles the case of number transformation
+        | z.ZodUnion<[z.ZodEffects<z.ZodString, any, any>, z.ZodBoolean]> // This handles the case of boolean transformation
+        | z.ZodUnion<
+              [
+                  z.ZodEffects<z.ZodString, any, any>,
+                  z.ZodArray<z.ZodTypeAny, "many">
+              ]
+          > // For array transformations
         | z.ZodNull => {
         switch (field.type) {
             case "string":
                 return z.string()
+
             case "number":
-                return z.number()
+                return z
+                    .string()
+                    .transform((val) => {
+                        const parsed = Number(val)
+                        if (isNaN(parsed)) {
+                            throw new Error("Invalid number")
+                        }
+                        return parsed
+                    })
+                    .or(z.number()) // Support both strings and numbers
+
             case "boolean":
-                return z.boolean()
+                return z
+                    .string()
+                    .transform((val) => {
+                        if (val === "true") return true
+                        if (val === "false") return false
+                        throw new Error("Invalid boolean")
+                    })
+                    .or(z.boolean()) // Support both strings and booleans
+
+            case "array":
+                return z
+                    .string()
+                    .transform((val) => {
+                        try {
+                            const parsed = JSON.parse(val)
+                            if (Array.isArray(parsed)) return parsed
+                            throw new Error("Invalid array")
+                        } catch (error) {
+                            throw new Error("Invalid array")
+                        }
+                    })
+                    .or(z.array(z.any())) // Support both strings (for stringified arrays) and arrays
+
             default:
-                return z.array(z.any()) // Adjust based on the specific type of array elements
+                throw new Error("Unsupported type")
         }
     }
-
     description(): Record<string, any> {
         return {
             type: "object",
@@ -119,7 +161,7 @@ export class AIFunction {
         return this
     }
 
-    returns(returnType: AIField<any>) {
+    returns(returnType: AIField<any> | AIObject) {
         this._returnType = returnType
         return this
     }
@@ -131,6 +173,10 @@ export class AIFunction {
 
     getName(): string {
         return this._name
+    }
+
+    getDescription(): string {
+        return this._description
     }
 
     getParams(): (AIField<any> | AIObject)[] {
@@ -209,7 +255,7 @@ export class AIFunction {
         }
     }
 
-    execute(...args: any[]) {
+    async execute(...args: any[]) {
         const parsedArgs = z
             .tuple(
                 this._params.map(this.validateAIField) as [
@@ -219,12 +265,18 @@ export class AIFunction {
             )
             .parse(args)
 
-        const result = this._implementation(...parsedArgs)
-        if (this._returnType) {
-            const returnTypeSchema = this.validateAIField(this._returnType)
-            return returnTypeSchema.parse(result)
+        console.log("execute", parsedArgs, args, this._params)
+
+        try {
+            const result = await this._implementation(...parsedArgs)
+            if (this._returnType) {
+                const returnTypeSchema = this.validateAIField(this._returnType)
+                return returnTypeSchema.parse(result)
+            }
+            return result
+        } catch (e) {
+            return "there was a error calling this function"
         }
-        return result
     }
 }
 
@@ -287,5 +339,5 @@ export async function callFunctionFromRegistryFromObject<F extends AIFunction>(
     // Call the function
     const result = await registeredFunction.execute(...args)
 
-    return result
+    return result ?? "This function is not available"
 }

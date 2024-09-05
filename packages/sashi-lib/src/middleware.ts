@@ -1,7 +1,10 @@
 import bodyParser from "body-parser"
 import cors from "cors"
 import {Request, Response, Router} from "express"
-import {callFunctionFromRegistryFromObject} from "./ai-function-loader"
+import {
+    callFunctionFromRegistryFromObject,
+    getFunctionRegistry
+} from "./ai-function-loader"
 import {AIBot} from "./aibot"
 import {validateSignedKey} from "./generate-token"
 import {init} from "./init"
@@ -10,6 +13,28 @@ import {createSashiHtml} from "./utils"
 
 var path = require("path")
 
+const getSystemPrompt = () => {
+    const today = new Date()
+
+    const system_prompt =
+        `You are a helpful admin assistant for an application.\n\n` +
+        `You job is to take user inquires and use the tools that we give you to help the users.\n` +
+        `You will either use the current tool or list out the tools the user can use as a workflow a user can trigger\n` +
+        `You might have to pass the response of one tool to a child tool and when you return result show parent tools and how it was passed to a child tool\n` +
+        `When you fill up some of the required information yourself, be sure to confirm to user before proceeding.\n` +
+        `Aside from the given functions above, answer all other inquiries by telling the user that it is out of scope of your ability.\n\n` +
+        `# User\n` +
+        `If my full name is needed, please ask me for my full name.\n\n` +
+        `# Language Support\n` +
+        `Please reply in the language used by the user.\n\n` +
+        `# Tools\n` +
+        `You have access to the following tools:\n` +
+        `${[...getFunctionRegistry().values()].map((func) => `${func.getName()}+":"+${func.getDescription()}`).join("\n")}\n\n` +
+        `when ask tell them they have access to those tools only and tell them they have no access to other tools\n\n` +
+        `Today is ${today}`
+
+    return system_prompt
+}
 export const isEven = (n: number) => {
     return n % 2 == 0
 }
@@ -175,6 +200,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     router.post("/chat", async (req, res) => {
         const {tools, previous, type} = req.body
 
+        console.log("type", type)
         if (type === "/chat/function") {
             if (!Array.isArray(tools) || !Array.isArray(previous)) {
                 return new Response("Bad system prompt", {
@@ -207,18 +233,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
             const today = new Date()
 
-            const system_prompt =
-                `You are a helpful admin assistant for an application.\n\n` +
-                `You job is to take user inquires and use the tools to help the users.\n` +
-                `You will either use the current tool or list out the tools the user can use as a workflow a user can trigger\n` +
-                `You might have to pass the response of one tool to a child tool and when you return result show parent tools and how it was passed to a child tool\n` +
-                `When you fill up some of the required information yourself, be sure to confirm to user before proceeding.\n` +
-                `Aside from the given functions above, answer all other inquiries by telling the user that it is out of scope of your ability.\n\n` +
-                `# User\n` +
-                `If my full name is needed, please ask me for my full name.\n\n` +
-                `# Language Support\n` +
-                `Please reply in the language used by the user.\n\n` +
-                `Today is ${today}`
+            const system_prompt = getSystemPrompt()
 
             let messages: any[] = [{role: "system", content: system_prompt}]
             if (context.length > 0) {
@@ -233,10 +248,14 @@ export const createMiddleware = (options: MiddlewareOptions) => {
             let result_message = null
 
             try {
+                console.log("before chatCompletion")
+
                 let result = await aiBot.chatCompletion({
                     temperature: 0.3,
                     messages
                 })
+
+                console.log("after chatCompletion")
 
                 result_message = result?.message
                 res.json({
@@ -244,7 +263,13 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                 })
                 return
             } catch (error: any) {
-                console.log(error.name, error.message)
+                console.log(
+                    "chatCompletion function error",
+                    error.name,
+                    error.message,
+                    req.body
+                )
+                console.log("chatCompletion function error #2", messages)
             }
         }
 
@@ -255,18 +280,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
             const today = new Date()
 
-            const system_prompt =
-                `You are a helpful admin assistant for an application.\n\n` +
-                `You job is to take user inquires and use the tools to help the users.\n` +
-                `You will either use the current tool or list out the tools the user can use as a workflow a user can trigger\n` +
-                `You might have to pass the response of one tool to a child tool and when you return result show parent tools and how it was passed to a child tool\n` +
-                `When you fill up some of the required information yourself, be sure to confirm to user before proceeding.\n` +
-                `Aside from the given functions above, answer all other inquiries by telling the user that it is out of scope of your ability.\n\n` +
-                `# User\n` +
-                `If my full name is needed, please ask me for my full name.\n\n` +
-                `# Language Support\n` +
-                `Please reply in the language used by the user.\n\n` +
-                `Today is ${today}`
+            const system_prompt = getSystemPrompt()
 
             let messages: any[] = [{role: "system", content: system_prompt}]
             if (context.length > 0) {
@@ -277,10 +291,12 @@ export const createMiddleware = (options: MiddlewareOptions) => {
             let result_message = null
 
             try {
+                console.log("before chatCompletion", messages)
                 const result = await aiBot.chatCompletion({
                     temperature: 0.3,
                     messages
                 })
+                console.log("after chatCompletion")
 
                 result_message = result?.message
 
@@ -290,7 +306,14 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
                 return
             } catch (error: any) {
-                console.log(error.name, error.message)
+                console.log(
+                    "chatCompletion message error",
+                    error.name,
+                    error.message,
+                    req.body
+                )
+
+                console.log("chatCompletion message error #2", messages)
             }
         }
     })

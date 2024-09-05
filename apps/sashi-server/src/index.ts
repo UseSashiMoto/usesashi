@@ -1,6 +1,8 @@
 import {createMiddleware} from "@sashimo/lib"
 import express from "express"
 import {Express} from "express-serve-static-core"
+import "./services/user_service"
+
 require("dotenv").config()
 
 const app = express()
