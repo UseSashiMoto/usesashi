@@ -193,6 +193,7 @@ export class AIObject {
 }
 
 export class AIFunction {
+    private _repo: string
     private _name: string
 
     private _description: string
@@ -232,6 +233,10 @@ export class AIFunction {
 
     getParams(): (AIField<any> | AIObject | AIArray)[] {
         return this._params
+    }
+
+    getRepo(): string {
+        return this._repo
     }
 
     validateAIField = (
