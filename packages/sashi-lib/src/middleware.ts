@@ -22,7 +22,9 @@ const getSystemPrompt = () => {
         `You will either use the current tool or list out the tools the user can use as a workflow a user can trigger\n` +
         `You might have to pass the response of one tool to a child tool and when you return result show parent tools and how it was passed to a child tool\n` +
         `When you fill up some of the required information yourself, be sure to confirm to user before proceeding.\n` +
-        `Aside from the given functions above, answer all other inquiries by telling the user that it is out of scope of your ability.\n\n` +
+        `Aside from the given tools, and manipulating the data, answer all other inquiries by telling the user that it is out of scope of your ability.\n\n` +
+        "Do not make things up, do not guess, do not invent, do not use the tools to do things that are not asked for.\n\n" +
+        `Do not run any function multiple times unless explicitly asked to do so or if a looping tool is detected and if so use the looping tools to loop through the function.\n\n` +
         `# User\n` +
         `If my full name is needed, please ask me for my full name.\n\n` +
         `# Language Support\n` +
@@ -211,6 +213,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
             let tools_output = []
 
             for (let tool of tools) {
+                console.log("tool being used", tool)
                 const funcName = tool.function.name
 
                 const functionArguments = JSON.parse(tool.function.arguments)
@@ -231,8 +234,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
             let context = trim_array(previous, 20)
 
-            const today = new Date()
-
             const system_prompt = getSystemPrompt()
 
             let messages: any[] = [{role: "system", content: system_prompt}]
@@ -245,19 +246,17 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                 messages.push(output_item)
             }
 
-            let result_message = null
-
             try {
                 console.log("before chatCompletion")
 
-                let result = await aiBot.chatCompletion({
+                const result = await aiBot.chatCompletion({
                     temperature: 0.3,
                     messages
                 })
 
                 console.log("after chatCompletion")
 
-                result_message = result?.message
+                const result_message = result?.message
                 res.json({
                     output: result_message
                 })
@@ -282,13 +281,11 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
             const system_prompt = getSystemPrompt()
 
-            let messages: any[] = [{role: "system", content: system_prompt}]
+            let  messages: any[] = [{role: "system", content: system_prompt}]
             if (context.length > 0) {
                 messages = messages.concat(context)
             }
             messages.push({role: "user", content: inquiry})
-
-            let result_message = null
 
             try {
                 console.log("before chatCompletion", messages)
@@ -298,7 +295,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                 })
                 console.log("after chatCompletion")
 
-                result_message = result?.message
+                const result_message = result?.message
 
                 res.json({
                     output: result_message

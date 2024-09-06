@@ -171,7 +171,27 @@ export const HomePage = ({apiUrl}: {apiUrl: string}) => {
                 }
             } while (!isCompleted)
         } catch (error: any) {
-            console.log("admin bot error here", error.name, error.message)
+            const payload: {
+                tools?: any[]
+                inquiry?: string
+                previous: any
+                type: string
+            } =
+                result_tools.length > 0
+                    ? {
+                          tools: result_tools,
+                          previous,
+                          type: "/chat/function"
+                      }
+                    : {inquiry: text, previous, type: "/chat/message"}
+
+            console.log(
+                "admin bot error here",
+                `${apiUrl}/chat`,
+                payload,
+                error.name,
+                error.message
+            )
         } finally {
             setLoading(false)
 
@@ -285,8 +305,6 @@ export const HomePage = ({apiUrl}: {apiUrl: string}) => {
                 (messageRef.current?.scrollHeight ?? 0) + 24
         }, 100)
     }
-
-    console.log("messages", messageItems, inputText)
 
     return (
         <Layout>

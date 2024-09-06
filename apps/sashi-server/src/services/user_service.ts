@@ -1,4 +1,9 @@
-import {AIFunction, AIObject, registerFunctionIntoAI} from "@sashimo/lib"
+import {
+    AIArray,
+    AIFunction,
+    AIObject,
+    registerFunctionIntoAI
+} from "@sashimo/lib"
 import generateDB from "your-db"
 import {Data} from "your-db/lib/types"
 
@@ -41,7 +46,6 @@ export const updateUser = async (id: number, user: User) => {
 }
 
 export const getUserById = async (id: number) => {
-    console.log("getUserById", id, typeof id)
     return myDB.getById(id)
 }
 
@@ -78,5 +82,13 @@ const GetUserByIdFunction = new AIFunction("get_user_by_id", "getUserById")
         return user
     })
 
-console.log("registering get_user_by_id function")
+const GetAllUserFunction = new AIFunction("get_all_users", "getUserAll")
+
+    .returns(new AIArray("users", "all users", UserObject))
+    .implement(async () => {
+        const users = await getAllUsers()
+        return users.map((user) => user.data)
+    })
+
 registerFunctionIntoAI("get_user_by_id", GetUserByIdFunction)
+registerFunctionIntoAI("get_all_users", GetAllUserFunction)

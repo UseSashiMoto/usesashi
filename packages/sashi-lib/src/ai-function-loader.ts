@@ -17,7 +17,53 @@ export type AIField<T> = {
 export type AINumber = AIField<"number">
 export type AIString = AIField<"string">
 export type AIBoolean = AIField<"boolean">
-export type AIArray = AIField<AIField<string | number | boolean>[]>
+
+export class AIArray {
+    _name: string
+    _type: "array"
+    _description: string
+    _itemType: AIField<any> | AIObject // Define the type of items in the array
+    _required: boolean
+
+    constructor(
+        name: string,
+        description: string,
+        itemType: AIField<any> | AIObject,
+        required: boolean = true
+    ) {
+        this._name = name
+        this._type = "array"
+        this._description = description
+        this._itemType = itemType // Define what kind of items the array will hold
+        this._required = required
+    }
+
+    getName() {
+        return this._name
+    }
+
+    getRequired() {
+        return this._required
+    }
+
+    getItemType() {
+        return this._itemType
+    }
+
+    description() {
+        return {
+            type: "array",
+            description: this.description,
+            items:
+                this._itemType instanceof AIObject
+                    ? this._itemType.description()
+                    : {
+                          type: this._itemType.type,
+                          description: this._itemType.description
+                      }
+        }
+    }
+}
 
 export class AIObject {
     private _name: string
@@ -45,7 +91,12 @@ export class AIObject {
         return this._description
     }
 
-    getFields(): (AIField<AllowedTypes> | AIObject)[] {
+    getFields(): (
+        | AIField<AllowedTypes>
+        | AIObject
+        | AIField<AllowedTypes>[]
+        | AIObject[]
+    )[] {
         return this._fields
     }
 
@@ -145,8 +196,8 @@ export class AIFunction {
     private _name: string
 
     private _description: string
-    private _params: (AIField<any> | AIObject)[]
-    private _returnType?: AIField<any> | AIObject
+    private _params: (AIField<any> | AIObject | AIArray)[]
+    private _returnType?: AIField<any> | AIObject | AIArray
     private _implementation: Function
 
     constructor(name: string, description: string) {
@@ -156,12 +207,12 @@ export class AIFunction {
         this._implementation = () => {}
     }
 
-    args(...params: (AIField<any> | AIObject)[]) {
+    args(...params: (AIField<any> | AIObject | AIArray)[]) {
         this._params = params
         return this
     }
 
-    returns(returnType: AIField<any> | AIObject) {
+    returns(returnType: AIField<any> | AIObject | AIArray) {
         this._returnType = returnType
         return this
     }
@@ -179,20 +230,22 @@ export class AIFunction {
         return this._description
     }
 
-    getParams(): (AIField<any> | AIObject)[] {
+    getParams(): (AIField<any> | AIObject | AIArray)[] {
         return this._params
     }
 
     validateAIField = (
-        param: AIField<any> | AIObject
+        param: AIField<any> | AIObject | AIArray
     ):
         | z.ZodString
         | z.ZodNumber
         | z.ZodBoolean
-        | z.ZodArray<z.ZodAny, "many">
+        | z.ZodArray<z.ZodTypeAny>
         | z.ZodNull
         | z.ZodAny => {
-        if (param instanceof AIObject) {
+        if (param instanceof AIArray) {
+            return z.array(this.validateAIField(param.getItemType()))
+        } else if (param instanceof AIObject) {
             return z.any()
         } else {
             switch (param.type) {
@@ -218,9 +271,13 @@ export class AIFunction {
                 description: this._description,
                 parameters: {
                     type: "object",
-
                     properties: this._params.reduce((acc, param) => {
-                        if (param instanceof AIObject) {
+                        if (param instanceof AIArray) {
+                            return {
+                                ...acc,
+                                [param.getName()]: param.description()
+                            }
+                        } else if (param instanceof AIObject) {
                             return {
                                 ...acc,
                                 [param.getName()]: param.description()
@@ -237,14 +294,18 @@ export class AIFunction {
                     }, {}),
                     required: this._params
                         .filter((param) => {
-                            if (param instanceof AIObject) {
+                            if (param instanceof AIArray) {
+                                return param.getRequired()
+                            } else if (param instanceof AIObject) {
                                 return param.getRequired()
                             } else {
                                 return param.required
                             }
                         })
                         .map((param) => {
-                            if (param instanceof AIObject) {
+                            if (param instanceof AIArray) {
+                                return param.getName()
+                            } else if (param instanceof AIObject) {
                                 return param.getName()
                             } else {
                                 return param.name
@@ -331,9 +392,17 @@ export async function callFunctionFromRegistryFromObject<F extends AIFunction>(
 
     const args = registeredFunction.getParams().map((param) => {
         if (param instanceof AIObject) {
+            // Handle AIObject by using getName
             return argsObj[param.getName()]
-        } else {
+        } else if (param instanceof AIArray) {
+            // Handle AIArray by using getName
+            return argsObj[param.getName()]
+        } else if ("name" in param) {
+            // For AIField, which has a name property
             return argsObj[param.name]
+        } else {
+            // If none of the conditions match, throw an error
+            throw new Error(`Parameter ${param} is missing a valid name`)
         }
     })
     // Call the function
