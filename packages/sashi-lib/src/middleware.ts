@@ -146,7 +146,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
             res.json(data)
         } catch (error: any) {
-            console.error("error", error.message)
             res.status(500).json({
                 message: "Failed to retrieve data",
                 error: error.message
@@ -202,7 +201,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     router.post("/chat", async (req, res) => {
         const {tools, previous, type} = req.body
 
-        console.log("type", type)
         if (type === "/chat/function") {
             if (!Array.isArray(tools) || !Array.isArray(previous)) {
                 return new Response("Bad system prompt", {
@@ -213,7 +211,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
             let tools_output = []
 
             for (let tool of tools) {
-                console.log("tool being used", tool)
                 const funcName = tool.function.name
 
                 const functionArguments = JSON.parse(tool.function.arguments)
@@ -247,29 +244,17 @@ export const createMiddleware = (options: MiddlewareOptions) => {
             }
 
             try {
-                console.log("before chatCompletion")
-
                 const result = await aiBot.chatCompletion({
                     temperature: 0.3,
                     messages
                 })
-
-                console.log("after chatCompletion")
 
                 const result_message = result?.message
                 res.json({
                     output: result_message
                 })
                 return
-            } catch (error: any) {
-                console.log(
-                    "chatCompletion function error",
-                    error.name,
-                    error.message,
-                    req.body
-                )
-                console.log("chatCompletion function error #2", messages)
-            }
+            } catch (error: any) {}
         }
 
         if (type === "/chat/message") {
@@ -281,19 +266,17 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
             const system_prompt = getSystemPrompt()
 
-            let  messages: any[] = [{role: "system", content: system_prompt}]
+            let messages: any[] = [{role: "system", content: system_prompt}]
             if (context.length > 0) {
                 messages = messages.concat(context)
             }
             messages.push({role: "user", content: inquiry})
 
             try {
-                console.log("before chatCompletion", messages)
                 const result = await aiBot.chatCompletion({
                     temperature: 0.3,
                     messages
                 })
-                console.log("after chatCompletion")
 
                 const result_message = result?.message
 
@@ -302,16 +285,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                 })
 
                 return
-            } catch (error: any) {
-                console.log(
-                    "chatCompletion message error",
-                    error.name,
-                    error.message,
-                    req.body
-                )
-
-                console.log("chatCompletion message error #2", messages)
-            }
+            } catch (error: any) {}
         }
     })
 

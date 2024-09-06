@@ -79,8 +79,6 @@ export const HomePage = ({apiUrl}: {apiUrl: string}) => {
     }
 
     const submitChatCompletion = async () => {
-        console.log("submitChatCompletion", inputText)
-
         if (inputText.length === 0) {
             return
         }
@@ -133,11 +131,7 @@ export const HomePage = ({apiUrl}: {apiUrl: string}) => {
 
                 const result = await sendMessage({payload})
 
-                console.log("admin-bot-response", result)
-
                 if (result.output.content) {
-                    console.log(result.output.content)
-
                     const newAssistantMessage: MessageItem = {
                         id: getUniqueId(),
                         created_at: new Date().toISOString(),
@@ -184,14 +178,6 @@ export const HomePage = ({apiUrl}: {apiUrl: string}) => {
                           type: "/chat/function"
                       }
                     : {inquiry: text, previous, type: "/chat/message"}
-
-            console.log(
-                "admin bot error here",
-                `${apiUrl}/chat`,
-                payload,
-                error.name,
-                error.message
-            )
         } finally {
             setLoading(false)
 

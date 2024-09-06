@@ -331,8 +331,6 @@ export class AIFunction {
             )
             .parse(args)
 
-        console.log("execute", parsedArgs, args, this._params)
-
         try {
             const result = await this._implementation(...parsedArgs)
             if (this._returnType) {
