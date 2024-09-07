@@ -236,7 +236,7 @@ export class AIFunction {
         return this._params
     }
 
-    getRepo(): string {
+    getRepo(): string | undefined {
         return this._repo
     }
 
