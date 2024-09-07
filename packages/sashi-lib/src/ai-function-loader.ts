@@ -193,7 +193,7 @@ export class AIObject {
 }
 
 export class AIFunction {
-    private _repo: string
+    private _repo?: string
     private _name: string
 
     private _description: string
@@ -201,11 +201,12 @@ export class AIFunction {
     private _returnType?: AIField<any> | AIObject | AIArray
     private _implementation: Function
 
-    constructor(name: string, description: string) {
+    constructor(name: string, description: string, repo?: string) {
         this._name = name
         this._description = description
         this._params = []
         this._implementation = () => {}
+        this._repo = repo
     }
 
     args(...params: (AIField<any> | AIObject | AIArray)[]) {
