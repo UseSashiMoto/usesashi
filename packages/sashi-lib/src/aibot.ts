@@ -1,6 +1,6 @@
 import OpenAI from "openai"
-import { AssistantTool } from "openai/resources/beta/assistants"
-import { getFunctionRegistry } from "./ai-function-loader"
+import {AssistantTool} from "openai/resources/beta/assistants"
+import {getFunctionRegistry} from "./ai-function-loader"
 
 export class AIBot {
     private _apiKey: string
@@ -33,16 +33,15 @@ export class AIBot {
         const openai = new OpenAI({apiKey: this._apiKey})
         let options = {messages, model, temperature, max_tokens} as any // Cast to any to allow dynamic properties
 
-
         const tools = this.convertToOpenAIFunction()
-        if(tools?.length > 0) {
+        if (tools?.length > 0) {
             options.tools = this.convertToOpenAIFunction()
         }
 
         try {
             const result = await openai.chat.completions.create(options)
 
-            console.log(result)
+            console.dir(result)
 
             return result.choices[0]
         } catch (error: any) {

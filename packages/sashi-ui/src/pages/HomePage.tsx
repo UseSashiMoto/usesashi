@@ -1,11 +1,15 @@
+import {PaperPlaneIcon} from "@radix-ui/react-icons"
 import axios from "axios"
 import {motion} from "framer-motion"
+import {X} from "lucide-react"
 import React, {useEffect} from "react"
 import {MasonryIcon, VercelIcon} from "src/components/message-icons"
 import {Message} from "src/components/MessageComponent"
+import {useScrollToBottom} from "src/components/use-scroll-to-bottom"
 import useAppStore from "src/store/chat-store"
 import {MessageItem} from "src/store/models"
 import {Layout} from "../components/Layout"
+
 function getUniqueId() {
     return (
         Math.random().toString(36).substring(2) +
@@ -16,6 +20,9 @@ export const HomePage = ({apiUrl}: {apiUrl: string}) => {
     const storedMessages = useAppStore(
         (state: {messages: any}) => state.messages
     )
+
+    const clearMessages = useAppStore((state) => state.clearMessages)
+
     const storedMode = useAppStore((state: {mode: any}) => state.mode)
     const addMessage = useAppStore(
         (state: {addMessage: any}) => state.addMessage
@@ -36,6 +43,9 @@ export const HomePage = ({apiUrl}: {apiUrl: string}) => {
     const [messageItems, setMessageItems] = React.useState<MessageItem[]>([])
 
     const [funcType, setFuncType] = React.useState(0)
+
+    const [messagesContainerRef, messagesEndRef] =
+        useScrollToBottom<HTMLDivElement>()
 
     useEffect(() => {
         setMounted(true)
@@ -63,8 +73,15 @@ export const HomePage = ({apiUrl}: {apiUrl: string}) => {
         return response.data
     }
 
+    const handleClearMessages = async () => {
+        setMessageItems([])
+        clearMessages()
+    }
+
     const submitChatCompletion = async () => {
-        console.log("submitChatCompletion", inputText)
+        if (inputText.length === 0) {
+            return
+        }
 
         setLoading(true)
 
@@ -114,11 +131,7 @@ export const HomePage = ({apiUrl}: {apiUrl: string}) => {
 
                 const result = await sendMessage({payload})
 
-                console.log("admin-bot-response", result)
-
                 if (result.output.content) {
-                    console.log(result.output.content)
-
                     const newAssistantMessage: MessageItem = {
                         id: getUniqueId(),
                         created_at: new Date().toISOString(),
@@ -152,7 +165,19 @@ export const HomePage = ({apiUrl}: {apiUrl: string}) => {
                 }
             } while (!isCompleted)
         } catch (error: any) {
-            console.log("admin bot error here", error.name, error.message)
+            const payload: {
+                tools?: any[]
+                inquiry?: string
+                previous: any
+                type: string
+            } =
+                result_tools.length > 0
+                    ? {
+                          tools: result_tools,
+                          previous,
+                          type: "/chat/function"
+                      }
+                    : {inquiry: text, previous, type: "/chat/message"}
         } finally {
             setLoading(false)
 
@@ -267,67 +292,57 @@ export const HomePage = ({apiUrl}: {apiUrl: string}) => {
         }, 100)
     }
 
-    console.log("messages", messageItems, inputText)
-
     return (
         <Layout>
             <div className="flex flex-row justify-center pb-20 h-dvh bg-white dark:bg-zinc-900">
-                <div className="flex flex-col justify-between gap-4">
-                    {messageItems.length === 0 && (
-                        <motion.div className="h-[350px] px-4 w-full md:w-[500px] md:px-0 pt-20">
-                            <div className="border rounded-lg p-6 flex flex-col gap-4 text-zinc-500 text-sm dark:text-zinc-400 dark:border-zinc-700">
-                                <p className="flex flex-row justify-center gap-4 items-center text-zinc-900 dark:text-zinc-50">
-                                    <VercelIcon size={16} />
-                                    <span>+</span>
-                                    <MasonryIcon />
-                                </p>
-                                <p>
-                                    Sashi Bot is a chatbot that can be used to
-                                    do administrative tasks on your application.
-                                    It can be integrated with your application
-                                    using the Sashi SDK.
-                                </p>
-                                <p>
-                                    {" "}
-                                    Learn more about the{" "}
-                                    <a
-                                        className="text-blue-500 dark:text-blue-400"
-                                        href="https://sdk.vercel.ai/docs/ai-sdk-rsc/streaming-react-components"
-                                        target="_blank"
-                                    >
-                                        Sashi SDK
-                                    </a>
-                                    from our website.
-                                </p>
-                            </div>
-                        </motion.div>
-                    )}
-                    <div className="flex flex-col gap-3 h-full w-dvw items-center overflow-y-scroll">
+                <div className="flex flex-col items-center justify-between gap-4">
+                    <div
+                        ref={messagesContainerRef}
+                        className="flex flex-col gap-3 h-full w-dvw items-center overflow-y-scroll"
+                    >
+                        {messageItems.length === 0 && (
+                            <motion.div className="h-[350px] px-4 w-full md:w-[500px] md:px-0 pt-20">
+                                <div className="border rounded-lg p-6 flex flex-col gap-4 text-zinc-500 text-sm dark:text-zinc-400 dark:border-zinc-700">
+                                    <p className="flex flex-row justify-center gap-4 items-center text-zinc-900 dark:text-zinc-50">
+                                        <VercelIcon size={16} />
+                                        <span>+</span>
+                                        <MasonryIcon />
+                                    </p>
+                                    <p>
+                                        Sashi Bot is a chatbot that can be used
+                                        to do administrative tasks on your
+                                        application. It can be integrated with
+                                        your application using the Sashi SDK.
+                                    </p>
+                                    <p>
+                                        {" "}
+                                        Learn more about the{" "}
+                                        <a
+                                            className="text-blue-500 dark:text-blue-400"
+                                            href="https://sdk.vercel.ai/docs/ai-sdk-rsc/streaming-react-components"
+                                            target="_blank"
+                                        >
+                                            Sashi SDK
+                                        </a>
+                                        from our website.
+                                    </p>
+                                </div>
+                            </motion.div>
+                        )}
                         {messageItems.map((item) => (
                             <Message role={item.role} content={item.content} />
                         ))}
-                        <div />
+                        <div ref={messagesEndRef} />
                     </div>
 
                     <div className="grid sm:grid-cols-2 gap-2 w-full px-4 md:px-0 mx-auto md:max-w-[500px] mb-4"></div>
 
                     <form
-                        className="flex flex-col gap-2 relative items-center"
+                        className="flex w-full flex-row gap-2 relative justify-center items-center"
                         onSubmit={async (event) => {
                             event.preventDefault()
                             handleSubmit(event)
-                            /*setMessages((messages) => [
-                                ...messages,
-                                <Message
-                                    key={messages.length}
-                                    role="user"
-                                    content={input}
-                                />
-                            ])*/
                             setInputText("")
-
-                            //const response: ReactNode = await sendMessage(input)
-                            //setMessages((messages) => [...messages, response])
                         }}
                     >
                         <input
@@ -339,6 +354,21 @@ export const HomePage = ({apiUrl}: {apiUrl: string}) => {
                                 setInputText(event.target.value)
                             }}
                         />
+
+                        <button tabIndex={-1} className="">
+                            <PaperPlaneIcon
+                                color="white"
+                                width={20}
+                                height={20}
+                            />
+                        </button>
+                        <button
+                            onClick={handleClearMessages}
+                            tabIndex={-1}
+                            className=""
+                        >
+                            <X color="white" width={20} height={20} />
+                        </button>
                     </form>
                 </div>
             </div>
