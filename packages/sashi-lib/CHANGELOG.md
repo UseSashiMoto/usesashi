@@ -1,5 +1,11 @@
 # sashi-lib
 
+## 2.13.0
+
+### Minor Changes
+
+- 82386bd: Added ability to have AIArray return/param
+
 ## 2.12.0
 
 ### Minor Changes
