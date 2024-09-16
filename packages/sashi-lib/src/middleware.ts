@@ -1,10 +1,8 @@
 import bodyParser from "body-parser"
 import cors from "cors"
 import { Request, Response, Router } from "express"
-import { ChatCompletionMessageToolCall } from "openai/resources"
 import {
     callFunctionFromRegistryFromObject,
-    ConfirmableToolCall,
     getFunctionRegistry
 } from "./ai-function-loader"
 import { AIBot } from "./aibot"
@@ -198,20 +196,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         res.json({valid: validated})
     })
 
-    function markToolsWithConfirmation(
-        tools: ChatCompletionMessageToolCall[]
-    ): ConfirmableToolCall[] {
-        return tools.map((tool) => {
-            const functionRegistry = getFunctionRegistry() // Get registered functions
-
-            const registeredFunction = functionRegistry.get(tool.function.name)
-
-            return {
-                ...tool,
-                needsConfirm: registeredFunction?.getNeedsConfirm() || false
-            }
-        })
-    }
 
     router.get("/metadata", async (req, res) => {
 
