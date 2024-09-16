@@ -34,6 +34,7 @@
         "@trpc/react-query": "^10.14.0",
         "@trpc/server": "^10.14.0",
         "axios": "^1.7.5",
+        "class-variance-authority": "^0.7.0",
         "clsx": "^1.2.1",
         "date-fns": "^2.29.3",
         "framer-motion": "^11.3.19",
@@ -42,6 +43,8 @@
         "react-json-tree": "^0.17.0",
         "react-router-dom": "^6.8.2",
         "remark-gfm": "^4.0.0",
+        "tailwind-merge": "^2.5.2",
+        "tailwindcss-animate": "^1.0.7",
         "zod": "^3.20.6",
         "zustand": "^4.5.5"
     },
