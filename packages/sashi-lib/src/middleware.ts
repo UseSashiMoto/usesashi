@@ -1,17 +1,17 @@
 import bodyParser from "body-parser"
 import cors from "cors"
-import {Request, Response, Router} from "express"
+import { Request, Response, Router } from "express"
+import { ChatCompletionMessageToolCall } from "openai/resources"
 import {
     callFunctionFromRegistryFromObject,
+    ConfirmableToolCall,
     getFunctionRegistry
 } from "./ai-function-loader"
-import {AIBot} from "./aibot"
-import {validateSignedKey} from "./generate-token"
-import {init} from "./init"
-import {getAllConfigs, getConfig, setConfig} from "./manage-config"
-import {createSashiHtml} from "./utils"
-
-var path = require("path")
+import { AIBot } from "./aibot"
+import { validateSignedKey } from "./generate-token"
+import { init } from "./init"
+import { getAllConfigs, getConfig, setConfig } from "./manage-config"
+import { createSashiHtml } from "./utils"
 
 const getSystemPrompt = () => {
     const today = new Date()
@@ -198,96 +198,155 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         res.json({valid: validated})
     })
 
-    router.post("/chat", async (req, res) => {
-        const {tools, previous, type} = req.body
+    function markToolsWithConfirmation(
+        tools: ChatCompletionMessageToolCall[]
+    ): ConfirmableToolCall[] {
+        return tools.map((tool) => {
+            const functionRegistry = getFunctionRegistry() // Get registered functions
 
+            const registeredFunction = functionRegistry.get(tool.function.name)
+
+            return {
+                ...tool,
+                needsConfirm: registeredFunction?.getNeedsConfirm() || false
+            }
+        })
+    }
+
+    router.get("/metadata", async (req, res) => {
+
+
+        return res.json({
+            name: "Sashimoto Chatbot",
+            functions: Array.from(getFunctionRegistry().values()).map((func) => {
+                return {
+                    name: func.getName(),
+                    description: func.getDescription(),
+                    needConfirmation: func.getNeedsConfirm()
+                }
+            })
+        })
+    })
+
+    router.post("/chat", async (req, res) => {
+        const { tools, previous, type } = req.body;
+
+    
         if (type === "/chat/function") {
             if (!Array.isArray(tools) || !Array.isArray(previous)) {
-                return new Response("Bad system prompt", {
-                    status: 400
-                })
+              return res.status(400).json({ message: "Bad system prompt" });
             }
-
-            let tools_output = []
-
+        
+            let tools_output = [];
+        
             for (let tool of tools) {
-                const funcName = tool.function.name
-
-                const functionArguments = JSON.parse(tool.function.arguments)
-                const output = await callFunctionFromRegistryFromObject(
-                    funcName,
-                    functionArguments
-                )
-
-                const tool_output = output
-
+              const funcName = tool.function?.name;
+              const functionArguments = JSON.parse(tool.function?.arguments || "{}");
+        
+              // Check if function name is missing
+              if (!funcName) {
+                return res.status(400).send("Missing function name in tool call.");
+              }
+        
+              // Check if the tool needs confirmation
+              const functionRegistry = getFunctionRegistry();
+              const registeredFunction = functionRegistry.get(funcName);
+              const needsConfirm = registeredFunction?.getNeedsConfirm() || false;
+        
+              if (needsConfirm && !tool.confirmed) {
                 tools_output.push({
-                    tool_call_id: tool.id,
-                    role: "tool",
-                    name: tool.function.name,
-                    content: JSON.stringify(tool_output, null, 2)
-                })
+                    tool_call_id: tool.id, // Use 'id' instead of 'tool_call_id'
+                  id: tool.id, // Use 'id' instead of 'tool_call_id'
+                  role: "tool",
+                  type: "function",
+                  content: `This tool (${funcName}) requires confirmation before it can be executed.`,
+                  needsConfirm: true,
+                  function: {
+                    name: funcName,
+                    arguments:tool.function?.arguments
+                  },
+                  args: JSON.stringify(functionArguments, null, 2),
+                });
+              } else {
+                // Proceed with execution if no confirmation is needed
+                const output = await callFunctionFromRegistryFromObject(funcName, functionArguments);
+        
+                tools_output.push({
+                  tool_call_id: tool.id, // Use 'id' instead of 'tool_call_id'
+                  id: tool.id, // Use 'id' instead of 'tool_call_id'
+                  role: "tool",
+                  type: "function",
+                  function: {
+                    name: funcName,
+                    arguments:tool.function?.arguments
+                  },
+                  content: JSON.stringify(output, null, 2),
+                });
+              }
             }
-
-            let context = trim_array(previous, 20)
-
-            const system_prompt = getSystemPrompt()
-
-            let messages: any[] = [{role: "system", content: system_prompt}]
+        
+            let context = trim_array(previous, 20);
+            const system_prompt = getSystemPrompt();
+        
+            let messages: any[] = [{ role: "system", content: system_prompt }];
             if (context.length > 0) {
-                messages = messages.concat(context)
+              messages = messages.concat(context);
             }
+        
+            // Assistant's message includes tool_calls
+            messages.push({
+              role: "assistant",
+              content: null,
+              tool_calls: tools.map((tool: any) => ({
+                type: "function",
+                id: tool.id,
+                function: tool.function,
+              }))
+            });
 
-            messages.push({role: "assistant", content: null, tool_calls: tools})
-            for (let output_item of tools_output) {
-                messages.push(output_item)
-            }
+            messages.push(...tools_output);
 
+        
             try {
-                const result = await aiBot.chatCompletion({
-                    temperature: 0.3,
-                    messages
-                })
-
-                const result_message = result?.message
-                res.json({
-                    output: result_message
-                })
-                return
-            } catch (error: any) {}
-        }
-
+              const result = await aiBot.chatCompletion({
+                temperature: 0.3,
+                messages,
+              });
+        
+              res.json({
+                output: result?.message,
+                tool_calls: result?.message?.tool_calls,
+              });
+            } catch (error:any) {
+              res.status(500).json({ message: "Error processing request", error: error.message });
+            }
+          }
         if (type === "/chat/message") {
-            const {inquiry, previous} = await req.body
-
-            let context = trim_array(previous, 20)
-
-            const today = new Date()
-
-            const system_prompt = getSystemPrompt()
-
-            let messages: any[] = [{role: "system", content: system_prompt}]
+            const { inquiry, previous } = req.body;
+    
+            let context = trim_array(previous, 20);
+            const system_prompt = getSystemPrompt();
+    
+            let messages: any[] = [{ role: "system", content: system_prompt }];
             if (context.length > 0) {
-                messages = messages.concat(context)
+                messages = messages.concat(context);
             }
-            messages.push({role: "user", content: inquiry})
-
+            messages.push({ role: "user", content: inquiry });
+    
             try {
                 const result = await aiBot.chatCompletion({
                     temperature: 0.3,
-                    messages
-                })
-
-                const result_message = result?.message
-
+                    messages,
+                });
+    
                 res.json({
-                    output: result_message
-                })
-
-                return
-            } catch (error: any) {}
+                    output: result?.message,
+                });
+            } catch (error:any) {
+                res.status(500).json({ message: "Error processing request", error: error.message });
+            }
         }
-    })
+    });
 
     router.get("/", async (req, res) => {
         const newPath = `${sashiServerUrl ?? req.originalUrl.replace(/\/$/, "")}/bot`

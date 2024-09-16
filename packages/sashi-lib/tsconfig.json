@@ -3,7 +3,7 @@
         "resolveJsonModule": true,
         "allowJs": true,
         "lib": ["dom", "dom.iterable", "esnext"],
-        "jsx": "react",
+        "jsx": "react-jsx",
         "target": "es2019",
         "module": "commonjs",
         "outDir": "./dist",
@@ -12,7 +12,7 @@
         "esModuleInterop": true,
         "skipLibCheck": true,
         "forceConsistentCasingInFileNames": true,
-        "noEmit": true,
+        "noEmit": false,
         "noUncheckedIndexedAccess": true
     },
     "include": ["src/**/*"],

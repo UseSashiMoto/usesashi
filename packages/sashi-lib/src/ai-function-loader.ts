@@ -1,4 +1,9 @@
+import {ChatCompletionMessageToolCall} from "openai/resources"
 import {z} from "zod"
+
+export interface ConfirmableToolCall extends ChatCompletionMessageToolCall {
+    needsConfirm?: boolean // Optional flag for confirmation
+}
 
 type AllowedTypes =
     | "string"
@@ -200,13 +205,20 @@ export class AIFunction {
     private _params: (AIField<any> | AIObject | AIArray)[]
     private _returnType?: AIField<any> | AIObject | AIArray
     private _implementation: Function
+    private _needsConfirm: boolean
 
-    constructor(name: string, description: string, repo?: string) {
+    constructor(
+        name: string,
+        description: string,
+        repo?: string,
+        needsConfirm: boolean = false
+    ) {
         this._name = name
         this._description = description
         this._params = []
         this._implementation = () => {}
         this._repo = repo
+        this._needsConfirm = needsConfirm
     }
 
     args(...params: (AIField<any> | AIObject | AIArray)[]) {
@@ -216,6 +228,11 @@ export class AIFunction {
 
     returns(returnType: AIField<any> | AIObject | AIArray) {
         this._returnType = returnType
+        return this
+    }
+
+    confirmation(needsConfirm: boolean) {
+        this._needsConfirm = needsConfirm
         return this
     }
 
@@ -238,6 +255,10 @@ export class AIFunction {
 
     getRepo(): string | undefined {
         return this._repo
+    }
+
+    getNeedsConfirm(): boolean {
+        return this._needsConfirm
     }
 
     validateAIField = (
