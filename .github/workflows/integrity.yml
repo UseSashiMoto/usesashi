@@ -1,0 +1,15 @@
+name: Yarn lock integrity
+
+on:
+    push:
+        branches-ignore:
+            - release
+
+jobs:
+    Verify-Lockfile:
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v3
+            - name: Check if package.json & yarn.lock are in sync
+              run: yarn install --frozen-lockfile
