@@ -41,7 +41,7 @@ export class AIBot {
         try {
             const result = await openai.chat.completions.create(options)
 
-            console.dir(result)
+            console.dir(result.choices[0])
 
             return result.choices[0]
         } catch (error: any) {

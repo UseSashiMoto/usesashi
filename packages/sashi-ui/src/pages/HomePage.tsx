@@ -1,14 +1,19 @@
-import {PaperPlaneIcon} from "@radix-ui/react-icons"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Label } from "@radix-ui/react-dropdown-menu"
+import { PaperPlaneIcon } from "@radix-ui/react-icons"
 import axios from "axios"
-import {motion} from "framer-motion"
-import {X} from "lucide-react"
-import React, {useEffect} from "react"
-import {MasonryIcon, VercelIcon} from "src/components/message-icons"
-import {Message} from "src/components/MessageComponent"
-import {useScrollToBottom} from "src/components/use-scroll-to-bottom"
+import { motion } from "framer-motion"
+import { X } from "lucide-react"
+import React, { useEffect, useState } from "react"
+import { MasonryIcon, VercelIcon } from "src/components/message-icons"
+import { Message } from "src/components/MessageComponent"
+import { useScrollToBottom } from "src/components/use-scroll-to-bottom"
+import { ChatCompletionMessage } from "src/models/gpt"
 import useAppStore from "src/store/chat-store"
-import {MessageItem} from "src/store/models"
-import {Layout} from "../components/Layout"
+import { MessageItem } from "src/store/models"
+import { Layout } from "../components/Layout"
+import { PayloadObject, ResultTool } from '../models/payload'
+import { Metadata, } from "../store/models"
 
 function getUniqueId() {
     return (
@@ -16,6 +21,65 @@ function getUniqueId() {
         new Date().getTime().toString(36)
     )
 }
+
+interface ConfirmationData {
+    name: string
+    description: string
+    args: Record<string, any>
+    payload: PayloadObject
+}
+
+interface ConfirmationCardProps {
+    confirmationData: ConfirmationData
+    onConfirm: () => void
+    onCancel: () => void
+}
+
+
+
+export function ConfirmationCard({
+    confirmationData,
+    onConfirm,
+    onCancel,
+  }: ConfirmationCardProps) {
+    return (
+        <>
+            <Card className="w-[350px]">
+      <CardHeader>
+        <CardTitle>Are yoy sure you want to call this function?</CardTitle>
+        <CardDescription>{confirmationData.name}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form>
+          <div className="grid w-full items-center gap-4">
+            <div className="flex flex-col space-y-1.5">
+              <Label >Description: {confirmationData.description}</Label>
+            </div>
+            {Object.entries(confirmationData.args).length > 0 && <div className="flex flex-col space-y-1.5">
+                <Label >Arguments:</Label>
+                <ul className="text-sm text-zinc-600 dark:text-zinc-400">
+                    {Object.entries(confirmationData.args).map(([key, value]) => (
+                        <li key={key}>
+                            <span className="font-semibold">{key}: </span>
+                            {JSON.stringify(value)}
+                        </li>
+                    ))}
+                </ul>
+            </div>}
+          </div>
+        </form>
+      </CardContent>
+      <CardFooter className="flex justify-between">
+        <button onClick={onCancel}>No</button>
+        
+        <button onClick={onConfirm} >Yes</button>
+      </CardFooter>
+    </Card>
+
+      </>
+    );
+  }
+
 export const HomePage = ({apiUrl}: {apiUrl: string}) => {
     const storedMessages = useAppStore(
         (state: {messages: any}) => state.messages
@@ -23,15 +87,13 @@ export const HomePage = ({apiUrl}: {apiUrl: string}) => {
 
     const clearMessages = useAppStore((state) => state.clearMessages)
 
-    const storedMode = useAppStore((state: {mode: any}) => state.mode)
     const addMessage = useAppStore(
         (state: {addMessage: any}) => state.addMessage
     )
 
-    const threadId = useAppStore((state: {threadId: any}) => state.threadId)
-    const setThreadId = useAppStore(
-        (state: {setThreadId: any}) => state.setThreadId
-    )
+    const setMetadata = useAppStore((state: {setMetadata: any}) => state.setMetadata)
+    const metadata: Metadata | undefined = useAppStore((state: {metadata: any}) => state.metadata)
+
 
     const messageRef = React.useRef<HTMLDivElement>(null)
     const inputRef = React.useRef<HTMLInputElement>(null)
@@ -42,10 +104,14 @@ export const HomePage = ({apiUrl}: {apiUrl: string}) => {
     const [inputText, setInputText] = React.useState("")
     const [messageItems, setMessageItems] = React.useState<MessageItem[]>([])
 
-    const [funcType, setFuncType] = React.useState(0)
-
     const [messagesContainerRef, messagesEndRef] =
         useScrollToBottom<HTMLDivElement>()
+        const [toolToConfirm, setToolToConfirm] = useState<any>(null);
+
+    const [confirmationData, setConfirmationData] = useState<ConfirmationData>()
+
+    const [confirmPromiseResolver, setConfirmPromiseResolver] = useState<null | ((confirmed: boolean) => void)>(null);
+
 
     useEffect(() => {
         setMounted(true)
@@ -53,10 +119,18 @@ export const HomePage = ({apiUrl}: {apiUrl: string}) => {
 
     useEffect(() => {
         if (isMounted) {
-            setFuncType(storedMode)
             setMessageItems(storedMessages)
         }
     }, [isMounted])
+
+    useEffect(() => {
+        const getMetadata = async () => {
+            const response = await axios.get(`${apiUrl}/metadata`)
+
+            setMetadata(response.data)
+        }
+        getMetadata()
+    }, [])
 
     const sendMessage = async ({
         payload
@@ -70,7 +144,7 @@ export const HomePage = ({apiUrl}: {apiUrl: string}) => {
     }) => {
         const response = await axios.post(`${apiUrl}/chat`, payload)
 
-        return response.data
+        return response.data as {output: ChatCompletionMessage | undefined}
     }
 
     const handleClearMessages = async () => {
@@ -78,60 +152,114 @@ export const HomePage = ({apiUrl}: {apiUrl: string}) => {
         clearMessages()
     }
 
-    const submitChatCompletion = async () => {
-        if (inputText.length === 0) {
-            return
-        }
+  const submitChatCompletion = async () => {
+    if (inputText.length === 0) {
+        return
+    }
 
-        setLoading(true)
+    setLoading(true)
 
-        const text = inputText
+    const text = inputText
 
-        setInputText("")
-        inputRef.current?.blur()
+    setInputText("")
+    inputRef.current?.blur()
 
-        let previous = messageItems.map((item) => {
+    const newUserMessage: MessageItem = {
+        id: getUniqueId(),
+        created_at: new Date().toISOString(),
+        role: "user",
+        content: text
+    }
+    setMessageItems((prev) => [...prev, ...[newUserMessage]])
+    addMessage(newUserMessage)
+
+    resetScroll()
+
+    await processChat({text})
+  };
+
+    const handleSubmit = async (e: {preventDefault: () => void}) => {
+        e.preventDefault()
+
+        submitChatCompletion()
+    }
+
+    const resetScroll = () => {
+        setTimeout(() => {
+            if (!messageRef.current) return
+            messageRef.current.scrollTop =
+                (messageRef.current?.scrollHeight ?? 0) + 24
+        }, 100)
+    }
+    const handleConfirm = () => {
+        console.log("handleConfirm", confirmationData)
+        if (!confirmationData) return
+        const  tools = confirmationData.payload!.tools?.map((tool) => {
+            if(tool.function.name === confirmationData!.name) {
+                tool.confirmed = true
+            }
+            return tool
+        }) ?? []
+
+        processChat({continuation: {...confirmationData!.payload, tools}})
+        setConfirmationData(undefined)
+      };
+    
+      const handleCancel = () => {
+        console.log("handleCancel", confirmationData)
+        if (!confirmationData) return
+        const  tools = confirmationData.payload!.tools?.filter((tool) => {
+            if(tool.function.name === confirmationData!.name) {
+                return false
+            }
+            return true
+        })
+        processChat({continuation: {...confirmationData!.payload, tools}})
+        setConfirmationData(undefined)
+
+      };
+
+      async function processChat( {text, continuation}: {text?: string, continuation?: PayloadObject}) {
+        const previous = messageItems.map((item) => {
             return {
                 role: item.role,
                 content: item.content
             }
         })
-
-        const newUserMessage: MessageItem = {
-            id: getUniqueId(),
-            created_at: new Date().toISOString(),
-            role: "user",
-            content: text
-        }
-        setMessageItems((prev) => [...prev, ...[newUserMessage]])
-        addMessage(newUserMessage)
-
-        resetScroll()
-
-        let result_tools = []
+        let result_tools: any[] = []
         let isCompleted = false
-        let MAX_LOOP_COUNT = 10 // Don't want to let it run loose
+        const MAX_LOOP_COUNT = 10 // Don't want to let it run loose
         let loopCount = 0
-
+    
         try {
             do {
-                const payload: {
-                    tools?: any[]
-                    inquiry?: string
-                    previous: any
-                    type: string
-                } =
-                    result_tools.length > 0
+                const payload: PayloadObject = continuation ? {...continuation} :  (result_tools.length > 0
                         ? {
-                              tools: result_tools,
-                              previous,
-                              type: "/chat/function"
-                          }
-                        : {inquiry: text, previous, type: "/chat/message"}
+                            tools: result_tools,
+                            previous,
+                            type: "/chat/function"
+                        }
+                        : { inquiry: text, previous, type: "/chat/message" })
 
-                const result = await sendMessage({payload})
+                // check for tools that need confirmation
+                const toolsNeedingConfirmation:ResultTool[] | undefined = payload.tools?.filter((tool: { function: { name: string } }) => metadata?.functions.find((func) => func.name === tool.function.name)).filter((tool) => !tool.confirmed)
 
-                if (result.output.content) {
+                if (!!toolsNeedingConfirmation && (toolsNeedingConfirmation?.length ?? 0 > 0)) {
+
+                    const description = metadata?.functions.find((func) => func.name === toolsNeedingConfirmation[0].function.name)?.description
+                    //show confirmation card
+                    setConfirmationData({
+                        name: toolsNeedingConfirmation[0].function.name,
+                        description: description ?? "",
+                        args: JSON.parse(toolsNeedingConfirmation[0].function.arguments), 
+                        payload: payload  
+                    })
+                    return
+                }
+    
+                const result = await sendMessage({ payload })
+    
+                if (result.output?.content) {
                     const newAssistantMessage: MessageItem = {
                         id: getUniqueId(),
                         created_at: new Date().toISOString(),
@@ -143,18 +271,18 @@ export const HomePage = ({apiUrl}: {apiUrl: string}) => {
                         ...[newAssistantMessage]
                     ])
                     addMessage(newAssistantMessage)
-
+    
                     previous.push({
                         role: "assistant",
-                        content: result.output.content
+                        content: result.output?.content
                     })
-
+    
                     resetScroll()
                 }
-
-                if (result.output.tool_calls) {
+    
+                if (result.output?.tool_calls) {
                     loopCount++
-
+    
                     if (loopCount >= MAX_LOOP_COUNT) {
                         isCompleted = true
                     } else {
@@ -165,131 +293,13 @@ export const HomePage = ({apiUrl}: {apiUrl: string}) => {
                 }
             } while (!isCompleted)
         } catch (error: any) {
-            const payload: {
-                tools?: any[]
-                inquiry?: string
-                previous: any
-                type: string
-            } =
-                result_tools.length > 0
-                    ? {
-                          tools: result_tools,
-                          previous,
-                          type: "/chat/function"
-                      }
-                    : {inquiry: text, previous, type: "/chat/message"}
         } finally {
             setLoading(false)
-
+    
             setTimeout(() => {
                 inputRef.current?.focus()
             }, 100)
         }
-    }
-
-    const submitAssistant = async () => {
-        setLoading(true)
-
-        const text = inputText
-
-        setInputText("")
-        inputRef.current?.blur()
-
-        const message_id = getUniqueId()
-
-        const newUserMessage: MessageItem = {
-            id: getUniqueId(),
-            created_at: new Date().toISOString(),
-            role: "user",
-            content: text
-        }
-        setMessageItems((prev) => [...prev, ...[newUserMessage]])
-        addMessage(newUserMessage)
-
-        resetScroll()
-
-        try {
-            const thread_id = threadId ? threadId : ""
-
-            const response = await fetch("/assistant/message", {
-                method: "POST",
-                headers: {
-                    Accept: "application/json",
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    inquiry: text,
-                    threadId: thread_id,
-                    messageId: message_id
-                })
-            })
-
-            if (!response.ok) {
-                console.log("Oops, an error occurred", response.status)
-            }
-
-            const result = await response.json()
-
-            setThreadId(result.threadId)
-
-            if (result.messages.length > 0) {
-                let new_messages = []
-
-                for (let i = 0; i < result.messages.length; i++) {
-                    const msg = result.messages[i]
-
-                    if (
-                        Object.prototype.hasOwnProperty.call(msg.metadata, "id")
-                    ) {
-                        if (msg.metadata.id === message_id) {
-                            break // last message
-                        }
-                    } else {
-                        new_messages.push({
-                            id: msg.id,
-                            created_at: msg.created_at,
-                            role: msg.role,
-                            content: msg.content[0].text.value
-                        })
-                    }
-                }
-
-                if (new_messages.length > 0) {
-                    setMessageItems((prev) => [...prev, ...new_messages])
-
-                    for (let newmsg of new_messages) {
-                        addMessage(newmsg)
-                    }
-
-                    resetScroll()
-                }
-            }
-        } catch (error: any) {
-            console.log(error.name, error.message)
-        } finally {
-            setLoading(false)
-
-            setTimeout(() => {
-                inputRef.current?.focus()
-            }, 100)
-        }
-    }
-
-    const handleSubmit = async (e: {preventDefault: () => void}) => {
-        e.preventDefault()
-        if (funcType > 0) {
-            submitAssistant()
-        } else {
-            submitChatCompletion()
-        }
-    }
-
-    const resetScroll = () => {
-        setTimeout(() => {
-            if (!messageRef.current) return
-            messageRef.current.scrollTop =
-                (messageRef.current?.scrollHeight ?? 0) + 24
-        }, 100)
     }
 
     return (
@@ -332,6 +342,15 @@ export const HomePage = ({apiUrl}: {apiUrl: string}) => {
                         {messageItems.map((item) => (
                             <Message role={item.role} content={item.content} />
                         ))}
+
+                        {!!confirmationData && (
+                            <ConfirmationCard
+                            
+                                confirmationData={confirmationData!}
+                                onConfirm={handleConfirm}
+                                onCancel={handleCancel}
+                            />
+                        )}
                         <div ref={messagesEndRef} />
                     </div>
 
@@ -375,3 +394,5 @@ export const HomePage = ({apiUrl}: {apiUrl: string}) => {
         </Layout>
     )
 }
+
+

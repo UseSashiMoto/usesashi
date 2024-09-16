@@ -1,29 +1,26 @@
-import { create } from "zustand"
-import { createJSONStorage, persist } from "zustand/middleware"
-import { MessageItem } from './models';
+import {create} from "zustand"
+import {createJSONStorage, persist} from "zustand/middleware"
+import {MessageItem, Metadata} from "./models"
 export const APP_STORAGE_KEY = "openai-api-function-call-sample-storage"
-
 
 interface MessageState {
     messages: MessageItem[]
-    threadId: string
-    runId: string
-    mode: number
+    metadata: Metadata
     addMessage: (newmessage: MessageItem) => void
+    setMetadata: (metadata: Metadata) => void
     clearMessages: () => void
-    setThreadId: (id: any) => void
-    setRunId: (id: any) => void
-    setMode: (n: any) => void
 }
 
 const useAppStore = create<MessageState>()(
     persist(
         (set, get) => ({
             messages: [],
-            threadId: "",
-            runId: "",
-            mode: 0,
-
+            metadata: {
+                name: "",
+                description: "",
+                functions: []
+            },
+            setMetadata: (metadata: Metadata) => set({metadata}),
             addMessage: (newmessage: MessageItem) => {
                 let messages = get().messages.slice(0)
                 messages.push(newmessage)
@@ -32,10 +29,7 @@ const useAppStore = create<MessageState>()(
                     messages: messages
                 })
             },
-            clearMessages: () => set({messages: []}),
-            setThreadId: (id: any) => set({threadId: id}),
-            setRunId: (id: any) => set({runId: id}),
-            setMode: (n: any) => set({mode: n})
+            clearMessages: () => set({messages: []})
         }),
         {
             name: APP_STORAGE_KEY,
