@@ -1,6 +1,6 @@
-import {createMiddleware} from "@sashimo/lib"
+import { createMiddleware } from "@sashimo/lib"
 import express from "express"
-import {Express} from "express-serve-static-core"
+import { Express } from "express-serve-static-core"
 import "./services/file_service"
 import "./services/user_service"
 
@@ -72,10 +72,7 @@ app.use(
     "/sashi",
     createMiddleware({
         openAIKey: process.env.OPENAI_API_KEY || "",
-        databaseUrl: process.env.DATABASE_URL || "",
-        redisUrl: process.env.REDIS_URL || "",
-        accountId: "account-id",
-        secretKey: "your-secret-key"
+        
     })
 )
 

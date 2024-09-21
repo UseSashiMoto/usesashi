@@ -1,16 +1,11 @@
 import bodyParser from "body-parser"
 import cors from "cors"
-import { Request, Response, Router } from "express"
-import { ChatCompletionMessageToolCall } from "openai/resources"
+import { Router } from "express"
 import {
     callFunctionFromRegistryFromObject,
-    ConfirmableToolCall,
     getFunctionRegistry
 } from "./ai-function-loader"
 import { AIBot } from "./aibot"
-import { validateSignedKey } from "./generate-token"
-import { init } from "./init"
-import { getAllConfigs, getConfig, setConfig } from "./manage-config"
 import { createSashiHtml } from "./utils"
 
 const getSystemPrompt = () => {
@@ -54,10 +49,7 @@ export const trim_array = (arr: string | any[], max_length = 20) => {
 }
 
 interface MiddlewareOptions {
-    databaseUrl?: string // Connection string for the database
-    redisUrl?: string
-    accountId: string // Header name to extract the account ID from request headers
-    secretKey: string
+    
     openAIKey: string
     sashiServerUrl?: string //where the sashi server is hosted if you can't find it automatically
 }
@@ -68,15 +60,11 @@ export interface DatabaseClient {
 
 export const createMiddleware = (options: MiddlewareOptions) => {
     const {
-        databaseUrl,
-        redisUrl,
+
         openAIKey,
-        accountId = "account-id",
         sashiServerUrl,
-        secretKey
     } = options
 
-    init({accountId, databaseUrl, redisUrl})
     const router = Router()
 
     const aiBot = new AIBot(openAIKey)
@@ -88,130 +76,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         res.json({message: "Sashi Middleware is running"})
         return
     })
-    // Get data endpoint
-    router.get("/configs/:key", async (req: Request, res: Response) => {
-        const key: string = req.params.key as string
 
-        const accountkey: string | undefined = req.headers[
-            "account-key"
-        ] as string
-
-        const accountSignature: string | undefined = req.headers[
-            "account-signature"
-        ] as string
-
-        if (!validateSignedKey(accountkey, accountSignature, secretKey)) {
-            res.sendStatus(401).send("Unauthorized")
-            return
-        }
-
-        if (!accountId) {
-            return res
-                .status(400)
-                .json({message: "Account ID is required in headers"})
-        }
-        try {
-            const {value} = await getConfig(key)
-            res.json({key, value})
-        } catch (error: any) {
-            res.status(500).json({
-                message: "Failed to retrieve data",
-                error: error.message
-            })
-        }
-    })
-
-    router.get("/configs", async (req: Request, res: Response) => {
-        const accountkey: string | undefined = req.headers[
-            "account-key"
-        ] as string
-
-        const accountSignature: string | undefined = req.headers[
-            "account-signature"
-        ] as string
-
-        if (!validateSignedKey(accountkey, accountSignature, secretKey)) {
-            res.sendStatus(401).send("Unauthorized")
-            return
-        }
-
-        if (!accountId) {
-            return res
-                .status(400)
-                .json({message: "Account ID is required in headers"})
-        }
-
-        try {
-            const data = await getAllConfigs()
-
-            res.json(data)
-        } catch (error: any) {
-            res.status(500).json({
-                message: "Failed to retrieve data",
-                error: error.message
-            })
-        }
-    })
-
-    // Set data endpoint
-    router.post("/configs/:key", async (req: Request, res: Response) => {
-        const key: string = req.params.key as string
-
-        const accountkey: string | undefined = req.headers[
-            "account-key"
-        ] as string
-
-        const accountSignature: string | undefined = req.headers[
-            "account-signature"
-        ] as string
-
-        if (!validateSignedKey(accountkey, accountSignature, secretKey)) {
-            res.sendStatus(401).send("Unauthorized")
-            return
-        }
-
-        const {value} = req.body
-
-        if (!accountId) {
-            return res
-                .status(400)
-                .json({message: "Account ID is required in headers"})
-        }
-
-        try {
-            await setConfig(key, value)
-            res.json({key, value})
-        } catch (error: any) {
-            res.status(500).json({
-                message: "Failed to store data",
-                error: error.message
-            })
-        }
-    })
-
-    // Endpoint to validate the key and signed key
-    router.post("/validate-key", (req, res) => {
-        const key = req.headers["account-key"] as string
-        const signature = req.headers["account-signature"] as string
-        const validated = validateSignedKey(key, signature, secretKey)
-
-        res.json({valid: validated})
-    })
-
-    function markToolsWithConfirmation(
-        tools: ChatCompletionMessageToolCall[]
-    ): ConfirmableToolCall[] {
-        return tools.map((tool) => {
-            const functionRegistry = getFunctionRegistry() // Get registered functions
-
-            const registeredFunction = functionRegistry.get(tool.function.name)
-
-            return {
-                ...tool,
-                needsConfirm: registeredFunction?.getNeedsConfirm() || false
-            }
-        })
-    }
 
     router.get("/metadata", async (req, res) => {
 

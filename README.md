@@ -1,60 +1,77 @@
-# Sashi starter
+# Sashi - AI-Powered Admin Tool
 
-Admin tools for developers
+Sashi is an advanced admin tool that allows you to label functions in your codebase and perform admin tasks using AI.
+
+## Components
+
+-   **sashi-lib**: Middleware library for integrating Sashi into your codebase
+-   **sashi-ui**: AI-powered frontend interface
 
 ## Features
 
-- Control runtime variables 
+-   Label functions in your codebase for AI access
+-   Subscribe to functions from external repositories
+-   AI-powered bot for executing admin tasks
+-   Security option to require confirmation for sensitive functions
 
+## Getting Started
 
-### Apps and Packages
+1. Install sashi-lib in your project:
 
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `sashi-extension`: chrome extension to admin app
-- `sashi-react-hooks`: react hooks to embed runtime variables, these can be control via the chrome extension and middleware
-- `sashi-server`: server for distrbuting admin control commands and runtime configs
+    ```
+    npm install @sashimo/lib
+    ```
 
+2. Import necessary components from sashi-lib:
 
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
+    ```typescript
+    import {
+      AIArray,
+      AIFunction,
+      AIObject,
+      registerFunctionIntoAI
+    } from "@sashimo/lib";
+    ```
 
+3. Define AI objects and functions:
 
-### Build
+    ```typescript
+    const UserObject = new AIObject("User", "a user in the system", true)
+      .field({
+        name: "email",
+        description: "the email of the user",
+        type: "string",
+        required: true
+      })
+      // ... add other fields ...
 
-To build all apps and packages, run the following command:
+    const GetUserByIdFunction = new AIFunction("get_user_by_id", "get a user by id")
+      .args({
+        name: "userId",
+        description: "a users id",
+        type: "number",
+        required: true
+      })
+      .returns(UserObject)
+      .implement(async (userId: number) => {
+        const user = await getUserById(userId);
+        return user;
+      });
 
-```
-cd my-turborepo
-yarn build
-```
+    // Register the function
+    registerFunctionIntoAI("get_user_by_id", GetUserByIdFunction);
+    ```
 
-### Develop
+4. Use the Sashi UI to interact with your labeled functions using the AI interface.
 
-To develop all apps and packages, run the following command:
+## Documentation
 
-```
-cd my-turborepo
-yarn dev
-```
+For detailed documentation and advanced usage, visit our [documentation site](https://docs.sashi.ai).
 
-### How to Use This Middleware in an Application
+## Contributing
 
-To use this middleware in an application, the consumer would set it up as follows:
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for more details.
 
-```typescript
-import express from 'express';
-import { PrismaClient } from '@prisma/client';
-import createMiddleware from './path/to/middleware';
+## License
 
-const prismaClient = new PrismaClient();
-const app = express();
-const port = 3000;
-
-app.use('/api', createMiddleware({
-    prismaClient: prismaClient,
-    redisUrl: 'redis://localhost:6379',
-    accountIdHeader: 'x-account-id'
-}));
-
-app.listen(port, () => {
-    console.log(`Server running at http://localhost:${port}`);
-});
+Sashi is released under the [MIT License](LICENSE).
