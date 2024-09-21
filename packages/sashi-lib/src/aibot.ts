@@ -1,6 +1,6 @@
 import OpenAI from "openai"
 import {AssistantTool} from "openai/resources/beta/assistants"
-import {getFunctionRegistry} from "./ai-function-loader"
+import {getFunctionAttributes, getFunctionRegistry} from "./ai-function-loader"
 
 export class AIBot {
     private _apiKey: string
@@ -12,7 +12,8 @@ export class AIBot {
     private convertToOpenAIFunction = () => {
         const functions: AssistantTool[] = Array.from(
             getFunctionRegistry().values()
-        ).map((func) => {
+        ).filter((func) => getFunctionAttributes().get(func.getName())?.active ?? true)
+        .map((func) => {
             return func.description() as AssistantTool
         })
 

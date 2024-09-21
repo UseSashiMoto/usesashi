@@ -1,5 +1,5 @@
-import {ChatCompletionMessageToolCall} from "openai/resources"
-import {z} from "zod"
+import { ChatCompletionMessageToolCall } from "openai/resources"
+import { z } from "zod"
 
 export interface ConfirmableToolCall extends ChatCompletionMessageToolCall {
     needsConfirm?: boolean // Optional flag for confirmation
@@ -171,25 +171,22 @@ export class AIObject {
             type: "object",
             name: this._name,
             description: this._description,
-            properties: this._fields.reduce(
-                (acc, field) => {
-                    if (field instanceof AIObject) {
-                        return {
-                            ...acc,
-                            [field.getName()]: field.description()
-                        }
-                    } else {
-                        return {
-                            ...acc,
-                            [field.name]: {
-                                type: field.type,
-                                description: field.description
-                            }
+            properties: this._fields.reduce((acc, field) => {
+                if (field instanceof AIObject) {
+                    return {
+                        ...acc,
+                        [field.getName()]: field.description()
+                    }
+                } else {
+                    return {
+                        ...acc,
+                        [field.name]: {
+                            type: field.type,
+                            description: field.description
                         }
                     }
-                },
-                {} as Record<string, any>
-            )
+                }
+            }, {} as Record<string, any>)
         }
     }
     getRequired() {
@@ -210,15 +207,14 @@ export class AIFunction {
     constructor(
         name: string,
         description: string,
-        repo?: string,
-        needsConfirm: boolean = false
+        repo?: string
     ) {
         this._name = name
         this._description = description
         this._params = []
         this._implementation = () => {}
         this._repo = repo
-        this._needsConfirm = needsConfirm
+        this._needsConfirm = false
     }
 
     args(...params: (AIField<any> | AIObject | AIArray)[]) {
@@ -375,11 +371,17 @@ interface RegisteredFunction<F extends AIFunction> extends FunctionMetadata<F> {
 }
 
 type FunctionRegistry = Map<string, AIFunction>
+type FunctionAttributes = Map<string, {active: boolean}>
 
 const functionRegistry: FunctionRegistry = new Map()
+const functionAttributes: FunctionAttributes = new Map()
 
 export function getFunctionRegistry(): FunctionRegistry {
     return functionRegistry
+}
+
+export function getFunctionAttributes(): FunctionAttributes {
+    return functionAttributes
 }
 
 export function registerFunctionIntoAI<F extends AIFunction>(
@@ -387,6 +389,20 @@ export function registerFunctionIntoAI<F extends AIFunction>(
     fn: F
 ) {
     functionRegistry.set(fn.getName(), fn)
+    functionAttributes.set(fn.getName(), {active: true})
+}
+
+export function toggleFunctionActive(name: string) {
+    const functionAtribute = functionAttributes.get(name)
+    if (!functionAtribute) {
+        throw new Error(`Function ${name} is not registered`)
+    }
+
+    functionAttributes.set(name, {
+        ...functionAtribute,
+        active: !functionAtribute.active
+    })
+    console.log("functionAtribute", functionAttributes.get(name))
 }
 
 export async function callFunctionFromRegistry<F extends AIFunction>(
@@ -400,9 +416,13 @@ export async function callFunctionFromRegistry<F extends AIFunction>(
     }
 
     // Call the function
-    const result = await registeredFunction.execute(...args)
+    if(getFunctionAttributes().get(name)?.active ?? true) {
+        const result = await registeredFunction.execute(...args)
+        return result
+    }else {
+        return "This function is not active"
+    }
 
-    return result
 }
 
 export async function callFunctionFromRegistryFromObject<F extends AIFunction>(
@@ -431,7 +451,11 @@ export async function callFunctionFromRegistryFromObject<F extends AIFunction>(
         }
     })
     // Call the function
-    const result = await registeredFunction.execute(...args)
+    if(getFunctionAttributes().get(name)?.active ?? true) {
+        const result = await registeredFunction.execute(...args)
+        return result
+    }else {
+        return "This function is not active"
+    }
 
-    return result ?? "This function is not available"
 }

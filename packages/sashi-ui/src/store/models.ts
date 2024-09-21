@@ -1,18 +1,19 @@
 export type MessageItem = {
-    id: string
-    created_at: string
-    role: "assistant" | "user"
-    content: string
-}
+  id: string;
+  created_at: string;
+  role: 'assistant' | 'user';
+  content: string;
+};
 
 export type FunctionMetadata = {
-    name: string
-    description: string
-    needConfirmation: boolean
-}
+  name: string;
+  description: string;
+  needConfirmation: boolean;
+  active: boolean;
+};
 
 export type Metadata = {
-    name: string
-    description: string
-    functions: FunctionMetadata[]
-}
+  name: string;
+  description: string;
+  functions: FunctionMetadata[];
+};
