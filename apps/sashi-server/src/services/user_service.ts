@@ -102,7 +102,6 @@ const GetAllUserFunction = new AIFunction(
     "get_all_users",
     "gets all the users in the system",
     "",
-    true
 )
 
     .returns(new AIArray("users", "all users", UserObject))
@@ -110,7 +109,6 @@ const GetAllUserFunction = new AIFunction(
         const users = await getAllUsers()
         return users.map((user) => user.data)
     })
-    .confirmation(true)
 
 registerFunctionIntoAI("get_user_by_id", GetUserByIdFunction)
 registerFunctionIntoAI("get_all_users", GetAllUserFunction)
