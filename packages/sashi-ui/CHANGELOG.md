@@ -1,5 +1,12 @@
 # @sashi/ui
 
+## 2.14.0
+
+### Minor Changes
+
+- 5357286: Update readme
+- 0d57d35: Allow user to label functions are needs to be confirmed
+
 ## 2.13.0
 
 ### Minor Changes
