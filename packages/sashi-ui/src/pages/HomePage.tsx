@@ -373,10 +373,10 @@ export const HomePage = ({ apiUrl }: { apiUrl: string }) => {
             />
 
             <button tabIndex={-1} className="">
-              <PaperPlaneIcon color="white" width={20} height={20} />
+              <PaperPlaneIcon   width={20} height={20} />
             </button>
             <button onClick={handleClearMessages} tabIndex={-1} className="">
-              <X color="white" width={20} height={20} />
+              <X width={20} height={20} />
             </button>
           </form>
         </div>

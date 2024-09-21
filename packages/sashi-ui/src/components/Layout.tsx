@@ -2,23 +2,14 @@ import { FunctionSwitch } from '@/models/function-switch';
 import { DashboardIcon, GitHubLogoIcon } from '@radix-ui/react-icons';
 import * as Toast from '@radix-ui/react-toast';
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import { useEffect, useState, type FC, type PropsWithChildren, type ReactNode } from 'react';
+import { useEffect, useState, type FC, type PropsWithChildren } from 'react';
 import { Button } from './Button';
 import { ThemeSwitcher } from './ThemeSwitcher';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { ScrollArea } from './ui/scroll-area';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 
-type SashiLinkProps = {
-  to: string;
-  label: string;
-  icon?: ReactNode;
-};
 
-interface Bot {
-  id: string;
-  name: string;
-  isActive: boolean;
-}
 
 export function FunctionsDropdown({
   functions,
@@ -54,21 +45,33 @@ export function FunctionsDropdown({
           <ul className="space-y-2">
      
             {bots.map((bot) => (
-              <li key={bot.id} className="flex items-center justify-between py-2">
-                <span className="text-sm font-medium">{bot.name}</span>
-                <Button
-                  size="sm"
-                  variant={bot.isActive ? 'default' : 'outline'}
-                  className={`w-12 h-6 ${
-                    bot.isActive ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'
-                  }`}
-                  onClick={() => toggleBot(bot.id)}
-                >
-                  <span className="sr-only">
-                    {bot.isActive ? 'Deactivate' : 'Activate'} {bot.name}
-                  </span>
-                  {bot.isActive ? 'On' : 'Off'}
-                </Button>
+              <li key={bot.id} className="flex flex-col space-y-2">
+                <div className="flex items-center justify-between">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="text-sm font-medium cursor-help">{bot.name}</span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>{bot.description}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  <Button
+                    size="sm"
+                    variant={bot.isActive ? "default" : "outline"}
+                    className={`w-12 h-6 ${
+                      bot.isActive ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'
+                    }`}
+                    onClick={() => toggleBot(bot.id)}
+                  >
+                    <span className="sr-only">
+                      {bot.isActive ? 'Deactivate' : 'Activate'} {bot.name}
+                    </span>
+                    {bot.isActive ? 'On' : 'Off'}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">{bot.description}</p>
               </li>
             ))}
           </ul>
