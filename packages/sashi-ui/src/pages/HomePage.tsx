@@ -342,6 +342,8 @@ export const HomePage = ({ apiUrl }: { apiUrl: string }) => {
               <Message role={item.role} content={item.content} />
             ))}
 
+            {loading && <Message role="assistant" isThinking={true} />}
+
             {!!confirmationData && (
               <ConfirmationCard
                 confirmationData={confirmationData!}
