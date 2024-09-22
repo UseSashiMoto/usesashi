@@ -1,5 +1,11 @@
 # @sashi/ui
 
+## 2.15.0
+
+### Minor Changes
+
+- 939283e: Displays functions you have access to
+
 ## 2.14.0
 
 ### Minor Changes
