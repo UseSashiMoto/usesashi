@@ -1,5 +1,11 @@
 # @sashi/client
 
+## 2.17.0
+
+### Minor Changes
+
+- 960d3e6: Added enum type
+
 ## 2.16.0
 
 ### Minor Changes
