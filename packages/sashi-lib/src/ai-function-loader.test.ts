@@ -1,5 +1,4 @@
-import {isDeepStrictEqual} from "util"
-import {AIBoolean} from "./ai-function-loader"
+import { AIBoolean } from "./ai-function-loader";
 // aiFunctionRegistry.test.ts
 import {
     AIFieldEnum,
@@ -7,7 +6,7 @@ import {
     AIObject,
     callFunctionFromRegistry,
     registerFunctionIntoAI
-} from "./ai-function-loader" // Adjust the import path as needed
+} from "./ai-function-loader"; // Adjust the import path as needed
 
 describe("AI Function Registry", () => {
     const AddFunction = new AIFunction("add", "Adds two numbers")
@@ -226,9 +225,6 @@ describe("AI Function Registry", () => {
         }
         const description = AddFunction.description()
 
-        console.log("description", JSON.stringify(description, null, 2))
-        console.log("expected", JSON.stringify(expected, null, 2))
-        console.log("deep equal", isDeepStrictEqual(description, expected))
         expect(expected).toEqual(description)
     })
 
@@ -257,7 +253,6 @@ describe("AI Function Registry", () => {
     // Test description of complex function parameters and nested object
     it("should describe the nested object and enum fields correctly", () => {
         const description = WeatherForecastFunction.description()
-        console.log("description", JSON.stringify(description, null, 2))
         expect(description).toEqual({
             type: "function",
             function: {
