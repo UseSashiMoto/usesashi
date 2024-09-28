@@ -1,10 +1,11 @@
-import { AIArray, AIFunction, AIObject, registerFunctionIntoAI } from "@sashimo/lib"
+import { AIArray, AIFieldEnum, AIFunction, AIObject, registerFunctionIntoAI } from "@sashimo/lib"
 import generateDB from "your-db"
 import { Data } from "your-db/lib/types"
 
 export interface File {
     name: string
-    userId: number
+    userId: number,
+    mimeType: string
 }
 
 // TypeScript can also infer your dataSchema type! :D
@@ -13,49 +14,56 @@ const data: Data<File>[] = [
         id: 0,
         data: {
             name: "image.png",
-            userId:0
+            userId:0,
+            mimeType: "image/png"
         }
     },
     {
         id: 1,
         data: {
             name: "happy face.png",
-            userId:0
+            userId:0,
+            mimeType: "image/png"
         }
     },
     {
         id: 2,
         data: {
             name: "music.mp3",
-            userId:0
+            userId:0,
+            mimeType: "audio/mp3"
         }
     },
     {
         id: 3,
         data: {
             name: "image1.png",
-            userId:1
+            userId:1,
+            mimeType: "image/png"
         }
     },
     {
         id: 4,
         data: {
             name: "happy face1.png",
-            userId:1
+            userId:1,
+            mimeType: "image/png"
         }
     },
     {
         id: 5,
         data: {
             name: "happy face2.png",
-            userId:2
+            userId:2,
+            mimeType: "image/png"
         }
     },
     {
         id: 6,
         data: {
             name: "music2.mp3",
-            userId:2
+            userId:2,
+            mimeType: "audio/mp3"
         }
     },
 ]
@@ -84,6 +92,10 @@ const removeFile = async (id: number) => {
 
 const updateFile = async (id: number, file: File) => {
     return myDB.update(id, file)
+}
+
+const getFileByMimeType = async (mimeType: string) => {
+    return myDB.getAll().filter((file) => file.data.mimeType === mimeType)
 }
 
 const FileObject = new AIObject("File", "a file in the system", true)
@@ -119,6 +131,14 @@ const GetFileByUserIdFunction = new AIFunction("get_file_by_user_id", "gets a fi
         const files = await getFileByUserId(userId)
         return files.map((file) => file.data)
     })
+
+    const GetFileByMimeTypeFunction = new AIFunction("get_file_by_mime_type", "gets a file by mime type")
+        .args(new AIFieldEnum("mimeType", "a file mime type", ["image/png", "audio/mp3"], true))
+        .returns(new AIArray("files", "all files", FileObject))
+        .implement(async (mimeType: string) => {
+            const files = await getFileByMimeType(mimeType)
+            return files.map((file) => file.data)
+        })
     
     const GetFileByIdFunction = new AIFunction("get_file_by_id", "gets a file by id")
         .args({
@@ -180,5 +200,6 @@ const GetFileByUserIdFunction = new AIFunction("get_file_by_user_id", "gets a fi
                     
                     registerFunctionIntoAI("get_file_by_user_id", GetFileByUserIdFunction)
                     registerFunctionIntoAI("get_file_by_id", GetFileByIdFunction)
-                    registerFunctionIntoAI("remove_file", RemoveFileFunction)                    
+                    registerFunctionIntoAI("remove_file", RemoveFileFunction) 
+                    registerFunctionIntoAI("get_file_by_mime_type", GetFileByMimeTypeFunction)
                     //registerFunctionIntoAI("update_file", UpdateFileFunction)

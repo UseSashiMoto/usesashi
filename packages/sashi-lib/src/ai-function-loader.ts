@@ -1,5 +1,5 @@
-import {ChatCompletionMessageToolCall} from "openai/resources"
-import {z} from "zod"
+import { ChatCompletionMessageToolCall } from "openai/resources"
+import { z } from "zod"
 
 export interface ConfirmableToolCall extends ChatCompletionMessageToolCall {
     needsConfirm?: boolean // Optional flag for confirmation
@@ -439,24 +439,37 @@ export class AIFunction {
     }
 
     async execute(...args: any[]) {
-        const parsedArgs = z
-            .tuple(
-                this._params.map(this.validateAIField) as [
-                    z.ZodTypeAny,
-                    ...z.ZodTypeAny[]
-                ]
-            )
-            .parse(args)
-
         try {
-            const result = await this._implementation(...parsedArgs)
-            if (this._returnType) {
-                const returnTypeSchema = this.validateAIField(this._returnType)
-                return returnTypeSchema.parse(result)
-            }
-            return result
+
+            const parsedArgs = z
+                .tuple(
+                    this._params.map(this.validateAIField) as [
+                        z.ZodTypeAny,
+                        ...z.ZodTypeAny[]
+                    ]
+                )
+                .parse(args)
+
+                const result = await this._implementation(...parsedArgs)
+                if (this._returnType) {
+                    const returnTypeSchema = this.validateAIField(this._returnType)
+                    return returnTypeSchema.parse(result)
+                }
+                return result
         } catch (e) {
-            return "there was a error calling this function"
+            if (e instanceof z.ZodError) {
+                // Format the error message for the user
+                const errorDetails = e.errors.map(error => {
+                    const path = error.path.join(' > ');
+                    return `Field "${path}": ${error.message}`;
+                }).join('\n');
+    
+                // Return a simple, formatted message for LLM output
+                return `There was an issue with the parameters you provided for the function "${this._name}":\n${errorDetails}\nPlease check your input and try again.`;
+            } else {
+                // Handle any other errors
+                return `An unexpected error occurred while calling the function "${this._name}". Please try again.`;
+            }
         }
     }
 }
@@ -539,6 +552,9 @@ export async function callFunctionFromRegistryFromObject<F extends AIFunction>(
             return argsObj[param.getName()]
         } else if (param instanceof AIArray) {
             // Handle AIArray by using getName
+            return argsObj[param.getName()]
+        } else if (param instanceof AIFieldEnum) {
+            // Handle AIFieldEnum by using getName
             return argsObj[param.getName()]
         } else if ("name" in param) {
             // For AIField, which has a name property
