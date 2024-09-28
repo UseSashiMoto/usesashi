@@ -1,5 +1,5 @@
-import { ChatCompletionMessageToolCall } from "openai/resources"
-import { z } from "zod"
+import {ChatCompletionMessageToolCall} from "openai/resources"
+import {z} from "zod"
 
 export interface ConfirmableToolCall extends ChatCompletionMessageToolCall {
     needsConfirm?: boolean // Optional flag for confirmation
@@ -10,6 +10,7 @@ type AllowedTypes =
     | "number"
     | "boolean"
     | "array"
+    | "enum"
     | AIField<string | number | boolean>[]
 
 export type AIField<T> = {
@@ -22,6 +23,60 @@ export type AIField<T> = {
 export type AINumber = AIField<"number">
 export type AIString = AIField<"string">
 export type AIBoolean = AIField<"boolean">
+export type AIEnum = AIField<"enum"> & {
+    values: string[] // The possible values for the enum
+}
+
+// Define an Enum Field class
+export class AIFieldEnum {
+    private _name: string
+    private _type: "enum"
+    private _description: string
+    private _values: string[]
+    private _required: boolean
+
+    constructor(
+        name: string,
+        description: string,
+        values: string[],
+        required: boolean = true
+    ) {
+        this._name = name
+        this._type = "enum" // Set the type to "enum"
+        this._description = description
+        this._values = values // The possible enum values
+        this._required = required
+    }
+
+    // Method to generate the description of the enum field
+    description() {
+        return {
+            type: "string",
+            enum: this._values,
+            description: this._description
+        }
+    }
+
+    getName() {
+        return this._name
+    }
+
+    getRequired() {
+        return this._required
+    }
+
+    getValues() {
+        return this._values
+    }
+
+    getType() {
+        return this._type
+    }
+
+    getDescription() {
+        return this._description
+    }
+}
 
 export class AIArray {
     _name: string
@@ -73,7 +128,7 @@ export class AIArray {
 export class AIObject {
     private _name: string
     private _description: string
-    private _fields: (AIField<AllowedTypes> | AIObject)[]
+    private _fields: (AIField<AllowedTypes> | AIObject | AIFieldEnum)[]
     private _required: boolean
 
     constructor(name: string, description: string, required: boolean) {
@@ -83,7 +138,7 @@ export class AIObject {
         this._required = required
     }
 
-    field<T extends AllowedTypes>(field: AIField<T> | AIObject) {
+    field<T extends AllowedTypes>(field: AIField<T> | AIObject | AIFieldEnum) {
         this._fields.push(field)
         return this
     }
@@ -101,6 +156,7 @@ export class AIObject {
         | AIObject
         | AIField<AllowedTypes>[]
         | AIObject[]
+        | AIFieldEnum
     )[] {
         return this._fields
     }
@@ -121,7 +177,9 @@ export class AIObject {
                   z.ZodArray<z.ZodTypeAny, "many">
               ]
           > // For array transformations
-        | z.ZodNull => {
+        | z.ZodNull
+        | z.ZodEnum<[string]>
+        | z.ZodEnum<[string, ...string[]]> => {
         switch (field.type) {
             case "string":
                 return z.string()
@@ -161,7 +219,14 @@ export class AIObject {
                         }
                     })
                     .or(z.array(z.any())) // Support both strings (for stringified arrays) and arrays
+            case "enum":
+                if ((field as AIEnum).values.length) {
+                    return z.enum(
+                        (field as AIEnum).values as [string, ...string[]]
+                    )
+                }
 
+                throw new Error("Enum values is not supported")
             default:
                 throw new Error("Unsupported type")
         }
@@ -177,6 +242,11 @@ export class AIObject {
                         ...acc,
                         [field.getName()]: field.description()
                     }
+                } else if (field instanceof AIFieldEnum) {
+                    return {
+                        ...acc,
+                        [field.getName()]: field.description()
+                    }
                 } else {
                     return {
                         ...acc,
@@ -186,7 +256,27 @@ export class AIObject {
                         }
                     }
                 }
-            }, {} as Record<string, any>)
+            }, {} as Record<string, any>),
+            required:
+                this._fields
+                    .filter((field) => {
+                        if (field instanceof AIObject) {
+                            return field.getRequired()
+                        } else if (field instanceof AIFieldEnum) {
+                            return field.getRequired()
+                        } else {
+                            return field.required
+                        }
+                    })
+                    .map((field) => {
+                        if (field instanceof AIObject) {
+                            return field.getName()
+                        } else if (field instanceof AIFieldEnum) {
+                            return field.getName()
+                        } else {
+                            return field.name
+                        }
+                    }) ?? []
         }
     }
     getRequired() {
@@ -199,16 +289,12 @@ export class AIFunction {
     private _name: string
 
     private _description: string
-    private _params: (AIField<any> | AIObject | AIArray)[]
+    private _params: (AIField<any> | AIObject | AIArray | AIFieldEnum)[]
     private _returnType?: AIField<any> | AIObject | AIArray
     private _implementation: Function
     private _needsConfirm: boolean
 
-    constructor(
-        name: string,
-        description: string,
-        repo?: string
-    ) {
+    constructor(name: string, description: string, repo?: string) {
         this._name = name
         this._description = description
         this._params = []
@@ -217,7 +303,7 @@ export class AIFunction {
         this._needsConfirm = false
     }
 
-    args(...params: (AIField<any> | AIObject | AIArray)[]) {
+    args(...params: (AIField<any> | AIObject | AIArray | AIFieldEnum)[]) {
         this._params = params
         return this
     }
@@ -245,7 +331,7 @@ export class AIFunction {
         return this._description
     }
 
-    getParams(): (AIField<any> | AIObject | AIArray)[] {
+    getParams(): (AIField<any> | AIObject | AIArray | AIFieldEnum)[] {
         return this._params
     }
 
@@ -258,11 +344,12 @@ export class AIFunction {
     }
 
     validateAIField = (
-        param: AIField<any> | AIObject | AIArray
+        param: AIField<any> | AIObject | AIArray | AIFieldEnum
     ):
         | z.ZodString
         | z.ZodNumber
         | z.ZodBoolean
+        | z.ZodEnum<[string, ...string[]]>
         | z.ZodArray<z.ZodTypeAny>
         | z.ZodNull
         | z.ZodAny => {
@@ -270,6 +357,9 @@ export class AIFunction {
             return z.array(this.validateAIField(param.getItemType()))
         } else if (param instanceof AIObject) {
             return z.any()
+        } else if (param instanceof AIFieldEnum) {
+            // Handle enum fields
+            return z.enum(param.getValues() as [string, ...string[]]) // Return Zod enum schema for AIFieldEnum
         } else {
             switch (param.type) {
                 case "string":
@@ -305,6 +395,11 @@ export class AIFunction {
                                 ...acc,
                                 [param.getName()]: param.description()
                             }
+                        } else if (param instanceof AIFieldEnum) {
+                            return {
+                                ...acc,
+                                [param.getName()]: param.description()
+                            }
                         } else {
                             return {
                                 ...acc,
@@ -321,6 +416,8 @@ export class AIFunction {
                                 return param.getRequired()
                             } else if (param instanceof AIObject) {
                                 return param.getRequired()
+                            } else if (param instanceof AIFieldEnum) {
+                                return param.getRequired()
                             } else {
                                 return param.required
                             }
@@ -329,6 +426,8 @@ export class AIFunction {
                             if (param instanceof AIArray) {
                                 return param.getName()
                             } else if (param instanceof AIObject) {
+                                return param.getName()
+                            } else if (param instanceof AIFieldEnum) {
                                 return param.getName()
                             } else {
                                 return param.name
@@ -416,13 +515,12 @@ export async function callFunctionFromRegistry<F extends AIFunction>(
     }
 
     // Call the function
-    if(getFunctionAttributes().get(name)?.active ?? true) {
+    if (getFunctionAttributes().get(name)?.active ?? true) {
         const result = await registeredFunction.execute(...args)
         return result
-    }else {
+    } else {
         return "This function is not active"
     }
-
 }
 
 export async function callFunctionFromRegistryFromObject<F extends AIFunction>(
@@ -451,11 +549,10 @@ export async function callFunctionFromRegistryFromObject<F extends AIFunction>(
         }
     })
     // Call the function
-    if(getFunctionAttributes().get(name)?.active ?? true) {
+    if (getFunctionAttributes().get(name)?.active ?? true) {
         const result = await registeredFunction.execute(...args)
         return result
-    }else {
+    } else {
         return "This function is not active"
     }
-
 }
