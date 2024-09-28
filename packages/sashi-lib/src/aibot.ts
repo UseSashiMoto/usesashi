@@ -1,6 +1,6 @@
 import OpenAI from "openai"
-import {AssistantTool} from "openai/resources/beta/assistants"
-import {getFunctionAttributes, getFunctionRegistry} from "./ai-function-loader"
+import { AssistantTool } from "openai/resources/beta/assistants"
+import { getFunctionAttributes, getFunctionRegistry } from "./ai-function-loader"
 
 export class AIBot {
     private _apiKey: string
@@ -42,7 +42,7 @@ export class AIBot {
         try {
             const result = await openai.chat.completions.create(options)
 
-            console.dir(result.choices[0])
+            console.dir(JSON.stringify(result.choices[0], null, 2))
 
             return result.choices[0]
         } catch (error: any) {

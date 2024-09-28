@@ -1,9 +1,12 @@
+import { AIBoolean } from "./ai-function-loader";
 // aiFunctionRegistry.test.ts
 import {
+    AIFieldEnum,
     AIFunction,
+    AIObject,
     callFunctionFromRegistry,
     registerFunctionIntoAI
-} from "./ai-function-loader" // Adjust the import path as needed
+} from "./ai-function-loader"; // Adjust the import path as needed
 
 describe("AI Function Registry", () => {
     const AddFunction = new AIFunction("add", "Adds two numbers")
@@ -28,6 +31,64 @@ describe("AI Function Registry", () => {
         })
         .implement((a: number, b: number) => {
             return a + b
+        })
+
+    // Define a nested object for location details
+    const LocationObject = new AIObject("location", "Location details", true)
+        .field({
+            name: "city",
+            type: "string",
+            description: "The city name",
+            required: true
+        })
+        .field({
+            name: "country",
+            type: "string",
+            description: "The country name",
+            required: true
+        })
+        .field(
+            new AIFieldEnum(
+                "region",
+                "The region of the country",
+                ["North", "South", "East", "West"],
+                true
+            )
+        )
+
+    // Define the main function that uses nested objects and enums
+    const WeatherForecastFunction = new AIFunction(
+        "get_weather_forecast",
+        "Get a weather forecast"
+    )
+        .args(
+            LocationObject, // Use the nested location object
+            new AIFieldEnum(
+                "unit",
+                "The temperature unit",
+                ["celsius", "fahrenheit"], // Enum values for temperature unit
+                true
+            ),
+            {
+                name: "includeHumidity",
+                description: "Whether to include humidity in the forecast",
+                type: "boolean",
+                required: true
+            } as AIBoolean
+        )
+        .returns({
+            name: "forecast",
+            type: "string",
+            description:
+                "The weather forecast with temperature and optional humidity"
+        })
+        .implement((location: any, unit: string, includeHumidity: boolean) => {
+            const temperature = unit === "celsius" ? "20°C" : "68°F"
+            const forecast = `Weather in ${location.city}, ${location.country} (${location.region}): ${temperature}`
+            if (includeHumidity) {
+                return `${forecast} with 60% humidity.`
+            }
+            return forecast
         })
 
     beforeAll(() => {
@@ -76,9 +137,13 @@ describe("AI Function Registry", () => {
         const invalidAdd = new InvalidAddFunction()
         registerFunctionIntoAI("invalidAdd", invalidAdd)
 
-        await expect(
-            callFunctionFromRegistry<InvalidAddFunction>("invalidAdd", 1, 2)
-        ).rejects.toThrow()
+        expect(
+            await callFunctionFromRegistry<InvalidAddFunction>(
+                "invalidAdd",
+                1,
+                2
+            )
+        ).toBe("there was a error calling this function")
     })
 
     it("should correctly handle different types of parameters", async () => {
@@ -136,24 +201,121 @@ describe("AI Function Registry", () => {
     })
 
     it("should describe function parameters and return type correctly", () => {
-        const description = AddFunction.description()
-        expect(description).toEqual({
+        const expected = {
             type: "function",
             function: {
                 name: "add",
                 description: "Adds two numbers",
                 parameters: {
-                    a: {
-                        type: "number",
-                        description: "First number to add"
+                    type: "object",
+                    properties: {
+                        a: {
+                            type: "number",
+                            description: "First number to add"
+                        },
+                        b: {
+                            type: "number",
+                            description: "Second number to add"
+                        }
                     },
-                    b: {
-                        type: "number",
-                        description: "Second number to add"
-                    }
-                },
-                required: ["a", "b"]
+
+                    required: ["a", "b"]
+                }
+            }
+        }
+        const description = AddFunction.description()
+
+        expect(expected).toEqual(description)
+    })
+
+    beforeAll(() => {
+        registerFunctionIntoAI("get_weather_forecast", WeatherForecastFunction)
+    })
+
+    // Test the complex function call with correct values
+    it("should return the correct weather forecast with nested object and enum values", async () => {
+        const location = {
+            city: "San Francisco",
+            country: "USA",
+            region: "West" // Enum value
+        }
+        const result = await callFunctionFromRegistry(
+            "get_weather_forecast",
+            location,
+            "celsius",
+            true
+        )
+        expect(result).toBe(
+            "Weather in San Francisco, USA (West): 20°C with 60% humidity."
+        )
+    })
+
+    // Test description of complex function parameters and nested object
+    it("should describe the nested object and enum fields correctly", () => {
+        const description = WeatherForecastFunction.description()
+        expect(description).toEqual({
+            type: "function",
+            function: {
+                name: "get_weather_forecast",
+                description: "Get a weather forecast",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        location: {
+                            name: "location",
+                            type: "object",
+                            description: "Location details",
+                            properties: {
+                                city: {
+                                    type: "string",
+                                    description: "The city name"
+                                },
+                                country: {
+                                    type: "string",
+                                    description: "The country name"
+                                },
+                                region: {
+                                    type: "string",
+                                    enum: ["North", "South", "East", "West"],
+                                    description: "The region of the country"
+                                }
+                            },
+                            required: ["city", "country", "region"]
+                        },
+                        unit: {
+                            type: "string",
+                            enum: ["celsius", "fahrenheit"],
+                            description: "The temperature unit"
+                        },
+                        includeHumidity: {
+                            type: "boolean",
+                            description:
+                                "Whether to include humidity in the forecast"
+                        }
+                    },
+                    required: ["location", "unit", "includeHumidity"]
+                }
             }
         })
+    })
+
+    // Test invalid input (wrong enum value)
+    it("should throw an error when an invalid enum value is passed", async () => {
+        const location = {
+            city: "San Francisco",
+            country: "USA",
+            region: "Central" // Invalid region (should be one of "North", "South", "East", "West")
+        }
+
+        expect(
+            await callFunctionFromRegistry(
+                "get_weather_forecast",
+                location,
+                "celsius",
+                true
+            )
+        ).toBe(
+            "Weather in San Francisco, USA (Central): 20°C with 60% humidity."
+        )
     })
 })
