@@ -122,10 +122,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                     )
                 }
             }
-            console.log(
-                "Fetched metadata from repositories:",
-                JSON.stringify(metadataStore)
-            )
         } catch (error) {
             console.error("Error fetching metadata")
         }
@@ -184,14 +180,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     ) => {
         const origin = req.headers.origin
         const currentUrl = sashiServerUrl ?? req.originalUrl.replace(/\/$/, "")
-
-        console.log(
-            "validateRepoRequest",
-            origin,
-            currentUrl,
-            req.headers[HEADER_REPO_TOKEN],
-            repoSecretKey
-        )
 
         // Check if the origin is different from the allowed one
         if (!origin?.includes(currentUrl)) {
