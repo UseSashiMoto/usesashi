@@ -1,0 +1,28 @@
+{
+    "name": "sashi-server-one",
+    "version": "1.0.1",
+    "main": "index.js",
+    "license": "MIT",
+    "private": true,
+    "scripts": {
+        "start": "ts-node src/index.ts",
+        "build": "tsc",
+        "serve": " node dist/index.js",
+        "dev": "NODE_ENV=development nodemon src/index.ts",
+        "generate:token": "ts-node src/generate-token.ts"
+    },
+    "devDependencies": {
+        "@sashimo/lib": "*",
+        "@types/express": "^4.17.21",
+        "@types/node": "^20.12.12",
+        "nodemon": "^3.1.0",
+        "ts-node": "^10.9.2",
+        "typescript": "^5.4.5"
+    },
+    "dependencies": {
+        "crypto": "^1.0.1",
+        "dotenv": "^16.4.5",
+        "express": "^4.19.2",
+        "your-db": "^1.0.3"
+    }
+}

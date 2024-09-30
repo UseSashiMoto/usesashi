@@ -1,5 +1,7 @@
+import axios from "axios"
 import { ChatCompletionMessageToolCall } from "openai/resources"
 import { z } from "zod"
+import { RepoFunctionMetadata } from "./models/repo-metadata"
 
 export interface ConfirmableToolCall extends ChatCompletionMessageToolCall {
     needsConfirm?: boolean // Optional flag for confirmation
@@ -294,13 +296,13 @@ export class AIFunction {
     private _implementation: Function
     private _needsConfirm: boolean
 
-    constructor(name: string, description: string, repo?: string) {
+    constructor(name: string, description: string, repo?: string, needsConfirm: boolean = false) {
         this._name = name
         this._description = description
         this._params = []
         this._implementation = () => {}
         this._repo = repo
-        this._needsConfirm = false
+        this._needsConfirm = needsConfirm
     }
 
     args(...params: (AIField<any> | AIObject | AIArray | AIFieldEnum)[]) {
@@ -449,13 +451,22 @@ export class AIFunction {
                     ]
                 )
                 .parse(args)
+                if(this.getRepo()) {
+                    const result = await axios.post(`${hubUrl}/forward-call`, {
+                        name: this.getName(),
+                        args: JSON.stringify(parsedArgs),
+                        subToken: this.getRepo()
 
-                const result = await this._implementation(...parsedArgs)
-                if (this._returnType) {
-                    const returnTypeSchema = this.validateAIField(this._returnType)
-                    return returnTypeSchema.parse(result)
-                }
-                return result
+                    })
+                    return result.data
+                } else {
+                    const result = await this._implementation(...parsedArgs)
+                    if (this._returnType) {
+                        const returnTypeSchema = this.validateAIField(this._returnType)
+                        return returnTypeSchema.parse(result)
+                    }
+                    return result
+                } 
         } catch (e) {
             if (e instanceof z.ZodError) {
                 // Format the error message for the user
@@ -487,6 +498,7 @@ type FunctionAttributes = Map<string, {active: boolean}>
 
 const functionRegistry: FunctionRegistry = new Map()
 const functionAttributes: FunctionAttributes = new Map()
+let hubUrl: string | undefined = undefined
 
 export function getFunctionRegistry(): FunctionRegistry {
     return functionRegistry
@@ -496,12 +508,24 @@ export function getFunctionAttributes(): FunctionAttributes {
     return functionAttributes
 }
 
+export function setHubUrl(url: string) {
+    hubUrl = url
+}
+
 export function registerFunctionIntoAI<F extends AIFunction>(
     name: string,
     fn: F
 ) {
     functionRegistry.set(fn.getName(), fn)
     functionAttributes.set(fn.getName(), {active: true})
+}
+
+export function registerRepoFunctionsIntoAI<F extends AIFunction>(
+    fn: RepoFunctionMetadata,
+    repoToken: string
+) {
+    functionRegistry.set(fn.name, new AIFunction(fn.name, fn.description, repoToken, fn.needConfirmation))
+    functionAttributes.set(fn.name, {active: true})
 }
 
 export function toggleFunctionActive(name: string) {
@@ -538,12 +562,17 @@ export async function callFunctionFromRegistry<F extends AIFunction>(
 
 export async function callFunctionFromRegistryFromObject<F extends AIFunction>(
     name: string,
-    argsObj: Record<string, any>
+    argsObj: Record<string, any>,
+    localOnly: boolean = false
 ): Promise<any> {
     const registeredFunction = functionRegistry.get(name)
 
     if (!registeredFunction) {
         throw new Error(`Function ${name} is not registered`)
+    }
+
+    if (!!localOnly && !!registeredFunction.getRepo()) {
+        throw new Error(`Function ${name} is not local`)
     }
 
     const args = registeredFunction.getParams().map((param) => {

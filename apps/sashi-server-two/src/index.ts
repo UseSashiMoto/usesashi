@@ -1,13 +1,13 @@
-import { createMiddleware } from "@sashimo/lib"
+import {createMiddleware} from "@sashimo/lib"
 import express from "express"
-import { Express } from "express-serve-static-core"
+import {Express} from "express-serve-static-core"
 import "./services/file_service"
 import "./services/user_service"
 
 require("dotenv").config()
 
 const app = express()
-const port = 3002
+const port = 3003
 
 // Optional: Use JSON middleware if your middleware or routes need it
 app.use(express.json())
@@ -72,7 +72,10 @@ app.use(
     "/sashi",
     createMiddleware({
         openAIKey: process.env.OPENAI_API_KEY || "",
-        
+        repos: ["usertwo-sub-to-userone"],
+        hubUrl: "http://localhost:5002",
+        apiSecretKey: "usertwo-api-token",
+        repoSecretKey: "usertworeposecret"
     })
 )
 
