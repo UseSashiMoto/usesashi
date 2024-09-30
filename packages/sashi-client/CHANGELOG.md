@@ -1,5 +1,11 @@
 # @sashi/client
 
+## 3.0.0
+
+### Major Changes
+
+- b475609: Added the ability to subscribe to std lib repo
+
 ## 2.17.0
 
 ### Minor Changes
