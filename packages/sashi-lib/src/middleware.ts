@@ -13,6 +13,9 @@ import {AIBot} from "./aibot"
 import {RepoMetadata} from "./models/repo-metadata"
 import {createSashiHtml} from "./utils"
 
+const HEADER_API_TOKEN = "x-api-token"
+const HEADER_REPO_TOKEN = "x-repo-token"
+
 const getSystemPrompt = () => {
     const today = new Date()
 
@@ -63,9 +66,10 @@ interface MiddlewareOptions {
     openAIKey: string
     repos?: string[]
     sashiServerUrl?: string //where the sashi server is hosted if you can't find it automatically
-    repoSecretKey?: string // used to validate requests from the hub
+    apiSecretKey?: string // used to validate requests from and to the hub
+    repoSecretKey?: string // used to upload metadata for a specific repo
     hubUrl?: string // hub where all the repos are hosted
-    version?: string //current version of you middleware
+    version?: number //current version of you middleware
 }
 
 export interface DatabaseClient {
@@ -73,7 +77,15 @@ export interface DatabaseClient {
 }
 
 export const createMiddleware = (options: MiddlewareOptions) => {
-    const {openAIKey, sashiServerUrl, repoSecretKey, repos, hubUrl} = options
+    const {
+        openAIKey,
+        sashiServerUrl,
+        apiSecretKey,
+        repos,
+        repoSecretKey,
+        hubUrl,
+        version
+    } = options
 
     const router = Router()
 
@@ -86,11 +98,14 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         }
         try {
             const metadataPromises = repos.map((repoToken) =>
-                axios.post<RepoMetadata>(`${hubUrl}/metadata`, {
-                    headers: {
-                        "x-repo-token": `${repoToken}` // Send the token for authorization
+                axios.get<RepoMetadata>(
+                    `${hubUrl}/metadata?repoToken=${repoToken}`,
+                    {
+                        headers: {
+                            [HEADER_API_TOKEN]: apiSecretKey
+                        }
                     }
-                })
+                )
             )
 
             const metadataResponses = await Promise.all(metadataPromises)
@@ -107,9 +122,12 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                     )
                 }
             }
-            console.log("Fetched metadata from repositories:", metadataStore)
+            console.log(
+                "Fetched metadata from repositories:",
+                JSON.stringify(metadataStore)
+            )
         } catch (error) {
-            console.error("Error fetching metadata:", error)
+            console.error("Error fetching metadata")
         }
     }
 
@@ -134,13 +152,17 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                     }
                 )
             }
-            await axios.post(`${hubUrl}/metadata`, metadata, {
-                headers: {
-                    "x-sashi-key": repoSecretKey
+            await axios.post(
+                `${hubUrl}/metadata`,
+                {metadata, version},
+                {
+                    headers: {
+                        [HEADER_API_TOKEN]: apiSecretKey
+                    }
                 }
-            })
+            )
         } catch (error) {
-            console.error("Error sending metadata to hub:", error)
+            console.error("Error sending metadata to hub")
         }
     }
 
@@ -155,7 +177,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         return
     })
 
-    const validateRequest = (
+    const validateRepoRequest = (
         req: Request,
         res: Response,
         next: NextFunction
@@ -163,9 +185,17 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         const origin = req.headers.origin
         const currentUrl = sashiServerUrl ?? req.originalUrl.replace(/\/$/, "")
 
+        console.log(
+            "validateRepoRequest",
+            origin,
+            currentUrl,
+            req.headers[HEADER_REPO_TOKEN],
+            repoSecretKey
+        )
+
         // Check if the origin is different from the allowed one
         if (!origin?.includes(currentUrl)) {
-            const secretKey = req.headers["x-sashi-key"] // The header where the secret key is passed
+            const secretKey = req.headers[HEADER_REPO_TOKEN] // The header where the secret key is passed
 
             if (!secretKey || secretKey !== repoSecretKey) {
                 return res.status(403).json({error: "Unauthorized request"})
@@ -175,9 +205,8 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         next() // Continue if authorized
     }
 
-    router.get("/metadata", validateRequest, async (req, res) => {
+    router.get("/metadata", validateRepoRequest, async (req, res) => {
         return res.json({
-            name: "Sashimoto Chatbot",
             functions: Array.from(getFunctionRegistry().values()).map(
                 (func) => {
                     const functionAtribute = getFunctionAttributes().get(
@@ -195,7 +224,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         })
     })
 
-    router.get("/call-function", validateRequest, async (req, res) => {
+    router.get("/call-function", validateRepoRequest, async (req, res) => {
         const {functionName, args} = req.body
 
         if (!functionName) {
