@@ -70,6 +70,7 @@ interface MiddlewareOptions {
     repoSecretKey?: string // used to upload metadata for a specific repo
     hubUrl?: string // hub where all the repos are hosted
     version?: number //current version of you middleware
+    addStdLib?: boolean // add the standard library to the hub
 }
 
 export interface DatabaseClient {
@@ -81,11 +82,16 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         openAIKey,
         sashiServerUrl,
         apiSecretKey,
-        repos,
+        repos = [],
         repoSecretKey,
-        hubUrl,
-        version
+        hubUrl = "https://hub.usesashi.com",
+        version = 1,
+        addStdLib = true
     } = options
+
+    if (addStdLib) {
+        repos.push("sashi-stdlib")
+    }
 
     const router = Router()
 
