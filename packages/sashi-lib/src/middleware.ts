@@ -1,14 +1,17 @@
+import axios from "axios"
 import bodyParser from "body-parser"
 import cors from "cors"
-import { Router } from "express"
+import {NextFunction, Request, Response, Router} from "express"
 import {
-  callFunctionFromRegistryFromObject,
-  getFunctionAttributes,
-  getFunctionRegistry,
-  toggleFunctionActive
+    callFunctionFromRegistryFromObject,
+    getFunctionAttributes,
+    getFunctionRegistry,
+    registerRepoFunctionsIntoAI,
+    toggleFunctionActive
 } from "./ai-function-loader"
-import { AIBot } from "./aibot"
-import { createSashiHtml } from "./utils"
+import {AIBot} from "./aibot"
+import {RepoMetadata} from "./models/repo-metadata"
+import {createSashiHtml} from "./utils"
 
 const getSystemPrompt = () => {
     const today = new Date()
@@ -29,7 +32,10 @@ const getSystemPrompt = () => {
         `# Tools\n` +
         `You have access to the following tools:\n` +
         `${[...getFunctionRegistry().values()]
-            .filter((func) => getFunctionAttributes().get(func.getName())?.active ?? true)
+            .filter(
+                (func) =>
+                    getFunctionAttributes().get(func.getName())?.active ?? true
+            )
             .map((func) => `${func.getName()}+":"+${func.getDescription()}`)
             .join("\n")}\n\n` +
         `when ask tell them they have access to those tools only and tell them they have no access to other tools\n\n` +
@@ -55,7 +61,11 @@ export const trim_array = (arr: string | any[], max_length = 20) => {
 
 interface MiddlewareOptions {
     openAIKey: string
+    repos?: string[]
     sashiServerUrl?: string //where the sashi server is hosted if you can't find it automatically
+    repoSecretKey?: string // used to validate requests from the hub
+    hubUrl?: string // hub where all the repos are hosted
+    version?: string //current version of you middleware
 }
 
 export interface DatabaseClient {
@@ -63,12 +73,80 @@ export interface DatabaseClient {
 }
 
 export const createMiddleware = (options: MiddlewareOptions) => {
-    const {openAIKey, sashiServerUrl} = options
+    const {openAIKey, sashiServerUrl, repoSecretKey, repos, hubUrl} = options
 
     const router = Router()
 
     const aiBot = new AIBot(openAIKey)
 
+    // Function to fetch metadata from all subscribed repositories
+    const fetchMetadataFromRepos = async () => {
+        if (!repos || !hubUrl) {
+            return
+        }
+        try {
+            const metadataPromises = repos.map((repoToken) =>
+                axios.post<RepoMetadata>(`${hubUrl}/metadata`, {
+                    headers: {
+                        "x-repo-token": `${repoToken}` // Send the token for authorization
+                    }
+                })
+            )
+
+            const metadataResponses = await Promise.all(metadataPromises)
+            const metadataStore = metadataResponses.map((response, index) => ({
+                data: response.data,
+                token: repos[index] ?? ""
+            }))
+
+            for (const metadata of metadataStore) {
+                for (const functionMetadata of metadata.data.functions) {
+                    registerRepoFunctionsIntoAI(
+                        functionMetadata,
+                        metadata.token
+                    )
+                }
+            }
+            console.log("Fetched metadata from repositories:", metadataStore)
+        } catch (error) {
+            console.error("Error fetching metadata:", error)
+        }
+    }
+
+    const sendMetadataToHub = async () => {
+        if (!hubUrl) {
+            return
+        }
+        try {
+            const metadata: Partial<RepoMetadata> = {
+                functions: Array.from(getFunctionRegistry().values()).map(
+                    (func) => {
+                        const functionAtribute = getFunctionAttributes().get(
+                            func.getName()
+                        )
+
+                        return {
+                            name: func.getName(),
+                            description: func.getDescription(),
+                            needConfirmation: func.getNeedsConfirm(),
+                            active: functionAtribute?.active ?? true
+                        }
+                    }
+                )
+            }
+            await axios.post(`${hubUrl}/metadata`, metadata, {
+                headers: {
+                    "x-sashi-key": repoSecretKey
+                }
+            })
+        } catch (error) {
+            console.error("Error sending metadata to hub:", error)
+        }
+    }
+
+    // Fetch metadata during middleware initialization
+    fetchMetadataFromRepos()
+    sendMetadataToHub()
     router.use(cors())
     router.use(bodyParser.json())
 
@@ -77,7 +155,27 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         return
     })
 
-    router.get("/metadata", async (req, res) => {
+    const validateRequest = (
+        req: Request,
+        res: Response,
+        next: NextFunction
+    ) => {
+        const origin = req.headers.origin
+        const currentUrl = sashiServerUrl ?? req.originalUrl.replace(/\/$/, "")
+
+        // Check if the origin is different from the allowed one
+        if (!origin?.includes(currentUrl)) {
+            const secretKey = req.headers["x-sashi-key"] // The header where the secret key is passed
+
+            if (!secretKey || secretKey !== repoSecretKey) {
+                return res.status(403).json({error: "Unauthorized request"})
+            }
+        }
+
+        next() // Continue if authorized
+    }
+
+    router.get("/metadata", validateRequest, async (req, res) => {
         return res.json({
             name: "Sashimoto Chatbot",
             functions: Array.from(getFunctionRegistry().values()).map(
@@ -95,6 +193,29 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                 }
             )
         })
+    })
+
+    router.get("/call-function", validateRequest, async (req, res) => {
+        const {functionName, args} = req.body
+
+        if (!functionName) {
+            return res.status(400).json({error: "Missing function name"})
+        }
+
+        const functionRegistry = getFunctionRegistry()
+        const registeredFunction = functionRegistry.get(functionName)
+
+        if (!registeredFunction) {
+            return res.status(404).json({error: "Function not found"})
+        }
+
+        const parsedArgs = JSON.parse(args)
+        const output = await callFunctionFromRegistryFromObject(
+            functionName,
+            parsedArgs
+        )
+
+        return res.json({output})
     })
 
     router.get("/functions/:function_id/toggle_active", async (req, res) => {
