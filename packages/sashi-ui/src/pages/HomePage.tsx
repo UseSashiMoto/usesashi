@@ -127,7 +127,7 @@ export const HomePage = ({ apiUrl }: { apiUrl: string }) => {
       type: string;
     };
   }) => {
-    const response = await axios.post(`${apiUrl}/chat?${queryString}`, payload);
+    const response = await axios.post(`${apiUrl}/chat${queryString}`, payload);
 
     return response.data as { output: ChatCompletionMessage | undefined };
   };
@@ -297,7 +297,7 @@ export const HomePage = ({ apiUrl }: { apiUrl: string }) => {
     <Layout
       onFunctionSwitch={(id: string) => {
         console.log('onFunctionSwitch', id);
-        axios.get(`${apiUrl}/functions/${id}/toggle_active?${queryString}`).then(() => {
+        axios.get(`${apiUrl}/functions/${id}/toggle_active${queryString}`).then(() => {
           getMetadata();
         });
       }}
