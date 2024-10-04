@@ -1,4 +1,3 @@
-import { QueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { createBrowserRouter } from 'react-router-dom';
 import type { UserPreferences } from './components/ThemeSwitcher';
@@ -12,7 +11,6 @@ type PagesProps = {
 };
 export const App = ({ apiUrl, basename }: PagesProps) => {
   const [ready, setReady] = useState(false);
-  const [queryClient] = useState(() => new QueryClient());
 
   useEffect(() => {
     const userPreferences: UserPreferences | null = JSON.parse(localStorage.getItem('user-preferences') || 'null');
@@ -45,7 +43,7 @@ export const App = ({ apiUrl, basename }: PagesProps) => {
     [
       {
         path: '/',
-        element: <HomePage apiUrl={apiUrl} />,
+        element: <HomePage  apiUrl={apiUrl} />,
       },
     ],
     {

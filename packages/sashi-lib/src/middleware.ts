@@ -184,19 +184,36 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         res: Response,
         next: NextFunction
     ) => {
-        const origin = req.headers.origin
-        const currentUrl = sashiServerUrl ?? req.originalUrl.replace(/\/$/, "")
+        const origin = req.headers.origin || ""
+        const currentUrl = sashiServerUrl ?? req.get("host") ?? ""
 
-        // Check if the origin is different from the allowed one
-        if (!origin?.includes(currentUrl)) {
-            const secretKey = req.headers[HEADER_REPO_TOKEN] // The header where the secret key is passed
 
-            if (!secretKey || secretKey !== repoSecretKey) {
-                return res.status(403).json({error: "Unauthorized request"})
+        try {
+            // Parse the origin and current URL to get the hostname
+            const originUrl = new URL(origin)
+            const currentUrlObj = new URL(`http://${currentUrl}`) // Ensure currentUrl is treated as a full URL
+
+            // Check if both are localhost or if the origin matches the current domain
+            const isLocalhost =
+                originUrl.hostname === "localhost" &&
+                currentUrlObj.hostname === "localhost"
+            const isSameDomain = originUrl.hostname === currentUrlObj.hostname
+
+            if (!isLocalhost && !isSameDomain) {
+                // If they are not the same domain or both localhost, validate the secret key
+                const secretKey = req.headers[HEADER_REPO_TOKEN]
+
+                if (!secretKey || secretKey !== repoSecretKey) {
+                    return res.status(403).json({error: "Unauthorized request"})
+                }
             }
-        }
 
-        next() // Continue if authorized
+            // If authorized, proceed to the next middleware
+            next()
+        } catch (err) {
+            console.error("Error parsing URLs:", err)
+            return res.status(400).json({error: "Invalid origin or URL"})
+        }
     }
 
     router.get("/metadata", validateRepoRequest, async (req, res) => {
