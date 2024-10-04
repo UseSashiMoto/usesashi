@@ -1,5 +1,11 @@
 # @sashi/client
 
+## 3.1.0
+
+### Minor Changes
+
+- 07e529b: Now query strings will be forward to api requests
+
 ## 3.0.0
 
 ### Major Changes
