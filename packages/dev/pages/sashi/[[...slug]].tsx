@@ -11,7 +11,7 @@ function getBaseUrl() {
 const Pages = () => {
     return (
         <div>
-            <SashiApp apiUrl={getBaseUrl()} basename="/sashi" />
+            <SashiApp  apiUrl={getBaseUrl()} basename="/sashi" />
         </div>
     )
 }

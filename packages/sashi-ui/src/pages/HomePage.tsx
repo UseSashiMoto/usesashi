@@ -74,6 +74,8 @@ export function ConfirmationCard({ confirmationData, onConfirm, onCancel }: Conf
 }
 
 export const HomePage = ({ apiUrl }: { apiUrl: string }) => {
+  const queryString = window.location.search;
+
   const storedMessages = useAppStore((state: { messages: any }) => state.messages);
 
   const clearMessages = useAppStore((state) => state.clearMessages);
@@ -107,7 +109,7 @@ export const HomePage = ({ apiUrl }: { apiUrl: string }) => {
   }, [isMounted]);
 
   const getMetadata = async () => {
-    const response = await axios.get(`${apiUrl}/metadata`);
+    const response = await axios.get(`${apiUrl}/metadata${queryString}`);
 
     setMetadata(response.data);
   };
@@ -125,7 +127,7 @@ export const HomePage = ({ apiUrl }: { apiUrl: string }) => {
       type: string;
     };
   }) => {
-    const response = await axios.post(`${apiUrl}/chat`, payload);
+    const response = await axios.post(`${apiUrl}/chat?${queryString}`, payload);
 
     return response.data as { output: ChatCompletionMessage | undefined };
   };
@@ -227,8 +229,9 @@ export const HomePage = ({ apiUrl }: { apiUrl: string }) => {
 
         // check for tools that need confirmation
         const toolsNeedingConfirmation: ResultTool[] | undefined = payload.tools
-          ?.filter((tool: { function: { name: string } }) =>
-            metadata?.functions.find((func) => func.name === tool.function.name)?.needConfirmation ?? false
+          ?.filter(
+            (tool: { function: { name: string } }) =>
+              metadata?.functions.find((func) => func.name === tool.function.name)?.needConfirmation ?? false
           )
           .filter((tool) => !tool.confirmed);
 
@@ -237,7 +240,7 @@ export const HomePage = ({ apiUrl }: { apiUrl: string }) => {
             (func) => func.name === toolsNeedingConfirmation[0].function.name
           )?.description;
 
-          console.log("show confirmation card",  payload.tools, metadata?.functions);
+          console.log('show confirmation card', payload.tools, metadata?.functions);
           //show confirmation card
           setConfirmationData({
             name: toolsNeedingConfirmation[0].function.name,
@@ -294,7 +297,7 @@ export const HomePage = ({ apiUrl }: { apiUrl: string }) => {
     <Layout
       onFunctionSwitch={(id: string) => {
         console.log('onFunctionSwitch', id);
-        axios.get(`${apiUrl}/functions/${id}/toggle_active`).then(() => {
+        axios.get(`${apiUrl}/functions/${id}/toggle_active?${queryString}`).then(() => {
           getMetadata();
         });
       }}
@@ -375,7 +378,7 @@ export const HomePage = ({ apiUrl }: { apiUrl: string }) => {
             />
 
             <button tabIndex={-1} className="">
-              <PaperPlaneIcon   width={20} height={20} />
+              <PaperPlaneIcon width={20} height={20} />
             </button>
             <button onClick={handleClearMessages} tabIndex={-1} className="">
               <X width={20} height={20} />
