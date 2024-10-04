@@ -1,5 +1,11 @@
 # sashi-lib
 
+## 3.2.0
+
+### Minor Changes
+
+- 1b4e0fe: fix querystring bug
+
 ## 3.1.0
 
 ### Minor Changes
