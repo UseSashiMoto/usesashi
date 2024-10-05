@@ -1,5 +1,11 @@
 # @sashi/client
 
+## 3.3.0
+
+### Minor Changes
+
+- 19d5a72: Added ability to create session token for validation
+
 ## 3.2.0
 
 ### Minor Changes
