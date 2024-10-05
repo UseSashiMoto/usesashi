@@ -1,30 +1,24 @@
-# Sashi - AI-Powered Admin Tool
+# 🌟 Sashi - Your Magical AI-Powered Admin Companion! 🤖
 
-Sashi is an advanced admin tool that allows you to label functions in your codebase and perform admin tasks using AI.
+<h3 align="center" style="color: rgb(12, 80, 255);">Transforming admin tasks into a delightful experience! ✨</h3>
 
-## Components
+## 🚀 Welcome to the Enchanted World of Sashi!
 
--   **sashi-lib**: Middleware library for integrating Sashi into your codebase
--   **sashi-ui**: AI-powered frontend interface
+Imagine a world where managing your application is as easy as having a conversation with a friend. Sashi is here to make that dream a reality! With its AI-powered chat interface, you can perform admin tasks with the ease of a magical spell. 🪄
 
-## Features
+## ✨ Why You'll Love Sashi
 
--   Label functions in your codebase for AI access
--   Subscribe to functions from external repositories
--   AI-powered bot for executing admin tasks
--   Security option to require confirmation for sensitive functions
+-   **🤖 AI-Powered Chat**: Execute admin tasks with simple, natural language commands.
+-   **🔗 Seamless Integration**: Effortlessly connect with Sashi-labeled functions in your backend.
+-   **💬 User-Friendly**: No need for complex commands—just speak your mind!
+-   **🔒 Secure and Reliable**: Built-in support for sensitive function confirmation.
+-   **⚡ Real-Time Updates**: Get instant feedback and results.
 
-## Getting Started
+## 🛠️ Setting Up Your Magical Portal
 
-### 1. Install sashi-lib in your project:
+Sashi is served directly from the Sashi middleware. Here's how to set it up:
 
-```
-npm install @sashimo/lib
-```
-
-### 2. Set up the middleware
-
-For server-side applications (e.g., Express.js):
+1. **Prepare Your Backend**: Use `@sashimo/lib` to set up the Sashi middleware.
 
 ```typescript
 import express from 'express';
@@ -32,18 +26,30 @@ import { createMiddleware } from '@sashimo/lib';
 
 const app = express();
 
-// Initialize Sashi middleware
 app.use('/sashi', createMiddleware({
-  // Configuration options
   openAIKey: process.env.OPENAI_API_KEY || "",
+  // Other configuration options
 }));
-
-// Your other routes and middleware
 ```
 
-### 3. Label and register functions
+2. **Access the Admin Chat**: Open your browser and navigate to the path where you've mounted the middleware, followed by `/bot`. For example:
 
-Import necessary components from sashi-lib:
+    - `http://yourwebsite.com/sashi/bot`
+
+3. **Customize Your Path**: Use the `sashiServerUrl` option to set a custom route.
+
+```typescript
+app.use('/control-panel', createMiddleware({
+  sashiServerUrl: 'http://yourwebsite.com/control-panel',
+  // other options...
+}));
+```
+
+## 🏷️ Labeling and Registering Functions
+
+Before diving into the magic, label and register your functions:
+
+### Basic Example
 
 ```typescript
 import {
@@ -52,24 +58,19 @@ import {
   AIObject,
   registerFunctionIntoAI
 } from "@sashimo/lib";
-```
 
-Define AI objects and functions:
-
-```typescript
 const UserObject = new AIObject("User", "a user in the system", true)
   .field({
     name: "email",
     description: "the email of the user",
     type: "string",
     required: true
-  })
-  // ... add other fields ...
+  });
 
 const GetUserByIdFunction = new AIFunction("get_user_by_id", "get a user by id")
   .args({
     name: "userId",
-    description: "a users id",
+    description: "a user's id",
     type: "number",
     required: true
   })
@@ -79,66 +80,80 @@ const GetUserByIdFunction = new AIFunction("get_user_by_id", "get a user by id")
     return user;
   });
 
-// Register the function
 registerFunctionIntoAI("get_user_by_id", GetUserByIdFunction);
 ```
 
-### 4. Access the Admin Chat
+### Advanced Example: Handling Multiple Objects
 
-To interact with your labeled functions using the AI interface, follow these steps:
+```typescript
+const ProductObject = new AIObject("Product", "a product in the inventory", true)
+  .field({
+    name: "productId",
+    description: "the unique identifier for a product",
+    type: "number",
+    required: true
+  })
+  .field({
+    name: "productName",
+    description: "the name of the product",
+    type: "string",
+    required: true
+  });
 
-1. Start your server with the Sashi middleware integrated.
+const GetProductsFunction = new AIFunction("get_products", "retrieve a list of products")
+  .returns(new AIArray(ProductObject))
+  .implement(async () => {
+    const products = await getAllProducts();
+    return products;
+  });
 
-2. The Admin Chat interface is accessible at the route where you mounted the Sashi middleware, followed by `/bot`. For example:
+registerFunctionIntoAI("get_products", GetProductsFunction);
+```
 
-    - If you mounted the middleware at the root: `http://yourwebsite.com/bot`
-    - If you mounted it at a specific path: `http://yourwebsite.com/your-path/bot`
+### Example: Using AIArray for Complex Returns
 
-3. You can also specify a custom route using the `sashiServerUrl` option when initializing the middleware:
+```typescript
+const OrderObject = new AIObject("Order", "an order placed by a user", true)
+  .field({
+    name: "orderId",
+    description: "the unique identifier for an order",
+    type: "number",
+    required: true
+  })
+  .field({
+    name: "orderDate",
+    description: "the date when the order was placed",
+    type: "string",
+    required: true
+  });
 
-    ```typescript
-    app.use('/control-panel', createMiddleware({
-      sashiServerUrl: 'http://yourwebsite.com/control-panel',
-      // other options...
-    }));
-    ```
+const GetUserOrdersFunction = new AIFunction("get_user_orders", "get all orders for a user")
+  .args({
+    name: "userId",
+    description: "a user's id",
+    type: "number",
+    required: true
+  })
+  .returns(new AIArray(OrderObject))
+  .implement(async (userId: number) => {
+    const orders = await getOrdersByUserId(userId);
+    return orders;
+  });
 
-    In this case, the Admin Chat would be accessible at: `http://yourwebsite.com/control-panel/bot`
+registerFunctionIntoAI("get_user_orders", GetUserOrdersFunction);
+```
 
-4. Open a web browser and navigate to the appropriate URL based on your configuration.
+## 🛡️ Security Spells
 
-5. You'll be presented with the Sashi Admin Chat interface.
+Protect your magical realm with robust security:
 
-6. Use natural language to interact with the AI and execute admin tasks. For example:
+-   **Custom Middleware**: Validate session tokens before reaching Sashi.
+-   **Session Management**: Use the `getSession` function to manage sessions securely.
 
-    - "Get user with ID 123"
-    - "List all users"
-    - "Update email for user with ID 456"
-
-7. The AI will interpret your commands and execute the appropriate labeled functions.
-
-8. For functions marked as sensitive, you'll be prompted to confirm the action before it's executed.
-
-Note: Ensure that you have proper authentication and authorization in place to restrict access to the Admin Chat interface in production environments.
-
-## Security
-
-Securing access to your Sashi Admin Chat is crucial, especially in production environments. Sashi works alongside your custom middleware to ensure proper authentication and authorization.
-
-### Session Management
-
-Sashi uses a two-step process for session management:
-
-1. **Custom Middleware**: You implement your own middleware to validate the session token before the Sashi middleware.
-2. **getSession Function**: This function, provided to the Sashi middleware, generates a session token for new sessions.
-
-Here's how to implement these security features:
-
-```typescript:apps/sashi-server-one/src/index.ts
+```typescript
 import { Request, Response, NextFunction } from 'express';
 import { createMiddleware } from '@sashimo/lib';
 
-// Custom middleware to verify the session
 const verifySessionMiddleware = async (
     req: Request,
     res: Response,
@@ -150,7 +165,6 @@ const verifySessionMiddleware = async (
         return res.status(401).send("Unauthorized");
     }
 
-    // Verify the session token
     if (sessionToken !== "userone-session-token") {
         return res.status(401).send("Unauthorized");
     }
@@ -158,7 +172,6 @@ const verifySessionMiddleware = async (
     next();
 };
 
-// Use sashi-middleware
 app.use(
     "/sashi",
     verifySessionMiddleware,
@@ -171,36 +184,20 @@ app.use(
 );
 ```
 
-### Implementing Session Management
+## 📚 Dive Deeper into the Magic
 
-1. **Custom Verification Middleware**:
+For more spells and incantations, visit our [Sashi documentation](https://docs.sashi.ai).
 
-    - This middleware runs before the Sashi middleware.
-    - It checks for the presence of a session token in the request headers.
-    - It validates the session token according to your authentication logic.
-    - If the token is invalid or missing, it returns a 401 Unauthorized response.
+## 🤝 Join the Sashi Fellowship
 
-2. **getSession Function**:
-    - This function is provided to the Sashi middleware configuration.
-    - It generates or retrieves a session token for new sessions.
-    - In this example, it returns a static token, but in a real-world scenario, you would generate a unique token for each session.
+Are you ready to make admin tasks a breeze? Join us on this magical journey! Check out our [Contributing Guide](https://github.com/sashimo/sashi/blob/main/CONTRIBUTING.md).
 
-### Customizing the Implementation
+## ⚖️ License
 
-You should adapt the `verifySessionMiddleware` and `getSession` function to fit your application's authentication system:
+Sashi is released under the [MIT License](https://github.com/sashimo/sashi/blob/main/LICENSE).
 
--   Use your database or a token service to validate and generate real session tokens.
--   Implement proper error handling and logging.
--   Consider using environment variables for sensitive values like secret keys.
+---
 
-## Documentation
-
-For detailed documentation and advanced usage, visit our [documentation site](https://docs.sashi.ai).
-
-## Contributing
-
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for more details.
-
-## License
-
-Sashi is released under the [MIT License](LICENSE).
+<p align="center" style="color: rgb(12, 80, 255);">
+  Crafted with 💖 by the Sashimotors
+</p>

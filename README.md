@@ -1,12 +1,12 @@
-# 🌟 Sashi UI - Your Magical AI-Powered Admin Companion! 🤖
+# 🌟 Sashi - Your Magical AI-Powered Admin Companion! 🤖
 
 <h3 align="center" style="color: rgb(12, 80, 255);">Transforming admin tasks into a delightful experience! ✨</h3>
 
-## 🚀 Welcome to the Enchanted World of Sashi UI!
+## 🚀 Welcome to the Enchanted World of Sashi!
 
-Imagine a world where managing your application is as easy as having a conversation with a friend. Sashi UI is here to make that dream a reality! With its AI-powered chat interface, you can perform admin tasks with the ease of a magical spell. 🪄
+Imagine a world where managing your application is as easy as having a conversation with a friend. Sashi is here to make that dream a reality! With its AI-powered chat interface, you can perform admin tasks with the ease of a magical spell. 🪄
 
-## ✨ Why You'll Love Sashi UI
+## ✨ Why You'll Love Sashi
 
 -   **🤖 AI-Powered Chat**: Execute admin tasks with simple, natural language commands.
 -   **🔗 Seamless Integration**: Effortlessly connect with Sashi-labeled functions in your backend.
@@ -16,7 +16,7 @@ Imagine a world where managing your application is as easy as having a conversat
 
 ## 🛠️ Setting Up Your Magical Portal
 
-Sashi UI is served directly from the Sashi middleware. Here's how to set it up:
+Sashi is served directly from the Sashi middleware. Here's how to set it up:
 
 1. **Prepare Your Backend**: Use `@sashimo/lib` to set up the Sashi middleware.
 
