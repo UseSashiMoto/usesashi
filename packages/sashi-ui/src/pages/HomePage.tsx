@@ -74,9 +74,6 @@ export function ConfirmationCard({ confirmationData, onConfirm, onCancel }: Conf
 }
 
 export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToken: string }) => {
-  console.log('HomePage', apiUrl, sessionToken);
-  const queryString = window.location.search;
-
   const storedMessages = useAppStore((state: { messages: any }) => state.messages);
 
   const clearMessages = useAppStore((state) => state.clearMessages);
@@ -129,7 +126,7 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
       type: string;
     };
   }) => {
-    const response = await axios.post(`${apiUrl}/chat${queryString}`, payload);
+    const response = await axios.post(`${apiUrl}/chat`, payload);
 
     return response.data as { output: ChatCompletionMessage | undefined };
   };
@@ -298,7 +295,7 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
   return (
     <Layout
       onFunctionSwitch={(id: string) => {
-        axios.get(`${apiUrl}/functions/${id}/toggle_active${queryString}`).then(() => {
+        axios.get(`${apiUrl}/functions/${id}/toggle_active`).then(() => {
           getMetadata();
         });
       }}
