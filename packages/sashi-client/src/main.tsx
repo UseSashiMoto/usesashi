@@ -6,6 +6,7 @@ interface CustomWindow extends Window {
     __INITIAL_STATE__: {
         apiUrl: string
         basename: string
+        sessionToken: string
     }
 }
 
@@ -19,6 +20,7 @@ createRoot(document.getElementById("root")!).render(
         <SashiApp
             apiUrl={window.__INITIAL_STATE__.apiUrl}
             basename={window.__INITIAL_STATE__.basename}
+            sessionToken={window.__INITIAL_STATE__.sessionToken}
         />
     </StrictMode>
 )

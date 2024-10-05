@@ -1,71 +1,69 @@
-# Sashi - AI-Powered Admin Tool
+# Sashi UI - Internal AI-Powered Admin Interface
 
-Sashi is an advanced admin tool that allows you to label functions in your codebase and perform admin tasks using AI.
+Sashi UI is the internal frontend component of the Sashi AI-powered admin tool. This package is private and should not be installed or used outside of the Sashi platform.
 
-## Components
+## Overview
 
-- **sashi-lib**: Middleware library for integrating Sashi into your codebase
-- **sashi-ui**: AI-powered frontend interface
+Sashi UI provides the chat interface for interacting with Sashi-labeled functions and performing admin tasks using AI within the Sashi ecosystem.
 
 ## Features
 
-- Label functions in your codebase for AI access
-- Subscribe to functions from external repositories
-- AI-powered bot for executing admin tasks
-- Security option to require confirmation for sensitive functions
+- AI-powered chat interface for executing admin tasks
+- Seamless integration with Sashi-labeled functions
+- User-friendly interaction using natural language
+- Support for sensitive function confirmation
+- Real-time updates and responses
 
-## Getting Started
+## Usage
 
-1. Install sashi-lib in your project:
+This package is used internally within the Sashi platform. It is not intended for external installation or use.
 
-   ```
-   npm install @sashimo/lib
-   ```
+## Development
 
-2. Import necessary components from sashi-lib:
+For Sashi team members working on this package:
 
-   ```typescript
-   import { AIArray, AIFunction, AIObject, registerFunctionIntoAI } from '@sashimo/lib';
-   ```
+1. Ensure you have access to the Sashi monorepo.
+2. Navigate to the `packages/sashi-ui` directory.
+3. Install dependencies:
 
-3. Define AI objects and functions:
+```bash
+npm install
+```
 
-   ```typescript
-   const UserObject = new AIObject('User', 'a user in the system', true).field({
-     name: 'email',
-     description: 'the email of the user',
-     type: 'string',
-     required: true,
-   });
-   // ... add other fields ...
+4. Run development server:
 
-   const GetUserByIdFunction = new AIFunction('get_user_by_id', 'get a user by id')
-     .args({
-       name: 'userId',
-       description: 'a users id',
-       type: 'number',
-       required: true,
-     })
-     .returns(UserObject)
-     .implement(async (userId: number) => {
-       const user = await getUserById(userId);
-       return user;
-     });
+```bash
+npm run dev
+```
 
-   // Register the function
-   registerFunctionIntoAI('get_user_by_id', GetUserByIdFunction);
-   ```
+## Testing
 
-4. Use the Sashi UI to interact with your labeled functions using the AI interface.
+Run the test suite with:
+
+```bash
+npm test
+```
+
+## Building
+
+To build the package:
+
+```bash
+npm run build
+```
 
 ## Documentation
 
-For detailed documentation and advanced usage, visit our [documentation site](https://docs.sashi.ai).
+Internal documentation for this package can be found in the Sashi team's documentation system.
 
 ## Contributing
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for more details.
+For Sashi team members: Please refer to our internal contributing guidelines when working on this package.
+
+## Security
+
+As an internal package, security is paramount. Always follow our security best practices and never expose sensitive information.
 
 ## License
 
-Sashi is released under the [MIT License](LICENSE).
+This is proprietary software owned by Sashi. Unauthorized use, modification, or distribution is strictly prohibited.

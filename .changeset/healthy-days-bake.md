@@ -4,4 +4,4 @@
 "@sashimo/ui": minor
 ---
 
-version bump
+Added ability to create session token for validation

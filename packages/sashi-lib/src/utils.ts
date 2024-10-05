@@ -2,7 +2,10 @@ const packaging = require("../package.json")
 
 const version = packaging.version
 
-export const createSashiHtml = (baseUrl: string) => /* HTML */ `<!DOCTYPE html>
+export const createSashiHtml = (
+    baseUrl: string,
+    sessionToken?: string
+) => /* HTML */ `<!DOCTYPE html>
   <html lang="en">
     <head>
       <meta charset="UTF-8" />
@@ -15,6 +18,7 @@ export const createSashiHtml = (baseUrl: string) => /* HTML */ `<!DOCTYPE html>
         window.__INITIAL_STATE__ = {
           apiUrl: "${baseUrl}",
           basename: "${baseUrl}/bot",
+          sessionToken: "${sessionToken}"
         };
       </script>
 
