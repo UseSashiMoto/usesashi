@@ -111,9 +111,7 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
 
   const getMetadata = async () => {
     console.log('getMetadata sessionToken', sessionToken);
-    const response = await axios.get(`${apiUrl}/metadata`, {
-      headers: { 'x-sashi-session-token': sessionToken },
-    });
+    const response = await axios.get(`${apiUrl}/metadata`);
 
     setMetadata(response.data);
   };
@@ -131,9 +129,7 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
       type: string;
     };
   }) => {
-    const response = await axios.post(`${apiUrl}/chat${queryString}`, payload, {
-      headers: { 'x-sashi-session-token': sessionToken },
-    });
+    const response = await axios.post(`${apiUrl}/chat${queryString}`, payload);
 
     return response.data as { output: ChatCompletionMessage | undefined };
   };
@@ -302,14 +298,9 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
   return (
     <Layout
       onFunctionSwitch={(id: string) => {
-        console.log('onFunctionSwitch', id);
-        axios
-          .get(`${apiUrl}/functions/${id}/toggle_active${queryString}`, {
-            headers: { 'x-sashi-session-token': sessionToken },
-          })
-          .then(() => {
-            getMetadata();
-          });
+        axios.get(`${apiUrl}/functions/${id}/toggle_active${queryString}`).then(() => {
+          getMetadata();
+        });
       }}
       functions={
         (metadata?.functions.map((func) => ({
