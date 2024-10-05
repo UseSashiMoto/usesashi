@@ -2,6 +2,8 @@ import axios from "axios"
 import bodyParser from "body-parser"
 import cors from "cors"
 import {NextFunction, Request, Response, Router} from "express"
+import {ParamsDictionary} from "express-serve-static-core"
+import {ParsedQs} from "qs"
 import {
     callFunctionFromRegistryFromObject,
     getFunctionAttributes,
@@ -69,8 +71,9 @@ interface MiddlewareOptions {
     apiSecretKey?: string // used to validate requests from and to the hub
     repoSecretKey?: string // used to upload metadata for a specific repo
     hubUrl?: string // hub where all the repos are hosted
-    version?: number //current version of you middleware
+    version?: number //current version of your repo
     addStdLib?: boolean // add the standard library to the hub
+    getSession?: (req: Request, res: Response) => Promise<string> // function to get the session id fot a request
 }
 
 export interface DatabaseClient {
@@ -86,7 +89,8 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         repoSecretKey,
         hubUrl = "https://hub.usesashi.com",
         version = 1,
-        addStdLib = true
+        addStdLib = true,
+        getSession
     } = options
 
     if (addStdLib) {
@@ -94,6 +98,26 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     }
 
     const router = Router()
+    // CORS middleware inside the router
+    router.use((req, res, next) => {
+        // Set CORS headers
+        res.header("Access-Control-Allow-Origin", "*") // Or specific origins
+        res.header(
+            "Access-Control-Allow-Methods",
+            "GET, POST, PUT, DELETE, OPTIONS"
+        )
+        res.header(
+            "Access-Control-Allow-Headers",
+            "x-sashi-session-token, Content-Type"
+        )
+
+        // If it's a preflight request (OPTIONS), respond immediately
+        if (req.method === "OPTIONS") {
+            return res.status(200).end()
+        }
+
+        next() // Continue to the next middleware or route handler
+    })
 
     const aiBot = new AIBot(openAIKey)
 
@@ -129,7 +153,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                 }
             }
         } catch (error) {
-            console.error("Error fetching metadata")
+            console.error("no third-party metadata")
         }
     }
 
@@ -164,7 +188,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                 }
             )
         } catch (error) {
-            console.error("Error sending metadata to hub")
+            console.error("No access to hub")
         }
     }
 
@@ -186,7 +210,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     ) => {
         const origin = req.headers.origin || ""
         const currentUrl = sashiServerUrl ?? req.get("host") ?? ""
-
 
         try {
             // Parse the origin and current URL to get the hostname
@@ -411,9 +434,22 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         return
     })
 
+    const createSessionToken = async (
+        req: Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>,
+        res: Response<any, Record<string, any>>
+    ) => {
+        if (getSession) {
+            return await getSession(req, res)
+        }
+
+        const sessionToken = crypto.randomUUID()
+        return sessionToken
+    }
+
     router.use("/bot", async (req, res, next) => {
+        const sessionToken = await createSessionToken(req, res)
         res.type("text/html").send(
-            createSashiHtml(sashiServerUrl ?? req.baseUrl)
+            createSashiHtml(sashiServerUrl ?? req.baseUrl, sessionToken)
         )
         next()
 

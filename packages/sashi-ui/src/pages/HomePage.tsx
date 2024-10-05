@@ -73,7 +73,8 @@ export function ConfirmationCard({ confirmationData, onConfirm, onCancel }: Conf
   );
 }
 
-export const HomePage = ({ apiUrl }: { apiUrl: string }) => {
+export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToken: string }) => {
+  console.log('HomePage', apiUrl, sessionToken);
   const queryString = window.location.search;
 
   const storedMessages = useAppStore((state: { messages: any }) => state.messages);
@@ -109,7 +110,10 @@ export const HomePage = ({ apiUrl }: { apiUrl: string }) => {
   }, [isMounted]);
 
   const getMetadata = async () => {
-    const response = await axios.get(`${apiUrl}/metadata${queryString}`);
+    console.log('getMetadata sessionToken', sessionToken);
+    const response = await axios.get(`${apiUrl}/metadata`, {
+      headers: { 'x-sashi-session-token': sessionToken },
+    });
 
     setMetadata(response.data);
   };
@@ -127,7 +131,9 @@ export const HomePage = ({ apiUrl }: { apiUrl: string }) => {
       type: string;
     };
   }) => {
-    const response = await axios.post(`${apiUrl}/chat${queryString}`, payload);
+    const response = await axios.post(`${apiUrl}/chat${queryString}`, payload, {
+      headers: { 'x-sashi-session-token': sessionToken },
+    });
 
     return response.data as { output: ChatCompletionMessage | undefined };
   };
@@ -297,9 +303,13 @@ export const HomePage = ({ apiUrl }: { apiUrl: string }) => {
     <Layout
       onFunctionSwitch={(id: string) => {
         console.log('onFunctionSwitch', id);
-        axios.get(`${apiUrl}/functions/${id}/toggle_active${queryString}`).then(() => {
-          getMetadata();
-        });
+        axios
+          .get(`${apiUrl}/functions/${id}/toggle_active${queryString}`, {
+            headers: { 'x-sashi-session-token': sessionToken },
+          })
+          .then(() => {
+            getMetadata();
+          });
       }}
       functions={
         (metadata?.functions.map((func) => ({

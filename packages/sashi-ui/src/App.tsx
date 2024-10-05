@@ -1,5 +1,5 @@
+import axios from 'axios';
 import { useEffect, useState } from 'react';
-import { createBrowserRouter } from 'react-router-dom';
 import type { UserPreferences } from './components/ThemeSwitcher';
 import { HomePage } from './pages/HomePage';
 
@@ -8,9 +8,33 @@ type PagesProps = {
   apiUrl: string;
   // Base path for the app
   basename: string;
+  // Session token
+  sessionToken: string;
 };
-export const App = ({ apiUrl, basename }: PagesProps) => {
+export const App = ({ apiUrl, basename, sessionToken }: PagesProps) => {
   const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    console.log('Setting session token', sessionToken);
+
+    // Add the interceptor and store its ID to remove it later
+    const interceptor = axios.interceptors.request.use(
+      (config) => {
+        // Set headers for every request made within this middleware
+        config.headers['x-sashi-session-token'] = sessionToken;
+        return config;
+      },
+      (error) => {
+        // Handle the error if the request fails
+        return Promise.reject(error);
+      }
+    );
+
+    // Cleanup: Remove the interceptor when the component unmounts or sessionToken changes
+    return () => {
+      axios.interceptors.request.eject(interceptor);
+    };
+  }, [sessionToken]);
 
   useEffect(() => {
     const userPreferences: UserPreferences | null = JSON.parse(localStorage.getItem('user-preferences') || 'null');
@@ -39,21 +63,9 @@ export const App = ({ apiUrl, basename }: PagesProps) => {
     return null;
   }
 
-  const router = createBrowserRouter(
-    [
-      {
-        path: '/',
-        element: <HomePage  apiUrl={apiUrl} />,
-      },
-    ],
-    {
-      basename,
-    }
-  );
-
   return (
     <>
-      <HomePage apiUrl={apiUrl} />
+      <HomePage sessionToken={sessionToken} apiUrl={apiUrl} />
     </>
   );
 };

@@ -9,9 +9,14 @@ function getBaseUrl() {
 }
 
 const Pages = () => {
+    console.log("connecting to api at", getBaseUrl())
     return (
         <div>
-            <SashiApp  apiUrl={getBaseUrl()} basename="/sashi" />
+            <SashiApp
+                sessionToken="userone-session-token"
+                apiUrl={getBaseUrl()}
+                basename="/sashi"
+            />
         </div>
     )
 }

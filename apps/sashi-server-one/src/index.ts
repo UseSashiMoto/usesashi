@@ -1,5 +1,5 @@
 import {createMiddleware} from "@sashimo/lib"
-import express from "express"
+import express, {NextFunction, Request, Response} from "express"
 import {Express} from "express-serve-static-core"
 import "./services/file_service"
 import "./services/user_service"
@@ -67,15 +67,58 @@ const listRoutes = (app: Express) => {
     })
 }
 
+// Global CORS setup before all routes
+app.use((req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "*") // Or specific origins
+    res.header(
+        "Access-Control-Allow-Methods",
+        "GET, POST, PUT, DELETE, OPTIONS"
+    )
+    res.header(
+        "Access-Control-Allow-Headers",
+        "x-sashi-session-token, Content-Type"
+    )
+
+    // Handle preflight requests
+    if (req.method === "OPTIONS") {
+        return res.status(200).end()
+    }
+
+    next()
+})
+
+const verifySessionMiddleware = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    const sessionToken = req.headers["x-sashi-session-token"]
+
+    if (!sessionToken) {
+        return res.status(401).send("Unauthorized")
+    }
+
+    // Verify the session token
+    if (sessionToken !== "userone-session-token") {
+        return res.status(401).send("Unauthorized")
+    }
+
+    next()
+}
+
 // Use sashi-middleware
 app.use(
     "/sashi",
+    verifySessionMiddleware,
     createMiddleware({
         openAIKey: process.env.OPENAI_API_KEY || "",
         repos: ["userone-sub-to-usertwo"],
         hubUrl: "http://localhost:5002",
         apiSecretKey: "userone-api-token",
-        repoSecretKey: "useronereposecret"
+        repoSecretKey: "useronereposecret",
+        getSession: async (req, res) => {
+            return "userone-session-token"
+        }
     })
 )
 
