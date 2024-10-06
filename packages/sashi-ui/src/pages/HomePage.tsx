@@ -107,7 +107,6 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
   }, [isMounted]);
 
   const getMetadata = async () => {
-    console.log('getMetadata sessionToken', sessionToken);
     const response = await axios.get(`${apiUrl}/metadata`);
 
     setMetadata(response.data);
@@ -185,7 +184,6 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
     }, 100);
   };
   const handleConfirm = () => {
-    console.log('handleConfirm', confirmationData);
     if (!confirmationData) return;
     const tools =
       confirmationData.payload!.tools?.map((tool) => {
@@ -200,7 +198,6 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
   };
 
   const handleCancel = () => {
-    console.log('handleCancel', confirmationData);
     if (!confirmationData) return;
     const tools = confirmationData.payload!.tools?.filter((tool) => {
       if (tool.function.name === confirmationData!.name) {
@@ -252,7 +249,6 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
             (func) => func.name === toolsNeedingConfirmation[0].function.name
           )?.description;
 
-          console.log('show confirmation card', payload.tools, metadata?.functions);
           //show confirmation card
           setConfirmationData({
             name: toolsNeedingConfirmation[0].function.name,
@@ -264,25 +260,6 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
         }
 
         const result = await sendMessage({ payload });
-        console.log('TOOL RESULTS', result);
-
-        /*if (result.output?.content) {
-          const newAssistantMessage: MessageItem = {
-            id: getUniqueId(),
-            created_at: new Date().toISOString(),
-            role: 'assistant',
-            content: result.output.content,
-          };
-          setMessageItems((prev) => [...prev, ...[newAssistantMessage]]);
-          addMessage(newAssistantMessage);
-
-          previous.push({
-            role: 'assistant',
-            content: result.output?.content,
-          });
-
-          resetScroll();
-        }*/
 
         if (result.output?.tool_calls) {
           result.output.tool_calls.forEach((toolCall) => {
@@ -303,6 +280,8 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
               addMessage(newVisualizationMessage);
             }
           });
+
+          resetScroll();
         } else if (result.output?.content) {
           // Only add text content if there were no visualizations
           const newAssistantMessage: MessageItem = {
@@ -313,6 +292,8 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
           };
           setMessageItems((prev) => [...prev, newAssistantMessage]);
           addMessage(newAssistantMessage);
+
+          resetScroll();
         }
 
         if (result.output?.tool_calls) {

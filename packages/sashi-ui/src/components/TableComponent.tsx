@@ -10,7 +10,6 @@ interface TableProps {
 }
 
 export const TableComponent: React.FC<TableProps> = ({ data, caption }) => {
-  console.log('tabledata', data);
   if (!data || !data.data || data.data.length === 0) return <p>No data available.</p>;
 
   const tableData = data.data;
