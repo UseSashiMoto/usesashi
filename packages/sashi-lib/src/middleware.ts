@@ -251,7 +251,8 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                         name: func.getName(),
                         description: func.getDescription(),
                         needConfirmation: func.getNeedsConfirm(),
-                        active: functionAtribute?.active ?? true
+                        active: functionAtribute?.active ?? true,
+                        isVisualization: false
                     }
                 }
             )

@@ -238,27 +238,30 @@ export class AIObject {
             type: "object",
             name: this._name,
             description: this._description,
-            properties: this._fields.reduce((acc, field) => {
-                if (field instanceof AIObject) {
-                    return {
-                        ...acc,
-                        [field.getName()]: field.description()
-                    }
-                } else if (field instanceof AIFieldEnum) {
-                    return {
-                        ...acc,
-                        [field.getName()]: field.description()
-                    }
-                } else {
-                    return {
-                        ...acc,
-                        [field.name]: {
-                            type: field.type,
-                            description: field.description
+            properties: this._fields.reduce(
+                (acc, field) => {
+                    if (field instanceof AIObject) {
+                        return {
+                            ...acc,
+                            [field.getName()]: field.description()
+                        }
+                    } else if (field instanceof AIFieldEnum) {
+                        return {
+                            ...acc,
+                            [field.getName()]: field.description()
+                        }
+                    } else {
+                        return {
+                            ...acc,
+                            [field.name]: {
+                                type: field.type,
+                                description: field.description
+                            }
                         }
                     }
-                }
-            }, {} as Record<string, any>),
+                },
+                {} as Record<string, any>
+            ),
             required:
                 this._fields
                     .filter((field) => {
@@ -296,7 +299,12 @@ export class AIFunction {
     private _implementation: Function
     private _needsConfirm: boolean
 
-    constructor(name: string, description: string, repo?: string, needsConfirm: boolean = false) {
+    constructor(
+        name: string,
+        description: string,
+        repo?: string,
+        needsConfirm: boolean = false
+    ) {
         this._name = name
         this._description = description
         this._params = []
@@ -442,7 +450,6 @@ export class AIFunction {
 
     async execute(...args: any[]) {
         try {
-
             const parsedArgs = z
                 .tuple(
                     this._params.map(this.validateAIField) as [
@@ -451,37 +458,80 @@ export class AIFunction {
                     ]
                 )
                 .parse(args)
-                if(this.getRepo()) {
-                    const result = await axios.post(`${hubUrl}/forward-call`, {
-                        name: this.getName(),
-                        args: JSON.stringify(parsedArgs),
-                        subToken: this.getRepo()
-
-                    })
-                    return result.data
-                } else {
-                    const result = await this._implementation(...parsedArgs)
-                    if (this._returnType) {
-                        const returnTypeSchema = this.validateAIField(this._returnType)
-                        return returnTypeSchema.parse(result)
-                    }
-                    return result
-                } 
+            if (this.getRepo()) {
+                const result = await axios.post(`${hubUrl}/forward-call`, {
+                    name: this.getName(),
+                    args: JSON.stringify(parsedArgs),
+                    subToken: this.getRepo()
+                })
+                return result.data
+            } else {
+                const result = await this._implementation(...parsedArgs)
+                if (this._returnType) {
+                    const returnTypeSchema = this.validateAIField(
+                        this._returnType
+                    )
+                    return returnTypeSchema.parse(result)
+                }
+                return result
+            }
         } catch (e) {
             if (e instanceof z.ZodError) {
                 // Format the error message for the user
-                const errorDetails = e.errors.map(error => {
-                    const path = error.path.join(' > ');
-                    return `Field "${path}": ${error.message}`;
-                }).join('\n');
-    
+                const errorDetails = e.errors
+                    .map((error) => {
+                        const path = error.path.join(" > ")
+                        return `Field "${path}": ${error.message}`
+                    })
+                    .join("\n")
+
                 // Return a simple, formatted message for LLM output
-                return `There was an issue with the parameters you provided for the function "${this._name}":\n${errorDetails}\nPlease check your input and try again.`;
+                return `There was an issue with the parameters you provided for the function "${this._name}":\n${errorDetails}\nPlease check your input and try again.`
             } else {
                 // Handle any other errors
-                return `An unexpected error occurred while calling the function "${this._name}". Please try again.`;
+                return `An unexpected error occurred while calling the function "${this._name}". Please try again.`
             }
         }
+    }
+}
+
+export type VisualizationType =
+    | "table"
+    | "dataCard"
+
+export class VisualizationFunction extends AIFunction {
+    private _visualizationType: VisualizationType
+
+    constructor(
+        name: string,
+        description: string,
+        visualizationType: VisualizationType,
+        repo?: string,
+        needsConfirm: boolean = false
+    ) {
+        super(name, description, repo, needsConfirm)
+        this._visualizationType = visualizationType
+    }
+
+    getVisualizationType(): VisualizationType {
+        return this._visualizationType
+    }
+
+    description() {
+        return {
+            ...super.description(),
+            visualizationType: this._visualizationType
+        }
+    }
+    // Override the implement method to ensure it returns visualization data
+    implement(func: (args: any) => any): this {
+        return super.implement((args: any) => {
+            const result = func(args)
+            return {
+                type: this._visualizationType,
+                data: result
+            }
+        })
     }
 }
 
@@ -494,7 +544,10 @@ interface RegisteredFunction<F extends AIFunction> extends FunctionMetadata<F> {
 }
 
 type FunctionRegistry = Map<string, AIFunction>
-type FunctionAttributes = Map<string, {active: boolean}>
+type FunctionAttributes = Map<
+    string,
+    {active: boolean; isVisualization: boolean}
+>
 
 const functionRegistry: FunctionRegistry = new Map()
 const functionAttributes: FunctionAttributes = new Map()
@@ -516,16 +569,23 @@ export function registerFunctionIntoAI<F extends AIFunction>(
     name: string,
     fn: F
 ) {
+    const isVisualization = fn instanceof VisualizationFunction
     functionRegistry.set(fn.getName(), fn)
-    functionAttributes.set(fn.getName(), {active: true})
+    functionAttributes.set(fn.getName(), {
+        active: true,
+        isVisualization: isVisualization
+    })
 }
 
 export function registerRepoFunctionsIntoAI<F extends AIFunction>(
     fn: RepoFunctionMetadata,
     repoToken: string
 ) {
-    functionRegistry.set(fn.name, new AIFunction(fn.name, fn.description, repoToken, fn.needConfirmation))
-    functionAttributes.set(fn.name, {active: true})
+    functionRegistry.set(
+        fn.name,
+        new AIFunction(fn.name, fn.description, repoToken, fn.needConfirmation)
+    )
+    functionAttributes.set(fn.name, {active: true, isVisualization: false})
 }
 
 export function toggleFunctionActive(name: string) {

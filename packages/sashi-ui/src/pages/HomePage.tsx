@@ -11,7 +11,7 @@ import { Message } from 'src/components/MessageComponent';
 import { useScrollToBottom } from 'src/components/use-scroll-to-bottom';
 import { ChatCompletionMessage } from 'src/models/gpt';
 import useAppStore from 'src/store/chat-store';
-import { MessageItem } from 'src/store/models';
+import { MessageItem, VisualizationContent } from 'src/store/models';
 import { Layout } from '../components/Layout';
 import { PayloadObject, ResultTool } from '../models/payload';
 import { Metadata } from '../store/models';
@@ -107,7 +107,6 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
   }, [isMounted]);
 
   const getMetadata = async () => {
-    console.log('getMetadata sessionToken', sessionToken);
     const response = await axios.get(`${apiUrl}/metadata`);
 
     setMetadata(response.data);
@@ -116,6 +115,12 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
     getMetadata();
   }, []);
 
+  const prepareMessageForPayload = (messages: MessageItem[]) => {
+    return messages.map((message) => ({
+      ...message,
+      content: typeof message.content === 'object' ? JSON.stringify(message.content) : message.content,
+    }));
+  };
   const sendMessage = async ({
     payload,
   }: {
@@ -126,7 +131,11 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
       type: string;
     };
   }) => {
-    const response = await axios.post(`${apiUrl}/chat`, payload);
+    const sanitizedPayload = {
+      ...payload,
+      previous: payload.previous ? prepareMessageForPayload(payload.previous) : undefined,
+    };
+    const response = await axios.post(`${apiUrl}/chat`, sanitizedPayload);
 
     return response.data as { output: ChatCompletionMessage | undefined };
   };
@@ -175,7 +184,6 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
     }, 100);
   };
   const handleConfirm = () => {
-    console.log('handleConfirm', confirmationData);
     if (!confirmationData) return;
     const tools =
       confirmationData.payload!.tools?.map((tool) => {
@@ -190,7 +198,6 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
   };
 
   const handleCancel = () => {
-    console.log('handleCancel', confirmationData);
     if (!confirmationData) return;
     const tools = confirmationData.payload!.tools?.filter((tool) => {
       if (tool.function.name === confirmationData!.name) {
@@ -213,7 +220,10 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
     let isCompleted = false;
     const MAX_LOOP_COUNT = 10; // Don't want to let it run loose
     let loopCount = 0;
-
+    const sanitizedMessages = previous.map((message) => ({
+      ...message,
+      content: typeof message.content === 'object' ? JSON.stringify(message.content) : message.content,
+    }));
     try {
       do {
         const payload: PayloadObject = continuation
@@ -221,7 +231,7 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
           : result_tools.length > 0
           ? {
               tools: result_tools,
-              previous,
+              previous: sanitizedMessages,
               type: '/chat/function',
             }
           : { inquiry: text, previous, type: '/chat/message' };
@@ -239,7 +249,6 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
             (func) => func.name === toolsNeedingConfirmation[0].function.name
           )?.description;
 
-          console.log('show confirmation card', payload.tools, metadata?.functions);
           //show confirmation card
           setConfirmationData({
             name: toolsNeedingConfirmation[0].function.name,
@@ -252,20 +261,37 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
 
         const result = await sendMessage({ payload });
 
-        if (result.output?.content) {
+        if (result.output?.tool_calls) {
+          result.output.tool_calls.forEach((toolCall) => {
+            if (toolCall.function.name.toLowerCase().includes('visualization')) {
+              const visualizationContent: VisualizationContent = {
+                type: toolCall.function.name.replace(/visualization/i, '').toLowerCase(),
+                data: JSON.parse(toolCall.function.arguments),
+              };
+
+              const newVisualizationMessage: MessageItem = {
+                id: getUniqueId(),
+                created_at: new Date().toISOString(),
+                role: 'assistant',
+                content: visualizationContent,
+              };
+
+              setMessageItems((prev) => [...prev, newVisualizationMessage]);
+              addMessage(newVisualizationMessage);
+            }
+          });
+
+          resetScroll();
+        } else if (result.output?.content) {
+          // Only add text content if there were no visualizations
           const newAssistantMessage: MessageItem = {
             id: getUniqueId(),
             created_at: new Date().toISOString(),
             role: 'assistant',
             content: result.output.content,
           };
-          setMessageItems((prev) => [...prev, ...[newAssistantMessage]]);
+          setMessageItems((prev) => [...prev, newAssistantMessage]);
           addMessage(newAssistantMessage);
-
-          previous.push({
-            role: 'assistant',
-            content: result.output?.content,
-          });
 
           resetScroll();
         }
