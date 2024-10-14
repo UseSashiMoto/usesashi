@@ -176,7 +176,7 @@ export const Layout: FC<
                     {connectedToHub ? 'Connected' : 'Disconnected'}
                   </span>
                 </div>
-                <ReposDropdown repos={repos} />
+                {/*<ReposDropdown repos={repos} /> */}
                 <FunctionsDropdown onFunctionSwitch={onFunctionSwitch} functions={functions} />
                 <div className="h-px w-full bg-slate-100 dark:bg-slate-700" />
                 <div className="w-full space-y-1"></div>
