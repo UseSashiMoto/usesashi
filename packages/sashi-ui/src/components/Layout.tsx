@@ -1,7 +1,8 @@
 import { FunctionSwitch } from '@/models/function-switch';
+import { RepoMetadata } from '@/store/models';
 import { DashboardIcon, GitHubLogoIcon } from '@radix-ui/react-icons';
 import * as Toast from '@radix-ui/react-toast';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, GitBranchIcon } from 'lucide-react';
 import { useEffect, useState, type FC, type PropsWithChildren } from 'react';
 import { Button } from './Button';
 import { ThemeSwitcher } from './ThemeSwitcher';
@@ -9,7 +10,46 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collap
 import { ScrollArea } from './ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 
+// Add this new component
+export function ReposDropdown({ repos }: { repos: { id: string; name: string; url: string }[] }) {
+  const [isOpen, setIsOpen] = useState(false);
 
+  return (
+    <Collapsible open={isOpen} onOpenChange={setIsOpen} className="w-full">
+      <CollapsibleTrigger className="mb-4" asChild>
+        <Button variant="ghost" className="w-full justify-between" aria-expanded={isOpen}>
+          Connected Repositories
+          {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        </Button>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <ScrollArea className="h-[300px] w-full rounded-md border p-4">
+          <>
+            {repos.length === 0 && <p className="text-sm text-slate-500">No repositories connected</p>}
+            <ul className="space-y-2">
+              {repos.map((repo) => (
+                <li key={repo.id} className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <GitBranchIcon className="h-4 w-4" />
+                    <span className="text-sm font-medium">{repo.name}</span>
+                  </div>
+                  <a
+                    href={repo.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-blue-500 hover:underline"
+                  >
+                    View
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </>
+        </ScrollArea>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
 
 export function FunctionsDropdown({
   functions,
@@ -41,40 +81,39 @@ export function FunctionsDropdown({
       <CollapsibleContent>
         <ScrollArea className="h-[300px] w-full rounded-md border p-4">
           <>
-          {bots.length === 0 &&  <p className="text-sm text-slate-500">No functions running</p>}
-          <ul className="space-y-2">
-     
-            {bots.map((bot) => (
-              <li key={bot.id} className="flex flex-col space-y-2">
-                <div className="flex items-center justify-between">
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="text-sm font-medium cursor-help">{bot.name}</span>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>{bot.description}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                  <Button
-                    size="sm"
-                    variant={bot.isActive ? "default" : "outline"}
-                    className={`w-12 h-6 ${
-                      bot.isActive ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'
-                    }`}
-                    onClick={() => toggleBot(bot.id)}
-                  >
-                    <span className="sr-only">
-                      {bot.isActive ? 'Deactivate' : 'Activate'} {bot.name}
-                    </span>
-                    {bot.isActive ? 'On' : 'Off'}
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground">{bot.description}</p>
-              </li>
-            ))}
-          </ul>
+            {bots.length === 0 && <p className="text-sm text-slate-500">No functions running</p>}
+            <ul className="space-y-2">
+              {bots.map((bot) => (
+                <li key={bot.id} className="flex flex-col space-y-2">
+                  <div className="flex items-center justify-between">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="text-sm font-medium cursor-help">{bot.name}</span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>{bot.description}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                    <Button
+                      size="sm"
+                      variant={bot.isActive ? 'default' : 'outline'}
+                      className={`w-12 h-6 ${
+                        bot.isActive ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'
+                      }`}
+                      onClick={() => toggleBot(bot.id)}
+                    >
+                      <span className="sr-only">
+                        {bot.isActive ? 'Deactivate' : 'Activate'} {bot.name}
+                      </span>
+                      {bot.isActive ? 'On' : 'Off'}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{bot.description}</p>
+                </li>
+              ))}
+            </ul>
           </>
         </ScrollArea>
       </CollapsibleContent>
@@ -83,8 +122,13 @@ export function FunctionsDropdown({
 }
 
 export const Layout: FC<
-  { functions: FunctionSwitch[]; onFunctionSwitch: (id: string) => void } & PropsWithChildren
-> = ({ children, functions, onFunctionSwitch }) => {
+  {
+    connectedToHub: boolean;
+    functions: FunctionSwitch[];
+    repos: RepoMetadata[];
+    onFunctionSwitch: (id: string) => void;
+  } & PropsWithChildren
+> = ({ children, functions, repos, onFunctionSwitch, connectedToHub }) => {
   return (
     <Toast.Provider swipeDirection="right">
       <div className="grid xl:grid-cols-[auto,1fr]">
@@ -121,17 +165,18 @@ export const Layout: FC<
 
               <div className="w-full space-y-4">
                 <DashboardIcon className="mb-0.5" height={16} width={16} />
-                {/*<SashiNavLink
-                                    label="Overview"
-                                    icon={
-                                        <DashboardIcon
-                                            className="mb-0.5"
-                                            height={16}
-                                            width={16}
-                                        />
-                                    }
-                                    to={`../`}
-                                />*/}
+                <div className="flex items-center space-x-2 mb-4">
+                  <span className="text-sm font-medium">Hub Status:</span>
+                  <div
+                    className={`w-3 h-3 rounded-full ${connectedToHub ? 'bg-green-500' : 'bg-red-500'} shadow-lg ${
+                      connectedToHub ? 'animate-pulse-green' : 'animate-pulse-red'
+                    }`}
+                  ></div>
+                  <span className={`text-sm ${connectedToHub ? 'text-green-500' : 'text-red-500'}`}>
+                    {connectedToHub ? 'Connected' : 'Disconnected'}
+                  </span>
+                </div>
+                <ReposDropdown repos={repos} />
                 <FunctionsDropdown onFunctionSwitch={onFunctionSwitch} functions={functions} />
                 <div className="h-px w-full bg-slate-100 dark:bg-slate-700" />
                 <div className="w-full space-y-1"></div>
