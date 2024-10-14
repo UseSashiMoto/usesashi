@@ -71,11 +71,11 @@ const listRoutes = (app: Express) => {
 app.use(
     "/sashi",
     createMiddleware({
-        openAIKey: process.env.OPENAI_API_KEY || "",
-        repos: ["usertwo-sub-to-userone"],
-        hubUrl: "http://localhost:5002",
-        apiSecretKey: "usertwo-api-token",
-        repoSecretKey: "usertworeposecret"
+        openAIKey: process.env.OPENAI_API_KEY || '',
+        repos: [{ repoId: 'usertwo-sub-to-userone' }],
+        hubUrl: 'http://localhost:5002',
+        apiSecretKey: 'usertwo-api-token',
+        repoSecretKey: 'usertworeposecret',
     })
 )
 
