@@ -137,7 +137,7 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
     };
     const response = await axios.post(`${apiUrl}/chat`, sanitizedPayload);
 
-    return response.data as { output: ChatCompletionMessage | undefined };
+    return response.data as { output: ChatCompletionMessage | undefined, visualization?: {name: string, type: string, parameters: any}[] };
   };
 
   const handleClearMessages = async () => {
@@ -261,6 +261,23 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
 
         const result = await sendMessage({ payload });
 
+
+
+        if(result.visualization){
+          result.visualization.forEach((viz) => {
+            const newVisualizationMessage: MessageItem = {
+              id: getUniqueId(),
+              created_at: new Date().toISOString(),
+              role: 'assistant',
+              content: {
+                type: viz.type,
+                data: viz.parameters
+              },
+            };
+            setMessageItems((prev) => [...prev, newVisualizationMessage]);
+            addMessage(newVisualizationMessage);
+          })
+        }
         if (result.output?.tool_calls) {
           result.output.tool_calls.forEach((toolCall) => {
             if (toolCall.function.name.toLowerCase().includes('visualization')) {
