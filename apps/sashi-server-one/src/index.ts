@@ -1,6 +1,6 @@
-import {createMiddleware} from "@sashimo/lib"
-import express, {NextFunction, Request, Response} from "express"
-import {Express} from "express-serve-static-core"
+import { createMiddleware } from "@sashimo/lib"
+import express, { NextFunction, Request, Response } from "express"
+import { Express } from "express-serve-static-core"
 import "./services/file_service"
 import "./services/user_service"
 

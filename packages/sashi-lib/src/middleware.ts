@@ -1,22 +1,28 @@
 import axios from "axios"
 import bodyParser from "body-parser"
 import cors from "cors"
-import {NextFunction, Request, Response, Router} from "express"
-import {ParamsDictionary} from "express-serve-static-core"
-import {ParsedQs} from "qs"
+import { NextFunction, Request, Response, Router } from "express"
+import { ParamsDictionary } from "express-serve-static-core"
+import { ParsedQs } from "qs"
 import {
     callFunctionFromRegistryFromObject,
     getFunctionAttributes,
     getFunctionRegistry,
     registerRepoFunctionsIntoAI,
-    toggleFunctionActive
+    toggleFunctionActive,
+    VisualizationFunction
 } from "./ai-function-loader"
-import {AIBot} from "./aibot"
-import {RepoMetadata} from "./models/repo-metadata"
-import {createSashiHtml} from "./utils"
+import { AIBot } from "./aibot"
+import { RepoMetadata } from "./models/repo-metadata"
+import { createSashiHtml } from "./utils"
 
 const HEADER_API_TOKEN = "x-api-token"
 const HEADER_REPO_TOKEN = "x-repo-token"
+
+
+function getUniqueId() {
+    return Math.random().toString(36).substring(2) + new Date().getTime().toString(36);
+}
 
 const getSystemPrompt = () => {
     const today = new Date()
@@ -382,12 +388,23 @@ export const createMiddleware = (options: MiddlewareOptions) => {
             try {
                 const result = await aiBot.chatCompletion({
                     temperature: 0.3,
-                    messages
+                    messages: messages.filter((message) => typeof message.content !== 'object' || message.content === null)
                 })
 
+                const shouldShowVisualization = await aiBot.shouldShowVisualization({
+                    messages: [...messages,{
+                        id: getUniqueId(),
+                        role: 'assistant',
+                        content: result?.message.content,
+                        created_at: new Date().toISOString()
+                    }],
+                    viz_tools: Array.from(getFunctionRegistry().values()).filter((func) => func instanceof VisualizationFunction) as unknown as VisualizationFunction[]
+                })
+    
                 res.json({
                     output: result?.message,
-                    tool_calls: result?.message?.tool_calls
+                    tool_calls: result?.message?.tool_calls,
+                    visualization: shouldShowVisualization
                 })
             } catch (error: any) {
                 res.status(500).json({
@@ -411,11 +428,11 @@ export const createMiddleware = (options: MiddlewareOptions) => {
             try {
                 const result = await aiBot.chatCompletion({
                     temperature: 0.3,
-                    messages
+                    messages: messages.filter((message) => typeof message.content !== 'object' || message.content === null )
                 })
 
                 res.json({
-                    output: result?.message
+                    output: result?.message,
                 })
             } catch (error: any) {
                 res.status(500).json({
