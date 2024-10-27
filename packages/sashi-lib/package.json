@@ -51,7 +51,6 @@
         "crypto": "^1.0.1",
         "dotenv": "^16.4.5",
         "express": "^4.19.2",
-        "firebase": "^10.12.4",
         "openai": "^4.53.2"
     },
     "jest": {
