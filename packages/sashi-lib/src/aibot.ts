@@ -119,7 +119,7 @@ Finally, if you decide that a component should be generated, you will output the
         | undefined
     > => {
         try {
-            const system_prompt = this.getUXSystemPrompt(viz_tools)
+            const system_prompt = this.getUXSystemPrompt()
 
             const viz_messages = [
                 {role: "system", content: system_prompt},
