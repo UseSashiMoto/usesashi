@@ -1,3 +1,4 @@
+import axios from "axios"
 import OpenAI from "openai"
 import {ChatCompletionTool} from "openai/resources"
 import {AssistantTool} from "openai/resources/beta/assistants"
@@ -8,13 +9,93 @@ import {
     VisualizationType
 } from "./ai-function-loader"
 
+class OpenAIWrapper {
+    openai: OpenAI
+    _sashiSecretKey: string | undefined
+    _hubUrl: string | undefined
+
+    constructor({
+        apiKey,
+        sashiSecretKey,
+        hubUrl
+    }: {
+        apiKey: string
+        sashiSecretKey?: string
+        hubUrl?: string
+    }) {
+        this.openai = new OpenAI({apiKey})
+        this._sashiSecretKey = sashiSecretKey
+        this._hubUrl = hubUrl
+    }
+
+    chatCompletion = async ({
+        messages,
+        model = "gpt-4o",
+        max_tokens = 2048,
+        temperature = 0,
+        tools,
+        tool_choice
+    }: {
+        messages: any[]
+        model?: string
+        max_tokens?: number
+        temperature?: number
+        tools?: any[]
+        tool_choice?: any
+    }) => {
+        if (this._sashiSecretKey && this._hubUrl) {
+            const result = await axios.post<{
+                result: OpenAI.Chat.Completions.ChatCompletion
+            }>(`${this._hubUrl}/chatCompletion`, {
+                messages,
+                model,
+                max_tokens,
+                temperature
+            })
+            return result.data.result
+        }
+        let options: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming =
+            {
+                messages,
+                model,
+                max_tokens,
+                temperature
+            }
+
+        if (tools) {
+            options.tools = tools
+        }
+        if (tool_choice) {
+            options.tool_choice = tool_choice
+        }
+        const result = await this.openai.chat.completions.create(options)
+        return result
+    }
+}
+
 export class AIBot {
     private _apiKey: string
-    openai: OpenAI
+    private _sashiSecretKey?: string
+    private _hubUrl?: string
+    openai: OpenAIWrapper
 
-    constructor(apiKey: string) {
+    constructor({
+        apiKey,
+        sashiSecretKey,
+        hubUrl
+    }: {
+        apiKey: string
+        sashiSecretKey?: string
+        hubUrl?: string
+    }) {
         this._apiKey = apiKey
-        this.openai = new OpenAI({apiKey: this._apiKey})
+        this.openai = new OpenAIWrapper({
+            apiKey: this._apiKey,
+            sashiSecretKey,
+            hubUrl
+        })
+        this._sashiSecretKey = sashiSecretKey
+        this._hubUrl = hubUrl
     }
 
     private convertToOpenAIFunction = () => {
@@ -72,7 +153,7 @@ Finally, if you decide that a component should be generated, you will output the
      Use the conversation history to determine based on the last message what data should be passed to the tool ${componentName} based on the context provided.
      `
 
-        const result = await this.openai.chat.completions.create({
+        const result = await this.openai.chatCompletion({
             messages: [
                 {role: "system", content: generateComponentPrompt},
                 ...messages
@@ -133,7 +214,7 @@ Finally, if you decide that a component should be generated, you will output the
                 ...messages
             ]
 
-            const result = await this.openai.chat.completions.create({
+            const result = await this.openai.chatCompletion({
                 messages: viz_messages,
                 model,
                 temperature,
@@ -186,7 +267,14 @@ Finally, if you decide that a component should be generated, you will output the
         }
 
         try {
-            const result = await this.openai.chat.completions.create(options)
+            if (this._sashiSecretKey && this._hubUrl) {
+                const result = await axios.post<{
+                    result: OpenAI.Chat.Completions.ChatCompletion
+                }>(`${this._hubUrl}/chatCompletion`, options)
+                return result.data.result.choices[0]
+            }
+
+            const result = await this.openai.chatCompletion(options)
 
             console.log("result", JSON.stringify(result.choices[0], null, 2))
 

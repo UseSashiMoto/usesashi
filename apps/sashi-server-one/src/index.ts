@@ -1,6 +1,6 @@
-import { createMiddleware } from "@sashimo/lib"
-import express, { NextFunction, Request, Response } from "express"
-import { Express } from "express-serve-static-core"
+import {createMiddleware} from "@sashimo/lib"
+import express, {NextFunction, Request, Response} from "express"
+import {Express} from "express-serve-static-core"
 import "./services/file_service"
 import "./services/user_service"
 
@@ -113,7 +113,7 @@ app.use(
     createMiddleware({
         openAIKey: process.env.OPENAI_API_KEY || "",
         repos: ["userone-sub-to-usertwo"],
-        hubUrl: "http://localhost:5002",
+        hubUrl: "http://localhost:3334",
         apiSecretKey: "userone-api-token",
         repoSecretKey: "useronereposecret",
         getSession: async (req, res) => {

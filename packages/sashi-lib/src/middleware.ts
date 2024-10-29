@@ -1,9 +1,9 @@
 import axios from "axios"
 import bodyParser from "body-parser"
 import cors from "cors"
-import { NextFunction, Request, Response, Router } from "express"
-import { ParamsDictionary } from "express-serve-static-core"
-import { ParsedQs } from "qs"
+import {NextFunction, Request, Response, Router} from "express"
+import {ParamsDictionary} from "express-serve-static-core"
+import {ParsedQs} from "qs"
 import {
     callFunctionFromRegistryFromObject,
     getFunctionAttributes,
@@ -12,16 +12,18 @@ import {
     toggleFunctionActive,
     VisualizationFunction
 } from "./ai-function-loader"
-import { AIBot } from "./aibot"
-import { RepoMetadata } from "./models/repo-metadata"
-import { createSashiHtml } from "./utils"
+import {AIBot} from "./aibot"
+import {RepoMetadata} from "./models/repo-metadata"
+import {createSashiHtml} from "./utils"
 
 const HEADER_API_TOKEN = "x-api-token"
 const HEADER_REPO_TOKEN = "x-repo-token"
 
-
 function getUniqueId() {
-    return Math.random().toString(36).substring(2) + new Date().getTime().toString(36);
+    return (
+        Math.random().toString(36).substring(2) +
+        new Date().getTime().toString(36)
+    )
 }
 
 const getSystemPrompt = () => {
@@ -79,6 +81,7 @@ interface MiddlewareOptions {
     hubUrl?: string // hub where all the repos are hosted
     version?: number //current version of your repo
     addStdLib?: boolean // add the standard library to the hub
+    useCloud?: boolean
     getSession?: (req: Request, res: Response) => Promise<string> // function to get the session id fot a request
 }
 
@@ -96,6 +99,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         hubUrl = "https://hub.usesashi.com",
         version = 1,
         addStdLib = true,
+        useCloud = true,
         getSession
     } = options
 
@@ -125,7 +129,11 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         next() // Continue to the next middleware or route handler
     })
 
-    const aiBot = new AIBot(openAIKey)
+    const aiBot = new AIBot({
+        apiKey: openAIKey,
+        sashiSecretKey: useCloud ? apiSecretKey : undefined,
+        hubUrl
+    })
 
     // Function to fetch metadata from all subscribed repositories
     const fetchMetadataFromRepos = async () => {
@@ -168,6 +176,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
             return
         }
         try {
+            console.log("sending metadata to hub")
             const metadata: Partial<RepoMetadata> = {
                 functions: Array.from(getFunctionRegistry().values()).map(
                     (func) => {
@@ -184,6 +193,8 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                     }
                 )
             }
+
+            console.log("hub url metadata", `${hubUrl}/metadata`)
             await axios.post(
                 `${hubUrl}/metadata`,
                 {metadata, version},
@@ -194,7 +205,8 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                 }
             )
         } catch (error) {
-            console.error("No access to hub")
+            console.error(error)
+            console.error(`No access to hub: ${hubUrl}/metadata`)
         }
     }
 
@@ -388,19 +400,31 @@ export const createMiddleware = (options: MiddlewareOptions) => {
             try {
                 const result = await aiBot.chatCompletion({
                     temperature: 0.3,
-                    messages: messages.filter((message) => typeof message.content !== 'object' || message.content === null)
+                    messages: messages.filter(
+                        (message) =>
+                            typeof message.content !== "object" ||
+                            message.content === null
+                    )
                 })
 
-                const shouldShowVisualization = await aiBot.shouldShowVisualization({
-                    messages: [...messages,{
-                        id: getUniqueId(),
-                        role: 'assistant',
-                        content: result?.message.content,
-                        created_at: new Date().toISOString()
-                    }],
-                    viz_tools: Array.from(getFunctionRegistry().values()).filter((func) => func instanceof VisualizationFunction) as unknown as VisualizationFunction[]
-                })
-    
+                const shouldShowVisualization =
+                    await aiBot.shouldShowVisualization({
+                        messages: [
+                            ...messages,
+                            {
+                                id: getUniqueId(),
+                                role: "assistant",
+                                content: result?.message.content,
+                                created_at: new Date().toISOString()
+                            }
+                        ],
+                        viz_tools: Array.from(
+                            getFunctionRegistry().values()
+                        ).filter(
+                            (func) => func instanceof VisualizationFunction
+                        ) as unknown as VisualizationFunction[]
+                    })
+
                 res.json({
                     output: result?.message,
                     tool_calls: result?.message?.tool_calls,
@@ -428,11 +452,15 @@ export const createMiddleware = (options: MiddlewareOptions) => {
             try {
                 const result = await aiBot.chatCompletion({
                     temperature: 0.3,
-                    messages: messages.filter((message) => typeof message.content !== 'object' || message.content === null )
+                    messages: messages.filter(
+                        (message) =>
+                            typeof message.content !== "object" ||
+                            message.content === null
+                    )
                 })
 
                 res.json({
-                    output: result?.message,
+                    output: result?.message
                 })
             } catch (error: any) {
                 res.status(500).json({
