@@ -1,5 +1,12 @@
 # @sashi/ui
 
+## 3.5.0
+
+### Minor Changes
+
+- a24ec58: add tracing
+- b1138e7: added agent to show visualizations
+
 ## 3.4.0
 
 ### Minor Changes
