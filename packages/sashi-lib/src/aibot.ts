@@ -1,3 +1,4 @@
+import {observeOpenAI} from "langfuse"
 import OpenAI from "openai"
 import {ChatCompletionTool} from "openai/resources"
 import {AssistantTool} from "openai/resources/beta/assistants"
@@ -10,11 +11,30 @@ import {
 
 export class AIBot {
     private _apiKey: string
+    private _langFuseInfo?: {
+        publicKey: string
+        secretKey: string
+        baseUrl: string
+    }
     openai: OpenAI
 
-    constructor(apiKey: string) {
+    constructor(
+        apiKey: string,
+        langFuseInfo?: {publicKey: string; secretKey: string; baseUrl: string}
+    ) {
         this._apiKey = apiKey
-        this.openai = new OpenAI({apiKey: this._apiKey})
+
+        if (langFuseInfo) {
+            this.openai = observeOpenAI(new OpenAI({apiKey: this._apiKey}), {
+                clientInitParams: {
+                    publicKey: langFuseInfo?.publicKey,
+                    secretKey: langFuseInfo?.secretKey,
+                    baseUrl: langFuseInfo?.baseUrl
+                }
+            })
+        } else {
+            this.openai = new OpenAI({apiKey: this._apiKey})
+        }
     }
 
     private convertToOpenAIFunction = () => {
