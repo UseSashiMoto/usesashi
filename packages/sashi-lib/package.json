@@ -1,6 +1,6 @@
 {
     "name": "@sashimo/lib",
-    "version": "3.3.0",
+    "version": "3.5.0",
     "description": "Tool to integrate AI admin tools into your application",
     "main": "dist/index.js",
     "module": "./dist/index.mjs",
@@ -51,7 +51,7 @@
         "crypto": "^1.0.1",
         "dotenv": "^16.4.5",
         "express": "^4.19.2",
-        "firebase": "^10.12.4",
+        "langfuse": "^3.28.0",
         "openai": "^4.53.2"
     },
     "jest": {

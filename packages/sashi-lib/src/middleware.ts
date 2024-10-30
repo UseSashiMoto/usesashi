@@ -11,13 +11,22 @@ import {
     getRepoRegistry,
     registerRepo,
     toggleFunctionActive,
+    VisualizationFunction
 } from './ai-function-loader';
 import { AIBot } from './aibot';
 import { MetaData, RepoMetadata } from './models/repo-metadata';
 import { createSashiHtml } from './utils';
 
+
 const HEADER_API_TOKEN = 'x-api-token';
 const HEADER_REPO_TOKEN = 'x-repo-token';
+
+function getUniqueId() {
+    return (
+        Math.random().toString(36).substring(2) +
+        new Date().getTime().toString(36)
+    )
+}
 
 const getSystemPrompt = () => {
     const today = new Date();
@@ -71,16 +80,21 @@ interface RepoSubscription {
 }
 
 interface MiddlewareOptions {
-    openAIKey: string;
-    repos?: RepoSubscription[];
-    sashiServerUrl?: string; //where the sashi server is hosted if you can't find it automatically
-    apiSecretKey?: string; // used to validate requests from and to the hub
-    repoSecretKey?: string; // used to upload metadata for a specific repo
-    hubUrl?: string; // hub where all the repos are hosted
-    version?: number; //current version of your repo
-    addStdLib?: boolean; // add the standard library to the hub
-    getSession?: (req: Request, res: Response) => Promise<string>; // function to get the session id fot a request
     debug?: boolean; // enable debug mode
+    openAIKey: string
+    repos?: string[]
+    sashiServerUrl?: string //where the sashi server is hosted if you can't find it automatically
+    apiSecretKey?: string // used to validate requests from and to the hub
+    repoSecretKey?: string // used to upload metadata for a specific repo
+    hubUrl?: string // hub where all the repos are hosted
+    version?: number //current version of your repo
+    addStdLib?: boolean // add the standard library to the hub
+    langFuseInfo?: {
+        publicKey: string
+        secretKey: string
+        baseUrl: string
+    }
+    getSession?: (req: Request, res: Response) => Promise<string> // function to get the session id fot a request
 }
 
 export interface DatabaseClient {
@@ -90,6 +104,7 @@ export interface DatabaseClient {
 export const createMiddleware = (options: MiddlewareOptions) => {
     const {
         openAIKey,
+        langFuseInfo,
         sashiServerUrl,
         apiSecretKey,
         repos = [],
@@ -137,7 +152,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         next(); // Continue to the next middleware or route handler
     });
 
-    const aiBot = new AIBot(openAIKey);
+    const aiBot = new AIBot(openAIKey, langFuseInfo)
 
     router.get('/check_hub_connection', async (_req, res) => {
         const connectedData = await axios.get(`${hubUrl}/ping`, {
@@ -423,13 +438,36 @@ export const createMiddleware = (options: MiddlewareOptions) => {
             try {
                 const result = await aiBot.chatCompletion({
                     temperature: 0.3,
-                    messages,
-                });
+                    messages: messages.filter(
+                        (message) =>
+                            typeof message.content !== "object" ||
+                            message.content === null
+                    )
+                })
+
+                const shouldShowVisualization =
+                    await aiBot.shouldShowVisualization({
+                        messages: [
+                            ...messages,
+                            {
+                                id: getUniqueId(),
+                                role: "assistant",
+                                content: result?.message.content,
+                                created_at: new Date().toISOString()
+                            }
+                        ],
+                        viz_tools: Array.from(
+                            getFunctionRegistry().values()
+                        ).filter(
+                            (func) => func instanceof VisualizationFunction
+                        ) as unknown as VisualizationFunction[]
+                    })
 
                 res.json({
                     output: result?.message,
                     tool_calls: result?.message?.tool_calls,
-                });
+                    visualization: shouldShowVisualization
+                })
             } catch (error: any) {
                 res.status(500).json({
                     message: 'Error processing request',
@@ -452,8 +490,12 @@ export const createMiddleware = (options: MiddlewareOptions) => {
             try {
                 const result = await aiBot.chatCompletion({
                     temperature: 0.3,
-                    messages,
-                });
+                    messages: messages.filter(
+                        (message) =>
+                            typeof message.content !== "object" ||
+                            message.content === null
+                    )
+                })
 
                 res.json({
                     output: result?.message,
@@ -468,9 +510,8 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     });
 
     router.get('/', async (req, res) => {
-        const newPath = `${
-            sashiServerUrl ?? req.originalUrl.replace(/\/$/, '')
-        }/bot`;
+        const newPath = `${sashiServerUrl ?? req.originalUrl.replace(/\/$/, '')
+            }/bot`;
 
         res.redirect(newPath);
         return;

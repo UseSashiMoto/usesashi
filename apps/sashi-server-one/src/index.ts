@@ -4,6 +4,8 @@ import { Express } from 'express-serve-static-core';
 import './services/file_service';
 import './services/user_service';
 
+
+
 require('dotenv').config();
 
 const app = express();
@@ -28,11 +30,11 @@ const listRoutes = (app: Express) => {
             layer.handle.stack.forEach((subLayer: any) =>
                 printRoutes(
                     pathPrefix +
-                        (layer.regexp.source !== '^\\/?$'
-                            ? layer.regexp.source
-                                  .replace(/\\\//g, '/')
-                                  .replace(/(\/\^|\/\(\?)/g, '')
-                            : ''),
+                    (layer.regexp.source !== '^\\/?$'
+                        ? layer.regexp.source
+                            .replace(/\\\//g, '/')
+                            .replace(/(\/\^|\/\(\?)/g, '')
+                        : ''),
                     subLayer
                 )
             );
@@ -52,8 +54,8 @@ const listRoutes = (app: Express) => {
                 printRoutes(
                     middleware.regexp.source !== '^\\/?$'
                         ? middleware.regexp.source
-                              .replace(/\\\//g, '/')
-                              .replace(/(\/\^|\/\(\?)/g, '')
+                            .replace(/\\\//g, '/')
+                            .replace(/(\/\^|\/\(\?)/g, '')
                         : '',
                     layer
                 )

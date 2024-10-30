@@ -1,5 +1,19 @@
 # @sashi/client
 
+## 3.5.0
+
+### Minor Changes
+
+- a24ec58: add tracing
+- b1138e7: added agent to show visualizations
+
+## 3.4.0
+
+### Minor Changes
+
+- bb5266b: add table and data card component
+- 2c5008b: update readme
+
 ## 3.3.0
 
 ### Minor Changes
