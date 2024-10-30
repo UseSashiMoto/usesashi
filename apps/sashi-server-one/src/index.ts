@@ -114,15 +114,12 @@ app.use(
     verifySessionMiddleware,
     createMiddleware({
         openAIKey: process.env.OPENAI_API_KEY || '',
-        repos: [
-            {
-                repoId: 'userone-sub-to-usertwo',
-            },
-        ],
+        repos: ["userone-sub-to-usertwo"],
+
         hubUrl: 'http://localhost:3333',
         apiSecretKey: 'userone-api-token',
         repoSecretKey: 'useronereposecret',
-        getSession: async (req, res) => {
+        getSession: async (req: any, res: any) => {
             return 'userone-session-token';
         },
         debug: true,

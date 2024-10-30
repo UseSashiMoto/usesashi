@@ -9,7 +9,6 @@ import {
     getFunctionAttributes,
     getFunctionRegistry,
     getRepoRegistry,
-    registerRepo,
     toggleFunctionActive,
     VisualizationFunction
 } from './ai-function-loader';
@@ -116,17 +115,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     } = options;
 
     if (addStdLib) {
-        if (options.debug) {
-            repos.push({
-                repoId: 'sashi-std-id',
-                repoUrl: 'http://localhost:3003/sashi',
-            });
-        } else {
-            repos.push({
-                repoId: 'sashi-std-id',
-                repoUrl: 'http://localhost:5001',
-            });
-        }
+        repos.push("sashi-stdlib")
     }
 
     const router = Router();
@@ -162,45 +151,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         });
         res.json({ connected: connectedData.data.connected });
     });
-    // Function to fetch metadata from all subscribed repositories
-    const fetchMetadataFromRepos = async () => {
-        console.log('getting subscription repo metadata', repos, hubUrl);
-        if (!repos || !hubUrl) {
-            return;
-        }
-        try {
-            const metadataPromises = repos.map((repo) =>
-                axios.get<RepoMetadata>(
-                    `${hubUrl}/metadata?repoId=${repo.repoId}&repoUrl=${repo.repoUrl}`,
-                    {
-                        headers: {
-                            [HEADER_API_TOKEN]: apiSecretKey,
-                        },
-                    }
-                )
-            );
-
-            const metadataResponses = await Promise.allSettled(
-                metadataPromises
-            );
-            const metadataStore = metadataResponses
-                .filter((result) => result.status === 'fulfilled') // Only keep fulfilled promises
-                .map((result, index) => ({
-                    data: result.value.data, // Access the value of fulfilled promises
-                    token: repos[index]?.repoId ?? '',
-                }));
-
-            for (const metadata of metadataStore) {
-                console.log('registering repo', metadata.data, metadata.token);
-                registerRepo(metadata.data, metadata.token);
-            }
-        } catch (error) {
-            console.error('no third-party metadata');
-            if (options.debug) {
-                console.error(error);
-            }
-        }
-    };
 
     const sendMetadataToHub = async () => {
         if (!hubUrl) {
@@ -238,7 +188,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     };
 
     // Fetch metadata during middleware initialization
-    fetchMetadataFromRepos();
     sendMetadataToHub();
     router.use(cors());
     router.use(bodyParser.json());
