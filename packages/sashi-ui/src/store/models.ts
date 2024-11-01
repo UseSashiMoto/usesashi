@@ -16,8 +16,23 @@ export type FunctionMetadata = {
   active: boolean;
 };
 
+export type RepoMetadata = {
+  id: string;
+  name: string;
+  url: string;
+};
+
+export type VisualizationMetadata = {
+  id: string;
+  name: string;
+  description: string;
+  active: boolean;
+};
+
 export type Metadata = {
   name: string;
   description: string;
   functions: FunctionMetadata[];
+  repos: RepoMetadata[];
+  visualizations: VisualizationMetadata[];
 };
