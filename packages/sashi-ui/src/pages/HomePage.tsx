@@ -112,8 +112,12 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
 
   useEffect(() => {
     const checkConnectedToHub = async () => {
-      const response = await axios.get(`${apiUrl}/check_hub_connection`);
-      setConnectedToHub(response.data.connected);
+      const response = await fetch(`${apiUrl}/check_hub_connection`, {
+        method: 'GET',
+      });
+      const data = await response.json();
+      console.log('checkConnectedToHub', data);
+      setConnectedToHub(data.connected);
     };
     checkConnectedToHub();
   }, []);
@@ -161,7 +165,10 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
     };
     const response = await axios.post(`${apiUrl}/chat`, sanitizedPayload);
 
-    return response.data as { output: ChatCompletionMessage | undefined, visualization?: {name: string, type: string, parameters: any}[] };
+    return response.data as {
+      output: ChatCompletionMessage | undefined;
+      visualization?: { name: string; type: string; parameters: any }[];
+    };
   };
 
   const handleClearMessages = async () => {
@@ -285,9 +292,7 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
 
         const result = await sendMessage({ payload });
 
-
-
-        if(result.visualization){
+        if (result.visualization) {
           result.visualization.forEach((viz) => {
             const newVisualizationMessage: MessageItem = {
               id: getUniqueId(),
@@ -295,12 +300,12 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
               role: 'assistant',
               content: {
                 type: viz.type,
-                data: viz.parameters
+                data: viz.parameters,
               },
             };
             setMessageItems((prev) => [...prev, newVisualizationMessage]);
             addMessage(newVisualizationMessage);
-          })
+          });
         }
         if (result.output?.tool_calls) {
           result.output.tool_calls.forEach((toolCall) => {

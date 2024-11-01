@@ -117,7 +117,7 @@ app.use(
         repos: ["userone-sub-to-usertwo"],
 
         hubUrl: 'http://localhost:3333',
-        apiSecretKey: 'userone-api-token',
+        apiSecretKey: process.env.HUB_API_SECRET_KEY,
         repoSecretKey: 'useronereposecret',
         getSession: async (req: any, res: any) => {
             return 'userone-session-token';

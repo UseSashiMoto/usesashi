@@ -144,12 +144,17 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     const aiBot = new AIBot(openAIKey, langFuseInfo)
 
     router.get('/check_hub_connection', async (_req, res) => {
-        const connectedData = await axios.get(`${hubUrl}/ping`, {
-            headers: {
-                [HEADER_API_TOKEN]: apiSecretKey,
-            },
-        });
-        res.json({ connected: connectedData.data.connected });
+        try {
+            const connectedData = await fetch(`${hubUrl}/ping`, {
+                headers: apiSecretKey ? {
+                    [HEADER_API_TOKEN]: apiSecretKey,
+                } : undefined,
+            });
+            res.json({ connected: connectedData.status === 200 });
+        } catch (error) {
+            console.error('Failed to check hub connection:', error);
+            res.json({ connected: false });
+        }
     });
 
     const sendMetadataToHub = async () => {
@@ -181,9 +186,11 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                         [HEADER_API_TOKEN]: apiSecretKey,
                     },
                 }
-            );
+            ).catch(error => {
+                console.error('Failed to send metadata to hub:', error);
+            });
         } catch (error) {
-            console.error('No access to hub');
+            console.error('No access to hub:', error);
         }
     };
 
