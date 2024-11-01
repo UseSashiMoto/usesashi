@@ -1,6 +1,6 @@
-import {createMiddleware} from "@sashimo/lib"
+import { createMiddleware } from "@sashimo/lib"
 import express from "express"
-import {Express} from "express-serve-static-core"
+import { Express } from "express-serve-static-core"
 import "./services/file_service"
 import "./services/user_service"
 
@@ -28,11 +28,11 @@ const listRoutes = (app: Express) => {
             layer.handle.stack.forEach((subLayer: any) =>
                 printRoutes(
                     pathPrefix +
-                        (layer.regexp.source !== "^\\/?$"
-                            ? layer.regexp.source
-                                  .replace(/\\\//g, "/")
-                                  .replace(/(\/\^|\/\(\?)/g, "")
-                            : ""),
+                    (layer.regexp.source !== "^\\/?$"
+                        ? layer.regexp.source
+                            .replace(/\\\//g, "/")
+                            .replace(/(\/\^|\/\(\?)/g, "")
+                        : ""),
                     subLayer
                 )
             )
@@ -52,8 +52,8 @@ const listRoutes = (app: Express) => {
                 printRoutes(
                     middleware.regexp.source !== "^\\/?$"
                         ? middleware.regexp.source
-                              .replace(/\\\//g, "/")
-                              .replace(/(\/\^|\/\(\?)/g, "")
+                            .replace(/\\\//g, "/")
+                            .replace(/(\/\^|\/\(\?)/g, "")
                         : "",
                     layer
                 )
@@ -72,7 +72,8 @@ app.use(
     "/sashi",
     createMiddleware({
         openAIKey: process.env.OPENAI_API_KEY || '',
-        repos: [{ repoId: 'usertwo-sub-to-userone' }],
+        repos: ["usertwo-sub-to-userone"],
+
         hubUrl: 'http://localhost:5002',
         apiSecretKey: 'usertwo-api-token',
         repoSecretKey: 'usertworeposecret',
