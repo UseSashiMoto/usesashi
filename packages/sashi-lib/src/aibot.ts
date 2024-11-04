@@ -28,32 +28,34 @@ class OpenAIWrapper {
         this._hubUrl = hubUrl
     }
 
+    private convertToOpenAIFunction = () => {
+        const functions: ChatCompletionTool[] = Array.from(
+            getFunctionRegistry().values()
+        )
+            .filter(
+                (func) =>
+                    getFunctionAttributes().get(func.getName())?.active ?? true
+            )
+            .map((func) => {
+                return func.description() as ChatCompletionTool
+            })
+
+        return functions
+    }
+
     chatCompletion = async ({
         messages,
         model = "gpt-4o",
         max_tokens = 2048,
         temperature = 0,
-        tools,
         tool_choice
     }: {
         messages: any[]
         model?: string
         max_tokens?: number
         temperature?: number
-        tools?: any[]
         tool_choice?: any
     }) => {
-        if (this._sashiSecretKey && this._hubUrl) {
-            const result = await axios.post<{
-                result: OpenAI.Chat.Completions.ChatCompletion
-            }>(`${this._hubUrl}/chatCompletion`, {
-                messages,
-                model,
-                max_tokens,
-                temperature
-            })
-            return result.data.result
-        }
         let options: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming =
             {
                 messages,
@@ -62,11 +64,26 @@ class OpenAIWrapper {
                 temperature
             }
 
-        if (tools) {
-            options.tools = tools
+        const tools = this.convertToOpenAIFunction()
+        if (tools?.length > 0) {
+            options.tools = this.convertToOpenAIFunction()
         }
+
         if (tool_choice) {
             options.tool_choice = tool_choice
+        } else {
+            options.tool_choice = "auto"
+        }
+
+        if (this._sashiSecretKey && this._hubUrl) {
+            const result =
+                await axios.post<OpenAI.Chat.Completions.ChatCompletion>(
+                    `${this._hubUrl}/chatCompletion`,
+                    options
+                )
+
+            console.log("result from hub", JSON.stringify(result.data, null, 2))
+            return result.data
         }
         const result = await this.openai.chat.completions.create(options)
         return result
@@ -259,30 +276,13 @@ Finally, if you decide that a component should be generated, you will output the
         temperature?: number
         messages: any[]
     }) => {
-        let options = {messages, model, temperature, max_tokens} as any // Cast to any to allow dynamic properties
-
-        const tools = this.convertToOpenAIFunction()
-        if (tools?.length > 0) {
-            options.tools = this.convertToOpenAIFunction()
-        }
-
-        try {
-            if (this._sashiSecretKey && this._hubUrl) {
-                const result = await axios.post<{
-                    result: OpenAI.Chat.Completions.ChatCompletion
-                }>(`${this._hubUrl}/chatCompletion`, options)
-                return result.data.result.choices[0]
-            }
-
-            const result = await this.openai.chatCompletion(options)
-
-            console.log("result", JSON.stringify(result.choices[0], null, 2))
-
-            return result.choices[0]
-        } catch (error: any) {
-            console.log(error.name, error.message)
-
-            throw error
-        }
+        return (
+            await this.openai.chatCompletion({
+                model,
+                max_tokens,
+                temperature,
+                messages
+            })
+        ).choices[0]
     }
 }
