@@ -1,16 +1,9 @@
 name: Tests
 
 on:
-    push:
-        branches: [main]
-        paths:
-            - "packages/**"
-            - ".github/workflows/test.yml"
     pull_request:
-        branches: [main]
-        paths:
-            - "packages/**"
-            - ".github/workflows/test.yml"
+        branches:
+            - "*"
 
 jobs:
     test:
@@ -56,3 +49,5 @@ jobs:
 
             - name: Run tests
               run: yarn test
+            - name: Run Lint
+              run: yarn lint
