@@ -11,7 +11,7 @@ import { Message } from 'src/components/MessageComponent';
 import { useScrollToBottom } from 'src/components/use-scroll-to-bottom';
 import { ChatCompletionMessage } from 'src/models/gpt';
 import useAppStore from 'src/store/chat-store';
-import { MessageItem, VisualizationContent } from 'src/store/models';
+import { MessageItem, RepoMetadata, VisualizationContent } from 'src/store/models';
 import { Layout } from '../components/Layout';
 import { PayloadObject, ResultTool } from '../models/payload';
 import { Metadata } from '../store/models';
@@ -81,7 +81,10 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
   const addMessage = useAppStore((state: { addMessage: any }) => state.addMessage);
 
   const setMetadata = useAppStore((state: { setMetadata: any }) => state.setMetadata);
+  const setConnectedToHub = useAppStore((state: { setConnectedToHub: any }) => state.setConnectedToHub);
   const metadata: Metadata | undefined = useAppStore((state: { metadata: any }) => state.metadata);
+
+  const setSubscribedRepos = useAppStore((state: { setSubscribedRepos: any }) => state.setSubscribedRepos);
 
   const messageRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -95,6 +98,7 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
   const [messagesContainerRef, messagesEndRef] = useScrollToBottom<HTMLDivElement>();
 
   const [confirmationData, setConfirmationData] = useState<ConfirmationData>();
+  const connectedToHub: boolean = useAppStore((state: { connectedToHub: any }) => state.connectedToHub);
 
   useEffect(() => {
     setMounted(true);
@@ -106,6 +110,21 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
     }
   }, [isMounted]);
 
+  useEffect(() => {
+    const checkConnectedToHub = async () => {
+      try {
+        const response = await fetch(`${apiUrl}/check_hub_connection`, {
+          method: 'GET',
+        });
+        const data = await response.json();
+        setConnectedToHub(data.connected);
+      } catch (error) {
+        setConnectedToHub(false);
+      }
+    };
+    checkConnectedToHub();
+  }, []);
+
   const getMetadata = async () => {
     const response = await axios.get(`${apiUrl}/metadata`);
 
@@ -113,6 +132,18 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
   };
   useEffect(() => {
     getMetadata();
+  }, []);
+
+  const getSubscribedRepos = async () => {
+    const response = await axios.get(`${apiUrl}/repos`);
+    return response.data.repos;
+  };
+
+  useEffect(() => {
+    getSubscribedRepos().then((repos) => {
+      setSubscribedRepos(repos);
+      console.log(repos);
+    });
   }, []);
 
   const prepareMessageForPayload = (messages: MessageItem[]) => {
@@ -137,7 +168,10 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
     };
     const response = await axios.post(`${apiUrl}/chat`, sanitizedPayload);
 
-    return response.data as { output: ChatCompletionMessage | undefined, visualization?: {name: string, type: string, parameters: any}[] };
+    return response.data as {
+      output: ChatCompletionMessage | undefined;
+      visualization?: { name: string; type: string; parameters: any }[];
+    };
   };
 
   const handleClearMessages = async () => {
@@ -261,9 +295,7 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
 
         const result = await sendMessage({ payload });
 
-
-
-        if(result.visualization){
+        if (result.visualization) {
           result.visualization.forEach((viz) => {
             const newVisualizationMessage: MessageItem = {
               id: getUniqueId(),
@@ -271,12 +303,12 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
               role: 'assistant',
               content: {
                 type: viz.type,
-                data: viz.parameters
+                data: viz.parameters,
               },
             };
             setMessageItems((prev) => [...prev, newVisualizationMessage]);
             addMessage(newVisualizationMessage);
-          })
+          });
         }
         if (result.output?.tool_calls) {
           result.output.tool_calls.forEach((toolCall) => {
@@ -335,13 +367,25 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
     }
   }
 
+  const subscribedRepos: RepoMetadata[] | undefined = useAppStore(
+    (state: { subscribedRepos: any }) => state.subscribedRepos
+  );
+
   return (
     <Layout
+      connectedToHub={connectedToHub}
       onFunctionSwitch={(id: string) => {
         axios.get(`${apiUrl}/functions/${id}/toggle_active`).then(() => {
           getMetadata();
         });
       }}
+      repos={
+        subscribedRepos?.map((repo) => ({
+          id: repo.id,
+          name: repo.name,
+          url: repo.url,
+        })) ?? []
+      }
       functions={
         (metadata?.functions.map((func) => ({
           id: func.name,

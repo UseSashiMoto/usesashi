@@ -1,41 +1,41 @@
-import axios from "axios"
-import { ChatCompletionMessageToolCall } from "openai/resources"
-import { z } from "zod"
-import { RepoFunctionMetadata } from "./models/repo-metadata"
+import axios from 'axios';
+import { ChatCompletionMessageToolCall } from 'openai/resources';
+import { z } from 'zod';
+import { RepoFunctionMetadata, RepoMetadata } from './models/repo-metadata';
 
 export interface ConfirmableToolCall extends ChatCompletionMessageToolCall {
-    needsConfirm?: boolean // Optional flag for confirmation
+    needsConfirm?: boolean; // Optional flag for confirmation
 }
 
 type AllowedTypes =
-    | "string"
-    | "number"
-    | "boolean"
-    | "array"
-    | "enum"
-    | AIField<string | number | boolean>[]
+    | 'string'
+    | 'number'
+    | 'boolean'
+    | 'array'
+    | 'enum'
+    | AIField<string | number | boolean>[];
 
 export type AIField<T> = {
-    name: string
-    type: T
-    description: string
-    required?: boolean
-}
+    name: string;
+    type: T;
+    description: string;
+    required?: boolean;
+};
 
-export type AINumber = AIField<"number">
-export type AIString = AIField<"string">
-export type AIBoolean = AIField<"boolean">
-export type AIEnum = AIField<"enum"> & {
-    values: string[] // The possible values for the enum
-}
+export type AINumber = AIField<'number'>;
+export type AIString = AIField<'string'>;
+export type AIBoolean = AIField<'boolean'>;
+export type AIEnum = AIField<'enum'> & {
+    values: string[]; // The possible values for the enum
+};
 
 // Define an Enum Field class
 export class AIFieldEnum {
-    private _name: string
-    private _type: "enum"
-    private _description: string
-    private _values: string[]
-    private _required: boolean
+    private _name: string;
+    private _type: 'enum';
+    private _description: string;
+    private _values: string[];
+    private _required: boolean;
 
     constructor(
         name: string,
@@ -43,49 +43,49 @@ export class AIFieldEnum {
         values: string[],
         required: boolean = true
     ) {
-        this._name = name
-        this._type = "enum" // Set the type to "enum"
-        this._description = description
-        this._values = values // The possible enum values
-        this._required = required
+        this._name = name;
+        this._type = 'enum'; // Set the type to "enum"
+        this._description = description;
+        this._values = values; // The possible enum values
+        this._required = required;
     }
 
     // Method to generate the description of the enum field
     description() {
         return {
-            type: "string",
+            type: 'string',
             enum: this._values,
-            description: this._description
-        }
+            description: this._description,
+        };
     }
 
     getName() {
-        return this._name
+        return this._name;
     }
 
     getRequired() {
-        return this._required
+        return this._required;
     }
 
     getValues() {
-        return this._values
+        return this._values;
     }
 
     getType() {
-        return this._type
+        return this._type;
     }
 
     getDescription() {
-        return this._description
+        return this._description;
     }
 }
 
 export class AIArray {
-    _name: string
-    _type: "array"
-    _description: string
-    _itemType: AIField<any> | AIObject // Define the type of items in the array
-    _required: boolean
+    _name: string;
+    _type: 'array';
+    _description: string;
+    _itemType: AIField<any> | AIObject; // Define the type of items in the array
+    _required: boolean;
 
     constructor(
         name: string,
@@ -93,64 +93,64 @@ export class AIArray {
         itemType: AIField<any> | AIObject,
         required: boolean = true
     ) {
-        this._name = name
-        this._type = "array"
-        this._description = description
-        this._itemType = itemType // Define what kind of items the array will hold
-        this._required = required
+        this._name = name;
+        this._type = 'array';
+        this._description = description;
+        this._itemType = itemType; // Define what kind of items the array will hold
+        this._required = required;
     }
 
     getName() {
-        return this._name
+        return this._name;
     }
 
     getRequired() {
-        return this._required
+        return this._required;
     }
 
     getItemType() {
-        return this._itemType
+        return this._itemType;
     }
 
     description() {
         return {
-            type: "array",
+            type: 'array',
             description: this.description,
             items:
                 this._itemType instanceof AIObject
                     ? this._itemType.description()
                     : {
-                          type: this._itemType.type,
-                          description: this._itemType.description
-                      }
-        }
+                        type: this._itemType.type,
+                        description: this._itemType.description,
+                    },
+        };
     }
 }
 
 export class AIObject {
-    private _name: string
-    private _description: string
-    private _fields: (AIField<AllowedTypes> | AIObject | AIFieldEnum)[]
-    private _required: boolean
+    private _name: string;
+    private _description: string;
+    private _fields: (AIField<AllowedTypes> | AIObject | AIFieldEnum)[];
+    private _required: boolean;
 
     constructor(name: string, description: string, required: boolean) {
-        this._name = name
-        this._description = description
-        this._fields = []
-        this._required = required
+        this._name = name;
+        this._description = description;
+        this._fields = [];
+        this._required = required;
     }
 
     field<T extends AllowedTypes>(field: AIField<T> | AIObject | AIFieldEnum) {
-        this._fields.push(field)
-        return this
+        this._fields.push(field);
+        return this;
     }
 
     getName(): string {
-        return this._name
+        return this._name;
     }
 
     getDescription(): string {
-        return this._description
+        return this._description;
     }
 
     getFields(): (
@@ -160,7 +160,7 @@ export class AIObject {
         | AIObject[]
         | AIFieldEnum
     )[] {
-        return this._fields
+        return this._fields;
     }
 
     validateAIField = (
@@ -169,73 +169,73 @@ export class AIObject {
         | z.ZodString
         | z.ZodNumber
         | z.ZodBoolean
-        | z.ZodArray<z.ZodTypeAny, "many">
+        | z.ZodArray<z.ZodTypeAny, 'many'>
         | z.ZodEffects<z.ZodString, any, any>
         | z.ZodUnion<[z.ZodEffects<z.ZodString, any, any>, z.ZodNumber]> // This handles the case of number transformation
         | z.ZodUnion<[z.ZodEffects<z.ZodString, any, any>, z.ZodBoolean]> // This handles the case of boolean transformation
         | z.ZodUnion<
-              [
-                  z.ZodEffects<z.ZodString, any, any>,
-                  z.ZodArray<z.ZodTypeAny, "many">
-              ]
-          > // For array transformations
+            [
+                z.ZodEffects<z.ZodString, any, any>,
+                z.ZodArray<z.ZodTypeAny, 'many'>,
+            ]
+        > // For array transformations
         | z.ZodNull
         | z.ZodEnum<[string]>
         | z.ZodEnum<[string, ...string[]]> => {
         switch (field.type) {
-            case "string":
-                return z.string()
+            case 'string':
+                return z.string();
 
-            case "number":
+            case 'number':
                 return z
                     .string()
                     .transform((val) => {
-                        const parsed = Number(val)
+                        const parsed = Number(val);
                         if (isNaN(parsed)) {
-                            throw new Error("Invalid number")
+                            throw new Error('Invalid number');
                         }
-                        return parsed
+                        return parsed;
                     })
-                    .or(z.number()) // Support both strings and numbers
+                    .or(z.number()); // Support both strings and numbers
 
-            case "boolean":
+            case 'boolean':
                 return z
                     .string()
                     .transform((val) => {
-                        if (val === "true") return true
-                        if (val === "false") return false
-                        throw new Error("Invalid boolean")
+                        if (val === 'true') return true;
+                        if (val === 'false') return false;
+                        throw new Error('Invalid boolean');
                     })
-                    .or(z.boolean()) // Support both strings and booleans
+                    .or(z.boolean()); // Support both strings and booleans
 
-            case "array":
+            case 'array':
                 return z
                     .string()
                     .transform((val) => {
                         try {
-                            const parsed = JSON.parse(val)
-                            if (Array.isArray(parsed)) return parsed
-                            throw new Error("Invalid array")
+                            const parsed = JSON.parse(val);
+                            if (Array.isArray(parsed)) return parsed;
+                            throw new Error('Invalid array');
                         } catch (error) {
-                            throw new Error("Invalid array")
+                            throw new Error('Invalid array');
                         }
                     })
-                    .or(z.array(z.any())) // Support both strings (for stringified arrays) and arrays
-            case "enum":
+                    .or(z.array(z.any())); // Support both strings (for stringified arrays) and arrays
+            case 'enum':
                 if ((field as AIEnum).values.length) {
                     return z.enum(
                         (field as AIEnum).values as [string, ...string[]]
-                    )
+                    );
                 }
 
-                throw new Error("Enum values is not supported")
+                throw new Error('Enum values is not supported');
             default:
-                throw new Error("Unsupported type")
+                throw new Error('Unsupported type');
         }
-    }
+    };
     description(): Record<string, any> {
         return {
-            type: "object",
+            type: 'object',
             name: this._name,
             description: this._description,
             properties: this._fields.reduce(
@@ -243,21 +243,21 @@ export class AIObject {
                     if (field instanceof AIObject) {
                         return {
                             ...acc,
-                            [field.getName()]: field.description()
-                        }
+                            [field.getName()]: field.description(),
+                        };
                     } else if (field instanceof AIFieldEnum) {
                         return {
                             ...acc,
-                            [field.getName()]: field.description()
-                        }
+                            [field.getName()]: field.description(),
+                        };
                     } else {
                         return {
                             ...acc,
                             [field.name]: {
                                 type: field.type,
-                                description: field.description
-                            }
-                        }
+                                description: field.description,
+                            },
+                        };
                     }
                 },
                 {} as Record<string, any>
@@ -266,38 +266,38 @@ export class AIObject {
                 this._fields
                     .filter((field) => {
                         if (field instanceof AIObject) {
-                            return field.getRequired()
+                            return field.getRequired();
                         } else if (field instanceof AIFieldEnum) {
-                            return field.getRequired()
+                            return field.getRequired();
                         } else {
-                            return field.required
+                            return field.required;
                         }
                     })
                     .map((field) => {
                         if (field instanceof AIObject) {
-                            return field.getName()
+                            return field.getName();
                         } else if (field instanceof AIFieldEnum) {
-                            return field.getName()
+                            return field.getName();
                         } else {
-                            return field.name
+                            return field.name;
                         }
-                    }) ?? []
-        }
+                    }) ?? [],
+        };
     }
     getRequired() {
-        return this._required
+        return this._required;
     }
 }
 
 export class AIFunction {
-    private _repo?: string
-    private _name: string
+    private _repo?: string;
+    private _name: string;
 
-    private _description: string
-    private _params: (AIField<any> | AIObject | AIArray | AIFieldEnum)[]
-    private _returnType?: AIField<any> | AIObject | AIArray
-    private _implementation: Function
-    private _needsConfirm: boolean
+    private _description: string;
+    private _params: (AIField<any> | AIObject | AIArray | AIFieldEnum)[];
+    private _returnType?: AIField<any> | AIObject | AIArray;
+    private _implementation: Function;
+    private _needsConfirm: boolean;
 
     constructor(
         name: string,
@@ -305,52 +305,52 @@ export class AIFunction {
         repo?: string,
         needsConfirm: boolean = false
     ) {
-        this._name = name
-        this._description = description
-        this._params = []
-        this._implementation = () => {}
-        this._repo = repo
-        this._needsConfirm = needsConfirm
+        this._name = name;
+        this._description = description;
+        this._params = [];
+        this._implementation = () => { };
+        this._repo = repo;
+        this._needsConfirm = needsConfirm;
     }
 
     args(...params: (AIField<any> | AIObject | AIArray | AIFieldEnum)[]) {
-        this._params = params
-        return this
+        this._params = params;
+        return this;
     }
 
     returns(returnType: AIField<any> | AIObject | AIArray) {
-        this._returnType = returnType
-        return this
+        this._returnType = returnType;
+        return this;
     }
 
     confirmation(needsConfirm: boolean) {
-        this._needsConfirm = needsConfirm
-        return this
+        this._needsConfirm = needsConfirm;
+        return this;
     }
 
     implement(fn: (...args: any[]) => any) {
-        this._implementation = fn
-        return this
+        this._implementation = fn;
+        return this;
     }
 
     getName(): string {
-        return this._name
+        return this._name;
     }
 
     getDescription(): string {
-        return this._description
+        return this._description;
     }
 
     getParams(): (AIField<any> | AIObject | AIArray | AIFieldEnum)[] {
-        return this._params
+        return this._params;
     }
 
     getRepo(): string | undefined {
-        return this._repo
+        return this._repo;
     }
 
     getNeedsConfirm(): boolean {
-        return this._needsConfirm
+        return this._needsConfirm;
     }
 
     validateAIField = (
@@ -364,88 +364,88 @@ export class AIFunction {
         | z.ZodNull
         | z.ZodAny => {
         if (param instanceof AIArray) {
-            return z.array(this.validateAIField(param.getItemType()))
+            return z.array(this.validateAIField(param.getItemType()));
         } else if (param instanceof AIObject) {
-            return z.any()
+            return z.any();
         } else if (param instanceof AIFieldEnum) {
             // Handle enum fields
-            return z.enum(param.getValues() as [string, ...string[]]) // Return Zod enum schema for AIFieldEnum
+            return z.enum(param.getValues() as [string, ...string[]]); // Return Zod enum schema for AIFieldEnum
         } else {
             switch (param.type) {
-                case "string":
-                    return z.string()
-                case "number":
-                    return z.number()
-                case "boolean":
-                    return z.boolean()
-                case "array":
-                    return z.array(z.any()) // Adjust based on the specific type of array elements
+                case 'string':
+                    return z.string();
+                case 'number':
+                    return z.number();
+                case 'boolean':
+                    return z.boolean();
+                case 'array':
+                    return z.array(z.any()); // Adjust based on the specific type of array elements
                 default:
-                    return z.null()
+                    return z.null();
             }
         }
-    }
+    };
 
     description() {
         return {
-            type: "function",
+            type: 'function',
             function: {
                 name: this._name,
                 description: this._description,
                 parameters: {
-                    type: "object",
+                    type: 'object',
                     properties: this._params.reduce((acc, param) => {
                         if (param instanceof AIArray) {
                             return {
                                 ...acc,
-                                [param.getName()]: param.description()
-                            }
+                                [param.getName()]: param.description(),
+                            };
                         } else if (param instanceof AIObject) {
                             return {
                                 ...acc,
-                                [param.getName()]: param.description()
-                            }
+                                [param.getName()]: param.description(),
+                            };
                         } else if (param instanceof AIFieldEnum) {
                             return {
                                 ...acc,
-                                [param.getName()]: param.description()
-                            }
+                                [param.getName()]: param.description(),
+                            };
                         } else {
                             return {
                                 ...acc,
                                 [param.name]: {
                                     type: param.type,
-                                    description: param.description
-                                }
-                            }
+                                    description: param.description,
+                                },
+                            };
                         }
                     }, {}),
                     required: this._params
                         .filter((param) => {
                             if (param instanceof AIArray) {
-                                return param.getRequired()
+                                return param.getRequired();
                             } else if (param instanceof AIObject) {
-                                return param.getRequired()
+                                return param.getRequired();
                             } else if (param instanceof AIFieldEnum) {
-                                return param.getRequired()
+                                return param.getRequired();
                             } else {
-                                return param.required
+                                return param.required;
                             }
                         })
                         .map((param) => {
                             if (param instanceof AIArray) {
-                                return param.getName()
+                                return param.getName();
                             } else if (param instanceof AIObject) {
-                                return param.getName()
+                                return param.getName();
                             } else if (param instanceof AIFieldEnum) {
-                                return param.getName()
+                                return param.getName();
                             } else {
-                                return param.name
+                                return param.name;
                             }
-                        })
-                }
-            }
-        }
+                        }),
+                },
+            },
+        };
     }
 
     async execute(...args: any[]) {
@@ -454,53 +454,51 @@ export class AIFunction {
                 .tuple(
                     this._params.map(this.validateAIField) as [
                         z.ZodTypeAny,
-                        ...z.ZodTypeAny[]
+                        ...z.ZodTypeAny[],
                     ]
                 )
-                .parse(args)
+                .parse(args);
             if (this.getRepo()) {
                 const result = await axios.post(`${hubUrl}/forward-call`, {
                     name: this.getName(),
                     args: JSON.stringify(parsedArgs),
-                    subToken: this.getRepo()
-                })
-                return result.data
+                    subToken: this.getRepo(),
+                });
+                return result.data;
             } else {
-                const result = await this._implementation(...parsedArgs)
+                const result = await this._implementation(...parsedArgs);
                 if (this._returnType) {
                     const returnTypeSchema = this.validateAIField(
                         this._returnType
-                    )
-                    return returnTypeSchema.parse(result)
+                    );
+                    return returnTypeSchema.parse(result);
                 }
-                return result
+                return result;
             }
         } catch (e) {
             if (e instanceof z.ZodError) {
                 // Format the error message for the user
                 const errorDetails = e.errors
                     .map((error) => {
-                        const path = error.path.join(" > ")
-                        return `Field "${path}": ${error.message}`
+                        const path = error.path.join(' > ');
+                        return `Field "${path}": ${error.message}`;
                     })
-                    .join("\n")
+                    .join('\n');
 
                 // Return a simple, formatted message for LLM output
-                return `There was an issue with the parameters you provided for the function "${this._name}":\n${errorDetails}\nPlease check your input and try again.`
+                return `There was an issue with the parameters you provided for the function "${this._name}":\n${errorDetails}\nPlease check your input and try again.`;
             } else {
                 // Handle any other errors
-                return `An unexpected error occurred while calling the function "${this._name}". Please try again.`
+                return `An unexpected error occurred while calling the function "${this._name}". Please try again.`;
             }
         }
     }
 }
 
-export type VisualizationType =
-    | "table"
-    | "dataCard"
+export type VisualizationType = 'table' | 'dataCard';
 
 export class VisualizationFunction extends AIFunction {
-    private _visualizationType: VisualizationType
+    private _visualizationType: VisualizationType;
 
     constructor(
         name: string,
@@ -509,72 +507,79 @@ export class VisualizationFunction extends AIFunction {
         repo?: string,
         needsConfirm: boolean = false
     ) {
-        super(name, description, repo, needsConfirm)
-        this._visualizationType = visualizationType
+        super(name, description, repo, needsConfirm);
+        this._visualizationType = visualizationType;
     }
 
     getVisualizationType(): VisualizationType {
-        return this._visualizationType
+        return this._visualizationType;
     }
 
     description() {
         return {
             ...super.description(),
-            visualizationType: this._visualizationType
-        }
+            visualizationType: this._visualizationType,
+        };
     }
     // Override the implement method to ensure it returns visualization data
     implement(func: (args: any) => any): this {
         return super.implement((args: any) => {
-            const result = func(args)
+            const result = func(args);
             return {
                 type: this._visualizationType,
-                data: result
-            }
-        })
+                data: result,
+            };
+        });
     }
 }
 
 export interface FunctionMetadata<F extends AIFunction> {
-    fn: F
+    fn: F;
 }
 
 interface RegisteredFunction<F extends AIFunction> extends FunctionMetadata<F> {
-    name: string
+    name: string;
 }
 
-type FunctionRegistry = Map<string, AIFunction>
+type FunctionRegistry = Map<string, AIFunction>;
 type FunctionAttributes = Map<
     string,
-    {active: boolean; isVisualization: boolean}
->
+    { active: boolean; isVisualization: boolean }
+>;
 
-const functionRegistry: FunctionRegistry = new Map()
-const functionAttributes: FunctionAttributes = new Map()
-let hubUrl: string | undefined = undefined
+type RepoRegistry = Map<string, RepoMetadata>;
+
+const functionRegistry: FunctionRegistry = new Map();
+const functionAttributes: FunctionAttributes = new Map();
+const repoRegistry: RepoRegistry = new Map();
+let hubUrl: string | undefined = undefined;
 
 export function getFunctionRegistry(): FunctionRegistry {
-    return functionRegistry
+    return functionRegistry;
 }
 
 export function getFunctionAttributes(): FunctionAttributes {
-    return functionAttributes
+    return functionAttributes;
+}
+
+export function getRepoRegistry(): RepoRegistry {
+    return repoRegistry;
 }
 
 export function setHubUrl(url: string) {
-    hubUrl = url
+    hubUrl = url;
 }
 
 export function registerFunctionIntoAI<F extends AIFunction>(
     name: string,
     fn: F
 ) {
-    const isVisualization = fn instanceof VisualizationFunction
-    functionRegistry.set(fn.getName(), fn)
+    const isVisualization = fn instanceof VisualizationFunction;
+    functionRegistry.set(fn.getName(), fn);
     functionAttributes.set(fn.getName(), {
         active: true,
-        isVisualization: isVisualization
-    })
+        isVisualization: isVisualization,
+    });
 }
 
 export function registerRepoFunctionsIntoAI<F extends AIFunction>(
@@ -584,39 +589,49 @@ export function registerRepoFunctionsIntoAI<F extends AIFunction>(
     functionRegistry.set(
         fn.name,
         new AIFunction(fn.name, fn.description, repoToken, fn.needConfirmation)
-    )
-    functionAttributes.set(fn.name, {active: true, isVisualization: false})
+    );
+    functionAttributes.set(fn.name, { active: true, isVisualization: false });
+}
+
+export function registerRepo(repo: RepoMetadata, token: string) {
+    console.log('registering repo', repo, token);
+
+    for (const functionMetadata of repo.functions) {
+        registerRepoFunctionsIntoAI(functionMetadata, token);
+    }
+
+    repoRegistry.set(repo.id, repo);
 }
 
 export function toggleFunctionActive(name: string) {
-    const functionAtribute = functionAttributes.get(name)
+    const functionAtribute = functionAttributes.get(name);
     if (!functionAtribute) {
-        throw new Error(`Function ${name} is not registered`)
+        throw new Error(`Function ${name} is not registered`);
     }
 
     functionAttributes.set(name, {
         ...functionAtribute,
-        active: !functionAtribute.active
-    })
-    console.log("functionAtribute", functionAttributes.get(name))
+        active: !functionAtribute.active,
+    });
+    console.log('functionAtribute', functionAttributes.get(name));
 }
 
 export async function callFunctionFromRegistry<F extends AIFunction>(
     name: string,
     ...args: any[]
 ): Promise<any> {
-    const registeredFunction = functionRegistry.get(name)
+    const registeredFunction = functionRegistry.get(name);
 
     if (!registeredFunction) {
-        throw new Error(`Function ${name} is not registered`)
+        throw new Error(`Function ${name} is not registered`);
     }
 
     // Call the function
     if (getFunctionAttributes().get(name)?.active ?? true) {
-        const result = await registeredFunction.execute(...args)
-        return result
+        const result = await registeredFunction.execute(...args);
+        return result;
     } else {
-        return "This function is not active"
+        return 'This function is not active';
     }
 }
 
@@ -625,39 +640,39 @@ export async function callFunctionFromRegistryFromObject<F extends AIFunction>(
     argsObj: Record<string, any>,
     localOnly: boolean = false
 ): Promise<any> {
-    const registeredFunction = functionRegistry.get(name)
+    const registeredFunction = functionRegistry.get(name);
 
     if (!registeredFunction) {
-        throw new Error(`Function ${name} is not registered`)
+        throw new Error(`Function ${name} is not registered`);
     }
 
     if (!!localOnly && !!registeredFunction.getRepo()) {
-        throw new Error(`Function ${name} is not local`)
+        throw new Error(`Function ${name} is not local`);
     }
 
     const args = registeredFunction.getParams().map((param) => {
         if (param instanceof AIObject) {
             // Handle AIObject by using getName
-            return argsObj[param.getName()]
+            return argsObj[param.getName()];
         } else if (param instanceof AIArray) {
             // Handle AIArray by using getName
-            return argsObj[param.getName()]
+            return argsObj[param.getName()];
         } else if (param instanceof AIFieldEnum) {
             // Handle AIFieldEnum by using getName
-            return argsObj[param.getName()]
-        } else if ("name" in param) {
+            return argsObj[param.getName()];
+        } else if ('name' in param) {
             // For AIField, which has a name property
-            return argsObj[param.name]
+            return argsObj[param.name];
         } else {
             // If none of the conditions match, throw an error
-            throw new Error(`Parameter ${param} is missing a valid name`)
+            throw new Error(`Parameter ${param} is missing a valid name`);
         }
-    })
+    });
     // Call the function
     if (getFunctionAttributes().get(name)?.active ?? true) {
-        const result = await registeredFunction.execute(...args)
-        return result
+        const result = await registeredFunction.execute(...args);
+        return result;
     } else {
-        return "This function is not active"
+        return 'This function is not active';
     }
 }

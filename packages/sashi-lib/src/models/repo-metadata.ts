@@ -6,7 +6,12 @@ export interface RepoFunctionMetadata {
 }
 
 export interface RepoMetadata {
+    id: string
     name: string
     description: string
+    functions: RepoFunctionMetadata[]
+}
+
+export interface MetaData {
     functions: RepoFunctionMetadata[]
 }

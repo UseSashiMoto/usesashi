@@ -1,7 +1,6 @@
 import axios from "axios"
+import { observeOpenAI } from "langfuse"
 import OpenAI from "openai"
-import {ChatCompletionTool} from "openai/resources"
-import {AssistantTool} from "openai/resources/beta/assistants"
 import {
     getFunctionAttributes,
     getFunctionRegistry,
@@ -9,114 +8,46 @@ import {
     VisualizationType
 } from "./ai-function-loader"
 
-class OpenAIWrapper {
-    openai: OpenAI
-    _sashiSecretKey: string | undefined
-    _hubUrl: string | undefined
-
-    constructor({
-        apiKey,
-        sashiSecretKey,
-        hubUrl
-    }: {
-        apiKey: string
-        sashiSecretKey?: string
-        hubUrl?: string
-    }) {
-        this.openai = new OpenAI({apiKey})
-        this._sashiSecretKey = sashiSecretKey
-        this._hubUrl = hubUrl
-    }
-
-    private convertToOpenAIFunction = () => {
-        const functions: ChatCompletionTool[] = Array.from(
-            getFunctionRegistry().values()
-        )
-            .filter(
-                (func) =>
-                    getFunctionAttributes().get(func.getName())?.active ?? true
-            )
-            .map((func) => {
-                return func.description() as ChatCompletionTool
-            })
-
-        return functions
-    }
-
-    chatCompletion = async ({
-        messages,
-        model = "gpt-4o",
-        max_tokens = 2048,
-        temperature = 0,
-        tool_choice
-    }: {
-        messages: any[]
-        model?: string
-        max_tokens?: number
-        temperature?: number
-        tool_choice?: any
-    }) => {
-        let options: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming =
-            {
-                messages,
-                model,
-                max_tokens,
-                temperature
-            }
-
-        const tools = this.convertToOpenAIFunction()
-        if (tools?.length > 0) {
-            options.tools = this.convertToOpenAIFunction()
-        }
-
-        if (tool_choice) {
-            options.tool_choice = tool_choice
-        } else {
-            options.tool_choice = "auto"
-        }
-
-        if (this._sashiSecretKey && this._hubUrl) {
-            const result =
-                await axios.post<OpenAI.Chat.Completions.ChatCompletion>(
-                    `${this._hubUrl}/chatCompletion`,
-                    options
-                )
-
-            console.log("result from hub", JSON.stringify(result.data, null, 2))
-            return result.data
-        }
-        const result = await this.openai.chat.completions.create(options)
-        return result
-    }
-}
-
 export class AIBot {
     private _apiKey: string
     private _sashiSecretKey?: string
     private _hubUrl?: string
-    openai: OpenAIWrapper
+    private _useCloud: boolean
+    openai: OpenAI
 
     constructor({
         apiKey,
         sashiSecretKey,
-        hubUrl
+        hubUrl,
+        langFuseInfo,
+        useCloud = false
     }: {
         apiKey: string
         sashiSecretKey?: string
         hubUrl?: string
+        langFuseInfo?: { publicKey: string; secretKey: string; baseUrl: string }
+        useCloud?: boolean
     }) {
         this._apiKey = apiKey
-        this.openai = new OpenAIWrapper({
-            apiKey: this._apiKey,
-            sashiSecretKey,
-            hubUrl
-        })
         this._sashiSecretKey = sashiSecretKey
         this._hubUrl = hubUrl
+        this._useCloud = useCloud
+
+        if (langFuseInfo) {
+            this.openai = observeOpenAI(new OpenAI({ apiKey: this._apiKey }), {
+                clientInitParams: {
+                    publicKey: langFuseInfo.publicKey,
+                    secretKey: langFuseInfo.secretKey,
+                    baseUrl: langFuseInfo.baseUrl
+                }
+            })
+        } else {
+            this.openai = new OpenAI({ apiKey: this._apiKey })
+        }
     }
 
     private convertToOpenAIFunction = () => {
-        const functions: AssistantTool[] = Array.from(
+        const functions: OpenAI.Chat.Completions.ChatCompletionTool[] = Array.from(
             getFunctionRegistry().values()
         )
             .filter(
@@ -124,7 +55,7 @@ export class AIBot {
                     getFunctionAttributes().get(func.getName())?.active ?? true
             )
             .map((func) => {
-                return func.description() as AssistantTool
+                return func.description() as OpenAI.Chat.Completions.ChatCompletionTool
             })
 
         return functions
@@ -170,27 +101,24 @@ Finally, if you decide that a component should be generated, you will output the
      Use the conversation history to determine based on the last message what data should be passed to the tool ${componentName} based on the context provided.
      `
 
-        const result = await this.openai.chatCompletion({
+        const result = await this.chatCompletion({
             messages: [
-                {role: "system", content: generateComponentPrompt},
+                { role: "system", content: generateComponentPrompt },
                 ...messages
             ],
             model,
             temperature,
             max_tokens,
-            tools: [component?.description() as ChatCompletionTool],
-            tool_choice: {type: "function", function: {name: componentName}}
+            tool_choice: { type: "function", function: { name: componentName } }
         })
 
-        const tool_calls = result.choices[0]?.message.tool_calls?.map(
-            (tool) => {
-                return {
-                    name: tool.function.name,
-                    type: component.getVisualizationType(),
-                    parameters: JSON.parse(tool.function.arguments)
-                }
+        const tool_calls = result.tool_calls?.map((tool: { function: { name: any; arguments: string } }) => {
+            return {
+                name: tool.function.name,
+                type: component.getVisualizationType(),
+                parameters: JSON.parse(tool.function.arguments)
             }
-        )
+        })
 
         return tool_calls
     }
@@ -209,10 +137,10 @@ Finally, if you decide that a component should be generated, you will output the
         temperature?: number
     }): Promise<
         | {
-              name: string
-              type: VisualizationType
-              parameters: any
-          }[]
+            name: string
+            type: VisualizationType
+            parameters: any
+        }[]
         | null
         | undefined
     > => {
@@ -220,7 +148,7 @@ Finally, if you decide that a component should be generated, you will output the
             const system_prompt = this.getUXSystemPrompt()
 
             const viz_messages = [
-                {role: "system", content: system_prompt},
+                { role: "system", content: system_prompt },
                 {
                     role: "user",
                     content: `<availableComponents>
@@ -231,14 +159,14 @@ Finally, if you decide that a component should be generated, you will output the
                 ...messages
             ]
 
-            const result = await this.openai.chatCompletion({
+            const result = await this.chatCompletion({
                 messages: viz_messages,
                 model,
                 temperature,
                 max_tokens
             })
 
-            const decisionResponse = result?.choices[0]?.message.content
+            const decisionResponse = result.content
             const shouldGenerate = decisionResponse?.match(
                 /<decision>(.*?)<\/decision>/
             )?.[1]
@@ -252,7 +180,7 @@ Finally, if you decide that a component should be generated, you will output the
                     throw new Error("Invalid component name")
                 }
 
-                return await this.setupComponent({messages, componentName})
+                return await this.setupComponent({ messages, componentName })
             }
 
             if (shouldGenerate === "false") {
@@ -266,23 +194,61 @@ Finally, if you decide that a component should be generated, you will output the
     }
 
     chatCompletion = async ({
-        model = "gpt-4o",
+        model = "gpt-4",
         max_tokens = 2048,
         temperature = 0,
-        messages
+        messages,
+        tool_choice
     }: {
         model?: string
         max_tokens?: number
         temperature?: number
         messages: any[]
+        tool_choice?: any
     }) => {
-        return (
-            await this.openai.chatCompletion({
-                model,
-                max_tokens,
-                temperature,
-                messages
-            })
-        ).choices[0]
+        let options: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming = {
+            messages,
+            model,
+            max_tokens,
+            temperature
+        }
+
+        const tools = this.convertToOpenAIFunction()
+        if (tools?.length > 0) {
+            options.tools = tools
+        }
+
+        if (tool_choice) {
+            options.tool_choice = tool_choice
+        }
+
+        try {
+            if (this._useCloud && this._sashiSecretKey && this._hubUrl) {
+                console.log("Sending request to cloud at:", this._hubUrl)
+                console.log("Request options:", JSON.stringify(options, null, 2))
+
+                const response = await axios.post(
+                    `${this._hubUrl}/chatCompletion`,
+                    options,
+                    {
+                        headers: {
+                            "Content-Type": "application/json",
+                            "x-api-token": this._sashiSecretKey
+                        }
+                    }
+                )
+
+                console.log("Received response from cloud:", JSON.stringify(response.data, null, 2))
+                return response.data.choices[0]
+            } else {
+                console.log("Sending request directly to OpenAI API")
+                const result = await this.openai.chat.completions.create(options)
+                console.log("Received response from OpenAI:", JSON.stringify(result, null, 2))
+                return result.choices[0]
+            }
+        } catch (error: any) {
+            console.error("Error in chatCompletion:", error)
+            throw error
+        }
     }
 }
