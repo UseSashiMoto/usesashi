@@ -112,12 +112,15 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
 
   useEffect(() => {
     const checkConnectedToHub = async () => {
-      const response = await fetch(`${apiUrl}/check_hub_connection`, {
-        method: 'GET',
-      });
-      const data = await response.json();
-      console.log('checkConnectedToHub', data);
-      setConnectedToHub(data.connected);
+      try {
+        const response = await fetch(`${apiUrl}/check_hub_connection`, {
+          method: 'GET',
+        });
+        const data = await response.json();
+        setConnectedToHub(data.connected);
+      } catch (error) {
+        setConnectedToHub(false);
+      }
     };
     checkConnectedToHub();
   }, []);

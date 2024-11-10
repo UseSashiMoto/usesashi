@@ -9,6 +9,7 @@
         "build": "turbo build",
         "dev": "turbo dev",
         "lint": "turbo lint",
+        "test": "turbo run test",
         "publish": "turbo publish",
         "format": "prettier --write \"**/*.{ts,tsx,md}\"",
         "release": "yarn build && changeset publish"

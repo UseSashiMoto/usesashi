@@ -1,0 +1,53 @@
+name: Tests
+
+on:
+    pull_request:
+        branches:
+            - "*"
+
+jobs:
+    test:
+        runs-on: ubuntu-latest
+
+        strategy:
+            matrix:
+                node-version: [18.x, 20.x]
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Use Node.js ${{ matrix.node-version }}
+              uses: actions/setup-node@v4
+              with:
+                  node-version: ${{ matrix.node-version }}
+                  cache: "yarn"
+
+            - name: Enable Corepack
+              run: corepack enable
+
+            - name: Get yarn cache directory path
+              id: yarn-cache-dir-path
+              run: echo "dir=$(yarn config get cacheFolder)" >> $GITHUB_OUTPUT
+
+            - name: Cache yarn dependencies
+              uses: actions/cache@v3
+              id: yarn-cache
+              with:
+                  path: |
+                      ${{ steps.yarn-cache-dir-path.outputs.dir }}
+                      .turbo
+                      node_modules/.cache/turbo
+                  key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+                  restore-keys: |
+                      ${{ runner.os }}-yarn-
+
+            - name: Install dependencies
+              run: yarn install --frozen-lockfile
+
+            - name: Build packages
+              run: yarn build
+
+            - name: Run tests
+              run: yarn test
+            - name: Run Lint
+              run: yarn lint
