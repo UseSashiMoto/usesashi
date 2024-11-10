@@ -306,123 +306,163 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         res.json({ message: 'Function toggled' });
     });
 
-    router.post('/chat', async (req, res) => {
-        const { tools, previous, type } = req.body;
 
-        if (type === '/chat/function') {
-            if (!Array.isArray(tools) || !Array.isArray(previous)) {
-                return res.status(400).json({ message: 'Bad system prompt' });
+    const processChatRequest = async ({ inquiry, previous }: { inquiry: string, previous: any[] }) => {
+        const context = trim_array(previous, 20);
+        const system_prompt = getSystemPrompt();
+
+        let messages: any[] = [{ role: 'system', content: system_prompt }];
+        if (context.length > 0) {
+            messages = messages.concat(context);
+        }
+        messages.push({ role: 'user', content: inquiry });
+
+        const result = await aiBot.chatCompletion({
+            temperature: 0.3,
+            messages: messages.filter(
+                (message) =>
+                    typeof message.content !== "object" ||
+                    message.content === null
+            )
+        })
+
+        return result
+    }
+
+    const processFunctionRequest = async ({ tools, previous }: { tools: any[], previous: any[] }) => {
+        if (!Array.isArray(tools) || !Array.isArray(previous)) {
+            throw new Error('Bad system prompt');
+        }
+
+        const tools_output = [];
+
+
+        for (let tool of tools) {
+            const funcName = tool.function?.name;
+            const functionArguments = JSON.parse(
+                tool.function?.arguments || '{}'
+            );
+
+            // Check if function name is missing
+            if (!funcName) {
+                throw new Error('Missing function name in tool call.');
             }
 
-            let tools_output = [];
+            // Check if the tool needs confirmation
+            const functionRegistry = getFunctionRegistry();
+            const registeredFunction = functionRegistry.get(funcName);
+            const needsConfirm =
+                registeredFunction?.getNeedsConfirm() || false;
 
-            for (let tool of tools) {
-                const funcName = tool.function?.name;
-                const functionArguments = JSON.parse(
-                    tool.function?.arguments || '{}'
+            if (needsConfirm && !tool.confirmed) {
+                tools_output.push({
+                    tool_call_id: tool.id, // Use 'id' instead of 'tool_call_id'
+                    id: tool.id, // Use 'id' instead of 'tool_call_id'
+                    role: 'tool',
+                    type: 'function',
+                    content: `This tool (${funcName}) requires confirmation before it can be executed.`,
+                    needsConfirm: true,
+                    function: {
+                        name: funcName,
+                        arguments: tool.function?.arguments,
+                    },
+                    args: JSON.stringify(functionArguments, null, 2),
+                });
+            } else {
+                // Proceed with execution if no confirmation is needed
+                const output = await callFunctionFromRegistryFromObject(
+                    funcName,
+                    functionArguments
                 );
 
-                // Check if function name is missing
-                if (!funcName) {
-                    return res
-                        .status(400)
-                        .send('Missing function name in tool call.');
-                }
-
-                // Check if the tool needs confirmation
-                const functionRegistry = getFunctionRegistry();
-                const registeredFunction = functionRegistry.get(funcName);
-                const needsConfirm =
-                    registeredFunction?.getNeedsConfirm() || false;
-
-                if (needsConfirm && !tool.confirmed) {
-                    tools_output.push({
-                        tool_call_id: tool.id, // Use 'id' instead of 'tool_call_id'
-                        id: tool.id, // Use 'id' instead of 'tool_call_id'
-                        role: 'tool',
-                        type: 'function',
-                        content: `This tool (${funcName}) requires confirmation before it can be executed.`,
-                        needsConfirm: true,
-                        function: {
-                            name: funcName,
-                            arguments: tool.function?.arguments,
-                        },
-                        args: JSON.stringify(functionArguments, null, 2),
-                    });
-                } else {
-                    // Proceed with execution if no confirmation is needed
-                    const output = await callFunctionFromRegistryFromObject(
-                        funcName,
-                        functionArguments
-                    );
-
-                    tools_output.push({
-                        tool_call_id: tool.id, // Use 'id' instead of 'tool_call_id'
-                        id: tool.id, // Use 'id' instead of 'tool_call_id'
-                        role: 'tool',
-                        type: 'function',
-                        function: {
-                            name: funcName,
-                            arguments: tool.function?.arguments,
-                        },
-                        content: JSON.stringify(output, null, 2),
-                    });
-                }
-            }
-
-            let context = trim_array(previous, 20);
-            const system_prompt = getSystemPrompt();
-
-            let messages: any[] = [{ role: 'system', content: system_prompt }];
-            if (context.length > 0) {
-                messages = messages.concat(context);
-            }
-
-            // Assistant's message includes tool_calls
-            messages.push({
-                role: 'assistant',
-                content: null,
-                tool_calls: tools.map((tool: any) => ({
+                tools_output.push({
+                    tool_call_id: tool.id, // Use 'id' instead of 'tool_call_id'
+                    id: tool.id, // Use 'id' instead of 'tool_call_id'
+                    role: 'tool',
                     type: 'function',
-                    id: tool.id,
-                    function: tool.function,
-                })),
-            });
+                    function: {
+                        name: funcName,
+                        arguments: tool.function?.arguments,
+                    },
+                    content: JSON.stringify(output, null, 2),
+                });
+            }
+        }
 
-            messages.push(...tools_output);
+        const context = trim_array(previous, 20);
+        const system_prompt = getSystemPrompt();
 
-            try {
-                const result = await aiBot.chatCompletion({
-                    temperature: 0.3,
-                    messages: messages.filter(
-                        (message) =>
-                            typeof message.content !== "object" ||
-                            message.content === null
-                    )
+        let messages: any[] = [{ role: 'system', content: system_prompt }];
+        if (context.length > 0) {
+            messages = messages.concat(context);
+        }
+
+        // Assistant's message includes tool_calls
+        messages.push({
+            role: 'assistant',
+            content: null,
+            tool_calls: tools.map((tool: any) => ({
+                type: 'function',
+                id: tool.id,
+                function: tool.function,
+            })),
+        });
+
+        messages.push(...tools_output);
+
+        try {
+            const result = await aiBot.chatCompletion({
+                temperature: 0.3,
+                messages: messages.filter(
+                    (message) =>
+                        typeof message.content !== "object" ||
+                        message.content === null
+                )
+            })
+
+            const shouldShowVisualization =
+                await aiBot.shouldShowVisualization({
+                    messages: [
+                        ...messages,
+                        {
+                            id: getUniqueId(),
+                            role: "assistant",
+                            content: result?.message.content,
+                            created_at: new Date().toISOString()
+                        }
+                    ],
+                    viz_tools: Array.from(
+                        getFunctionRegistry().values()
+                    ).filter(
+                        (func) => func instanceof VisualizationFunction
+                    ) as unknown as VisualizationFunction[]
                 })
 
-                const shouldShowVisualization =
-                    await aiBot.shouldShowVisualization({
-                        messages: [
-                            ...messages,
-                            {
-                                id: getUniqueId(),
-                                role: "assistant",
-                                content: result?.message.content,
-                                created_at: new Date().toISOString()
-                            }
-                        ],
-                        viz_tools: Array.from(
-                            getFunctionRegistry().values()
-                        ).filter(
-                            (func) => func instanceof VisualizationFunction
-                        ) as unknown as VisualizationFunction[]
-                    })
 
+            return {
+                output: result?.message,
+                tool_calls: result?.message?.tool_calls,
+                visualization: shouldShowVisualization
+            }
+        } catch (error: any) {
+            throw new Error('Error processing request');
+
+        }
+    }
+
+    router.post('/chat', async (req, res) => {
+        const { tools, previous, type } = req.body;
+        console.log('/chat request', req.body)
+        if (type === '/chat/function') {
+
+
+            try {
+                const result = await processFunctionRequest({ tools, previous })
+                console.log('/chat/function result', result)
                 res.json({
-                    output: result?.message,
-                    tool_calls: result?.message?.tool_calls,
-                    visualization: shouldShowVisualization
+                    output: result?.output,
+                    tool_calls: result.tool_calls,
+                    visualization: result.visualization
                 })
             } catch (error: any) {
                 res.status(500).json({
@@ -432,34 +472,20 @@ export const createMiddleware = (options: MiddlewareOptions) => {
             }
         }
         if (type === '/chat/message') {
+
+
             const { inquiry, previous } = req.body;
-
-            let context = trim_array(previous, 20);
-            const system_prompt = getSystemPrompt();
-
-            let messages: any[] = [{ role: 'system', content: system_prompt }];
-            if (context.length > 0) {
-                messages = messages.concat(context);
-            }
-            messages.push({ role: 'user', content: inquiry });
-
             try {
-                const result = await aiBot.chatCompletion({
-                    temperature: 0.3,
-                    messages: messages.filter(
-                        (message) =>
-                            typeof message.content !== "object" ||
-                            message.content === null
-                    )
-                })
+                const result = await processChatRequest({ inquiry, previous })
+                console.log('/chat/message results', result)
 
                 res.json({
                     output: result?.message,
                 });
-            } catch (error: any) {
+            } catch (e: any) {
                 res.status(500).json({
                     message: 'Error processing request',
-                    error: error.message,
+                    error: e.message,
                 });
             }
         }
