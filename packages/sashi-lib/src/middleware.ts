@@ -152,7 +152,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
             });
             res.json({ connected: connectedData.status === 200 });
         } catch (error) {
-            console.error('Failed to check hub connection:', error);
             res.json({ connected: false });
         }
     });
@@ -214,8 +213,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         const currentUrl = sashiServerUrl ?? req.get('host') ?? '';
 
         try {
-            console.log('origin', origin);
-            console.log('req headers', req.headers);
+
             // Parse the origin and current URL to get the hostname
             const originUrl = new URL(origin);
             const currentUrlObj = new URL(`http://${currentUrl}`); // Ensure currentUrl is treated as a full URL
@@ -246,7 +244,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     };
 
     router.get('/repos', validateRepoRequest, async (req, res) => {
-        console.log('/repos', Array.from(getRepoRegistry().values()));
         return res.json({ repos: Array.from(getRepoRegistry().values()) });
     });
 
@@ -452,13 +449,11 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
     router.post('/chat', async (req, res) => {
         const { tools, previous, type } = req.body;
-        console.log('/chat request', req.body)
         if (type === '/chat/function') {
 
 
             try {
                 const result = await processFunctionRequest({ tools, previous })
-                console.log('/chat/function result', result)
                 res.json({
                     output: result?.output,
                     tool_calls: result.tool_calls,
@@ -477,7 +472,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
             const { inquiry, previous } = req.body;
             try {
                 const result = await processChatRequest({ inquiry, previous })
-                console.log('/chat/message results', result)
 
                 res.json({
                     output: result?.message,
