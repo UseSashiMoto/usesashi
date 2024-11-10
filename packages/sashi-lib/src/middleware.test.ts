@@ -101,6 +101,8 @@ describe('Chat Endpoint', () => {
             const mockFunction = {
                 getNeedsConfirm: jest.fn().mockReturnValue(false),
                 execute: jest.fn(),
+                getName: jest.fn().mockReturnValue('testFunction'),
+                getDescription: jest.fn().mockReturnValue('Test function description'),
             };
             mockFunctionRegistry.set('testFunction', mockFunction);
 
@@ -134,7 +136,7 @@ describe('Chat Endpoint', () => {
             expect(response.body).toEqual(
                 expect.objectContaining({
                     output: expect.any(Object),
-                    visualization: false,
+                    visualization: [],
                 })
             );
         });
@@ -143,6 +145,7 @@ describe('Chat Endpoint', () => {
             const mockFunction = {
                 getNeedsConfirm: jest.fn().mockReturnValue(true),
                 getName: jest.fn().mockReturnValue('testFunction'),
+                getDescription: jest.fn().mockReturnValue('Test function description'),
             };
             mockFunctionRegistry.set('testFunction', mockFunction);
 
