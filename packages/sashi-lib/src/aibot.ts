@@ -1,4 +1,3 @@
-import axios from "axios"
 import { observeOpenAI } from "langfuse"
 import OpenAI from "openai"
 import {
@@ -227,21 +226,25 @@ Finally, if you decide that a component should be generated, you will output the
                 console.log("Sending request to cloud at:", this._hubUrl)
                 console.log("Request options:", JSON.stringify(options, null, 2))
 
-                const response = await axios.post(
-                    `${this._hubUrl}/chatCompletion`,
-                    options,
-                    {
-                        headers: {
-                            "Content-Type": "application/json",
-                            "x-api-token": this._sashiSecretKey
-                        }
-                    }
-                )
+                const response = await fetch(`${this._hubUrl}/chatCompletion`, {
+                    method: 'POST',
+                    headers: {
+                        "Content-Type": "application/json",
+                        "x-api-token": this._sashiSecretKey
+                    },
+                    body: JSON.stringify(options)
+                })
 
-                console.log("Received response from cloud:", JSON.stringify(response.data, null, 2))
-                return response.data.choices[0]
+                if (!response.ok) {
+                    const errorText = await response.text()
+                    throw new Error(`Network response was not ok: ${response.statusText} - ${errorText}`)
+                }
+
+                const responseData = await response.json()
+                console.log("Received response from cloud:", JSON.stringify(responseData, null, 2))
+                return responseData.choices[0]
             } else {
-                console.log("Sending request directly to OpenAI API")
+                console.log("Sending request directly to OpenAI API", this._useCloud, this._sashiSecretKey, this._hubUrl)
                 const result = await this.openai.chat.completions.create(options)
                 console.log("Received response from OpenAI:", JSON.stringify(result, null, 2))
                 return result.choices[0]
@@ -251,4 +254,19 @@ Finally, if you decide that a component should be generated, you will output the
             throw error
         }
     }
+}
+
+
+let aiBot: AIBot | null = null
+
+export const createAIBot = ({ apiKey, sashiSecretKey, hubUrl, useCloud }: { apiKey: string, sashiSecretKey?: string, hubUrl: string, useCloud: boolean }) => {
+    aiBot = new AIBot({ apiKey, sashiSecretKey, hubUrl, useCloud })
+}
+
+export const getAIBot = () => {
+    if (!aiBot) {
+        throw new Error("AIBot not initialized")
+    }
+
+    return aiBot
 }
