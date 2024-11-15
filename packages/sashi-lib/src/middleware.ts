@@ -83,7 +83,7 @@ export const validateRepoRequest = ({ sashiServerUrl, repoSecretKey }: {
             next();
         } catch (err) {
             console.error('Error parsing URLs:', err);
-            return res.status(400).json({ error: 'Invalid origin or URL' });
+            return res.status(403).json({ error: 'Invalid origin or URL' });
         }
     }
 };
