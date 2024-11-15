@@ -20,6 +20,21 @@ import { createSashiHtml } from './utils';
 const HEADER_API_TOKEN = 'x-api-token';
 const HEADER_REPO_TOKEN = 'x-repo-token';
 
+const Sentry = require("@sentry/node");
+
+Sentry.init({
+    dsn: 'https://81e05c5cf10d2ec20ef0ab944853ec79@o4508301271105536.ingest.us.sentry.io/4508301273726976', // Replace with your actual DSN
+    // Optional configurations
+});
+
+const asyncHandler = (fn: (req: Request, res: Response, next?: NextFunction) => Promise<any>) => (req: Request, res: Response, next: NextFunction) => {
+    Promise.resolve(fn(req, res, next)).catch((err) => {
+        console.error('Error in middleware:', err);
+        Sentry.captureException(err); // Capture the error with Sentry
+        next(err);
+    });
+};
+
 function getUniqueId() {
     return (
         Math.random().toString(36).substring(2) +
@@ -209,6 +224,8 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         res: Response,
         next: NextFunction
     ) => {
+
+
         const origin = req.headers.origin || '';
         const currentUrl = sashiServerUrl ?? req.get('host') ?? '';
 
@@ -239,7 +256,8 @@ export const createMiddleware = (options: MiddlewareOptions) => {
             next();
         } catch (err) {
             console.error('Error parsing URLs:', err);
-            return res.status(400).json({ error: 'Invalid origin or URL' });
+            Sentry.captureException(err);
+            return res.status(400).json({ error: 'Request not authorized', details: JSON.stringify(err) });
         }
     };
 
@@ -247,7 +265,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         return res.json({ repos: Array.from(getRepoRegistry().values()) });
     });
 
-    router.get('/metadata', validateRepoRequest, async (req, res) => {
+    router.get('/metadata', validateRepoRequest, asyncHandler(async (_req, res, next) => {
         const metadata: MetaData = {
             functions: Array.from(getFunctionRegistry().values()).map(
                 (func) => {
@@ -266,7 +284,11 @@ export const createMiddleware = (options: MiddlewareOptions) => {
             ),
         };
         return res.json(metadata);
-    });
+    }))
+
+    router.get('/test-error', asyncHandler(async (req, res) => {
+        throw new Error('Test error for Sentry');
+    }));
 
     router.get('/call-function', validateRepoRequest, async (req, res) => {
         const { functionName, args } = req.body;
