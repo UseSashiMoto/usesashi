@@ -1,10 +1,15 @@
+import crypto from "crypto"
+import { Request, Response } from "express"
+import { ParamsDictionary } from "express-serve-static-core"
+import { ParsedQs } from "qs"
+
 const packaging = require("../package.json")
 
 const version = packaging.version
 
 export const createSashiHtml = (
-    baseUrl: string,
-    sessionToken?: string
+  baseUrl: string,
+  sessionToken?: string
 ) => /* HTML */ `<!DOCTYPE html>
   <html lang="en">
     <head>
@@ -33,3 +38,34 @@ export const createSashiHtml = (
       ></script>
     </body>
   </html>`
+
+
+export const isEven = (n: number) => {
+  return n % 2 == 0;
+};
+export const trim_array = (arr: string | any[], max_length = 20) => {
+  let new_arr = arr;
+
+  if (arr.length > max_length) {
+    let cutoff = Math.ceil(arr.length - max_length);
+    cutoff = isEven(cutoff) ? cutoff : cutoff + 1;
+
+    new_arr = arr.slice(cutoff);
+  }
+
+  return new_arr;
+};
+
+export const createSessionToken = async (
+  req: Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>,
+  res: Response<any, Record<string, any>>,
+  getSession?: (req: Request, res: Response) => Promise<string>
+) => {
+  if (getSession) {
+    return await getSession(req, res);
+  }
+
+  const sessionToken = crypto.randomUUID();
+  return sessionToken;
+};
+

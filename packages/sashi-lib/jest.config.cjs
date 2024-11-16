@@ -17,5 +17,7 @@ module.exports = {
         "/node_modules/",
         "\\.pnp\\.[^\\\/]+$",
         '<rootDir>/node_modules/',
-    ]
+    ],
+    "setupFilesAfterEnv": ['<rootDir>/jest.setup.js']
+
 };

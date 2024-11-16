@@ -1,8 +1,11 @@
-import { createMiddleware } from '@sashimo/lib';
-import express, { NextFunction, Request, Response } from 'express';
-import { Express } from 'express-serve-static-core';
-import './services/file_service';
-import './services/user_service';
+import { createMiddleware } from "@sashimo/lib"
+import express, { NextFunction, Request, Response } from "express"
+import { Express } from "express-serve-static-core"
+import "./services/file_service"
+import "./services/user_service"
+
+import './services/file_service'
+import './services/user_service'
 
 
 
@@ -122,6 +125,7 @@ app.use(
         getSession: async (req: any, res: any) => {
             return 'userone-session-token';
         },
+        useCloud: false,
         debug: true,
     })
 );
