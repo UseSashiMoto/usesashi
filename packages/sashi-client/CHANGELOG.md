@@ -1,5 +1,11 @@
 # @sashi/client
 
+## 3.7.0
+
+### Minor Changes
+
+-   ef35341: added breadcrumbs for sentry
+
 ## 3.6.0
 
 ### Minor Changes
