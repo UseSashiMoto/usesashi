@@ -82,18 +82,35 @@ export const validateRepoRequest = ({ sashiServerUrl, repoSecretKey }: {
             // Parse the origin and current URL to get the hostname
             const originUrl = new URL(origin);
             const currentUrlObj = new URL(`http://${currentUrl}`); // Ensure currentUrl is treated as a full URL
-
+            Sentry.addBreadcrumb({
+                category: "validation",
+                message: `origin: ${origin}, currentUrl: ${currentUrl}`,
+                level: "info",
+            });
             // Check if both are localhost or if the origin matches the current domain
             const isLocalhost =
                 originUrl.hostname === 'localhost' &&
                 currentUrlObj.hostname === 'localhost';
             const isSameDomain = originUrl.hostname === currentUrlObj.hostname;
-
+            Sentry.addBreadcrumb({
+                category: "validation",
+                message: `isLocalhost: ${isLocalhost}, isSameDomain: ${isSameDomain}`,
+                level: "info",
+            });
             if (!isLocalhost && !isSameDomain) {
                 // If they are not the same domain or both localhost, validate the secret key
                 const secretKey = req.headers[HEADER_REPO_TOKEN];
-
+                Sentry.addBreadcrumb({
+                    category: "validation",
+                    message: `secretKey: ${secretKey}`,
+                    level: "info",
+                });
                 if (!secretKey || secretKey !== repoSecretKey) {
+                    Sentry.addBreadcrumb({
+                        category: "validation",
+                        message: `Unauthorized request`,
+                        level: "error",
+                    });
                     return res
                         .status(403)
                         .json({ error: 'Unauthorized request' });
