@@ -1,5 +1,11 @@
 # @sashi/client
 
+## 3.8.0
+
+### Minor Changes
+
+-   5e72ac8: fix type error
+
 ## 3.7.0
 
 ### Minor Changes
