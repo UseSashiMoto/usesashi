@@ -164,6 +164,68 @@ describe('Chat Endpoint', () => {
                 error: 'Chat error',
             });
         });
+
+        test('should use local OpenAI instance when useCloud is false', async () => {
+            const response = await request.post('/chat').send({
+                type: '/chat/message',
+                inquiry: 'Hello',
+                previous: [],
+            });
+
+            expect(response.status).toBe(200);
+            expect(response.body).toEqual({
+                output: {
+                    content: 'Hello, how can I help?',
+                    role: 'assistant',
+                    refusal: null,
+                },
+            });
+
+            // Verify that OpenAI SDK's chat completion method was called
+            expect(mockedOpenAI.prototype.chat.completions.create).toHaveBeenCalled();
+
+            // Verify that the cloud API was not called
+            expect(fetchMock).not.toHaveBeenCalled();
+        });
+
+        test('should use cloud API when useCloud is true', async () => {
+            // Reinitialize the app and router with useCloud set to true
+            app = express();
+            app.use(express.json());
+
+            const router = createMiddleware({
+                openAIKey: process.env.OPENAI_API_KEY as string,
+                useCloud: true,
+                sashiServerUrl: 'https://example.com',
+                apiSecretKey: 'test-secret-key',
+                hubUrl: 'https://hub.example.com',
+            });
+            app.use(router);
+            request = supertest(app);
+
+            const response = await request.post('/chat').send({
+                type: '/chat/message',
+                inquiry: 'Hello',
+                previous: [],
+            });
+
+            expect(response.status).toBe(200);
+            expect(response.body).toEqual({
+                output: {
+                    content: 'Hello, how can I help?',
+                    role: 'assistant',
+                    refusal: null,
+                },
+            });
+
+            // Verify that the cloud API was called
+            expect(fetchMock).toHaveBeenCalled();
+
+            // Verify that the OpenAI SDK was not called directly
+            expect(
+                mockedOpenAI.prototype.chat.completions.create
+            ).not.toHaveBeenCalled();
+        });
     });
 
     // Adjust the rest of your test cases similarly
