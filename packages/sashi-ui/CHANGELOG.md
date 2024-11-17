@@ -1,5 +1,11 @@
 # @sashi/ui
 
+## 3.6.0
+
+### Minor Changes
+
+- c505087: Added the ability to send message to a hub. Added sentry for logging error to help with debugging
+
 ## 3.5.0
 
 ### Minor Changes
