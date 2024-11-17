@@ -1,10 +1,11 @@
 import { describe, expect, it, jest, test } from '@jest/globals';
 import axios from 'axios';
-import express from 'express';
+import express, { Request, Response } from 'express';
 import fetchMock from 'jest-fetch-mock';
 import OpenAI from 'openai';
 import supertest from 'supertest';
-import { createMiddleware } from './middleware';
+import TestAgent from 'supertest/lib/agent';
+import { createMiddleware, validateRepoRequest } from './middleware';
 
 
 fetchMock.enableMocks(); // Enable fetch mocks
@@ -229,4 +230,46 @@ describe('Chat Endpoint', () => {
     });
 
     // Adjust the rest of your test cases similarly
+});
+
+describe('validateRepoRequest Middleware', () => {
+    let app: express.Application;
+    let request: TestAgent;
+
+    beforeEach(() => {
+        app = express();
+
+        // Mock sashiServerUrl and repoSecretKey
+        const sashiServerUrl = undefined; // Let it be undefined to use req.get('host')
+        const repoSecretKey = 'test-repo-secret-key';
+
+        // Apply the middleware to the test app
+        app.use(
+            validateRepoRequest({ sashiServerUrl, repoSecretKey }),
+            (req: Request, res: Response) => {
+                res.status(200).json({ message: 'Middleware passed' });
+            }
+        );
+
+        request = supertest(app);
+    });
+
+    it('should handle invalid currentUrl correctly', async () => {
+        const invalidCurrentUrl = 'invalid-url';
+        // Mock req.get to return invalidCurrentUrl
+        jest.spyOn(express.request, 'get').mockImplementation((headerName: string) => {
+            if (headerName === 'host') {
+                return invalidCurrentUrl;
+            }
+            return '';
+        });
+
+        const response = await request
+            .get('/')
+            .set('Origin', 'http://example.com')
+            .set('x-repo-token', 'test-repo-secret-key');
+
+        expect(response.status).toBe(200);
+        expect(response.body).toEqual({ message: 'Middleware passed' });
+    });
 });
