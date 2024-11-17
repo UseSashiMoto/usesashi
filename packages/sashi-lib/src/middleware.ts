@@ -121,7 +121,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         hubUrl = 'https://hub.usesashi.com',
         version = 1,
         addStdLib = true,
-        useCloud = true,
+        useCloud = false,
         getSession
     } = options
 
