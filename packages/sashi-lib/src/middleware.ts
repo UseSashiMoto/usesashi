@@ -75,28 +75,45 @@ export const validateRepoRequest = ({ sashiServerUrl, repoSecretKey }: {
 
     return (req: Request, res: Response, next: NextFunction) => {
         const origin = req.headers.origin || '';
-        const currentUrl = sashiServerUrl ?? req.get('host') ?? '';
+        let currentUrl = sashiServerUrl ?? req.get('host') ?? '';
 
         try {
-
-            // Parse the origin and current URL to get the hostname
+            // Parse the origin to get the hostname
             const originUrl = new URL(origin);
-            const currentUrlObj = new URL(`http://${currentUrl}`); // Ensure currentUrl is treated as a full URL
+
+            // Validate currentUrl and default to 'localhost' if invalid
+            if (!currentUrl || typeof currentUrl !== 'string') {
+                currentUrl = 'localhost';
+            }
+
+            let currentUrlObj: URL;
+            try {
+                currentUrlObj = new URL(`http://${currentUrl}`); // Ensure currentUrl is treated as a full URL
+            } catch (err) {
+                Sentry.captureException(err);
+                console.error('Invalid currentUrl:', err);
+                // Default to localhost if currentUrl is invalid
+                currentUrlObj = new URL('http://localhost');
+            }
+
             Sentry.addBreadcrumb({
                 category: "validation",
                 message: `origin: ${origin}, currentUrl: ${currentUrl}`,
                 level: "info",
             });
+
             // Check if both are localhost or if the origin matches the current domain
             const isLocalhost =
                 originUrl.hostname === 'localhost' &&
                 currentUrlObj.hostname === 'localhost';
             const isSameDomain = originUrl.hostname === currentUrlObj.hostname;
+
             Sentry.addBreadcrumb({
                 category: "validation",
                 message: `isLocalhost: ${isLocalhost}, isSameDomain: ${isSameDomain}`,
                 level: "info",
             });
+
             if (!isLocalhost && !isSameDomain) {
                 // If they are not the same domain or both localhost, validate the secret key
                 const secretKey = req.headers[HEADER_REPO_TOKEN];
