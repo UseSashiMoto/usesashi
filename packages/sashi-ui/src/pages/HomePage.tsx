@@ -1,3 +1,4 @@
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { FunctionSwitch } from '@/models/function-switch';
 import { HEADER_SESSION_TOKEN } from '@/utils/contants';
 import { Label } from '@radix-ui/react-dropdown-menu';
@@ -15,7 +16,6 @@ import { MessageItem, RepoMetadata, VisualizationContent } from 'src/store/model
 import { Layout } from '../components/Layout';
 import { PayloadObject, ResultTool } from '../models/payload';
 import { Metadata } from '../store/models';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 
 function getUniqueId() {
   return Math.random().toString(36).substring(2) + new Date().getTime().toString(36);
@@ -483,7 +483,7 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
           </form>
         </div>
       </div>
-      <div data-testid="connected-status">
+      <div style={{display: "none"}} data-testid="connected-status">
         {connectedToHub ? 'Connected' : 'Not Connected'}
       </div>
     </Layout>
