@@ -3,7 +3,7 @@ import { RepoMetadata } from '@/store/models';
 import { DashboardIcon, GitHubLogoIcon } from '@radix-ui/react-icons';
 import * as Toast from '@radix-ui/react-toast';
 import { ChevronDown, ChevronUp, GitBranchIcon } from 'lucide-react';
-import { useEffect, useState, type FC, type PropsWithChildren } from 'react';
+import React, { useEffect, useState, type FC, type PropsWithChildren } from 'react';
 import { Button } from './Button';
 import { ThemeSwitcher } from './ThemeSwitcher';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';

@@ -1,9 +1,9 @@
 'use client'
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { motion } from "framer-motion"
-import { CalendarDays, Clock, Hash, Info, Mail, MapPin, Phone, User } from "lucide-react"
-import { useEffect, useState } from 'react'
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { motion } from "framer-motion";
+import { CalendarDays, Clock, Hash, Info, Mail, MapPin, Phone, User } from "lucide-react";
+import React, { useEffect, useState } from 'react';
 
 type DataEntry = Record<string, string | number | boolean | Date | undefined>
 

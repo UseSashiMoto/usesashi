@@ -60,7 +60,7 @@ interface MiddlewareOptions {
         secretKey: string
         baseUrl: string
     }
-    getSession?: (req: Request, res: Response) => Promise<string> // function to get the session id fot a request
+    getSession?: (req: Request, res: Response) => Promise<string> // function to get the session id for a request
 }
 
 export interface DatabaseClient {

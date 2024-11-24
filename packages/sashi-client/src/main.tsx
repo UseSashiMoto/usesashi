@@ -1,6 +1,6 @@
-import {SashiApp} from "@sashimo/ui"
-import {StrictMode} from "react"
-import {createRoot} from "react-dom/client"
+import { SashiApp } from "@sashimo/ui"
+import { StrictMode } from "react"
+import { createRoot } from "react-dom/client"
 
 interface CustomWindow extends Window {
     __INITIAL_STATE__: {
