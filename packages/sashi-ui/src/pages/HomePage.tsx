@@ -1,5 +1,5 @@
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { FunctionSwitch } from '@/models/function-switch';
+import { HEADER_SESSION_TOKEN } from '@/utils/contants';
 import { Label } from '@radix-ui/react-dropdown-menu';
 import { PaperPlaneIcon } from '@radix-ui/react-icons';
 import axios from 'axios';
@@ -15,6 +15,7 @@ import { MessageItem, RepoMetadata, VisualizationContent } from 'src/store/model
 import { Layout } from '../components/Layout';
 import { PayloadObject, ResultTool } from '../models/payload';
 import { Metadata } from '../store/models';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 
 function getUniqueId() {
   return Math.random().toString(36).substring(2) + new Date().getTime().toString(36);
@@ -115,6 +116,9 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
       try {
         const response = await fetch(`${apiUrl}/check_hub_connection`, {
           method: 'GET',
+          headers: {
+            [HEADER_SESSION_TOKEN]: sessionToken,
+          },
         });
         const data = await response.json();
         setConnectedToHub(data.connected);
@@ -123,10 +127,14 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
       }
     };
     checkConnectedToHub();
-  }, []);
+  }, [apiUrl, sessionToken]);
 
   const getMetadata = async () => {
-    const response = await axios.get(`${apiUrl}/metadata`);
+    const response = await axios.get(`${apiUrl}/metadata`, {
+      headers: {
+        [HEADER_SESSION_TOKEN]: sessionToken,
+      },
+    });
 
     setMetadata(response.data);
   };
@@ -135,7 +143,11 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
   }, []);
 
   const getSubscribedRepos = async () => {
-    const response = await axios.get(`${apiUrl}/repos`);
+    const response = await axios.get(`${apiUrl}/repos`, {
+      headers: {
+        [HEADER_SESSION_TOKEN]: sessionToken,
+      },
+    });
     return response.data.repos;
   };
 
@@ -470,6 +482,9 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
             </button>
           </form>
         </div>
+      </div>
+      <div data-testid="connected-status">
+        {connectedToHub ? 'Connected' : 'Not Connected'}
       </div>
     </Layout>
   );

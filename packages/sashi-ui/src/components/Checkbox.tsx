@@ -1,6 +1,7 @@
 import * as RadixCheckbox from "@radix-ui/react-checkbox";
 import { CheckIcon, DividerHorizontalIcon } from "@radix-ui/react-icons";
 import { clsx } from "clsx";
+import React from 'react';
 
 export const Checkbox = ({
   className,

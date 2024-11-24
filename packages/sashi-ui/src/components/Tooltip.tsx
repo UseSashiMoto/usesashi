@@ -1,5 +1,6 @@
 import * as TooltipRadix from "@radix-ui/react-tooltip";
 import type { PropsWithChildren } from "react";
+import React from 'react';
 
 type TooltipProps = {
   message: string;

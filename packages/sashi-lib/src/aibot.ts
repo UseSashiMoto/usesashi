@@ -6,6 +6,7 @@ import {
     VisualizationFunction,
     VisualizationType
 } from "./ai-function-loader"
+import { HEADER_API_TOKEN } from "./utils/constants"
 
 export class AIBot {
     private _apiKey: string
@@ -230,7 +231,7 @@ Finally, if you decide that a component should be generated, you will output the
                     method: 'POST',
                     headers: {
                         "Content-Type": "application/json",
-                        "x-api-token": this._sashiSecretKey
+                        [HEADER_API_TOKEN]: this._sashiSecretKey
                     },
                     body: JSON.stringify(options)
                 })

@@ -15,6 +15,6 @@
         "noEmit": false,
         "noUncheckedIndexedAccess": true
     },
-    "include": ["src/**/*"],
+    "include": ["src/**/*", "../sashi-ui/src/tests"],
     "exclude": ["node_modules", "dist", "tsconfig.json"]
 }

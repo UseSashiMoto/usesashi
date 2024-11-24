@@ -1,7 +1,7 @@
-import * as RadixToast from "@radix-ui/react-toast";
-import { useState } from "react";
 import { CheckCircledIcon, CrossCircledIcon } from "@radix-ui/react-icons";
+import * as RadixToast from "@radix-ui/react-toast";
 import { clsx } from "clsx";
+import React, { useState } from 'react';
 
 type ToastProps = {
   message: string;

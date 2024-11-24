@@ -1,5 +1,6 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { DotsVerticalIcon } from "@radix-ui/react-icons";
+import React from 'react';
 
 type Action = {
   label: string;

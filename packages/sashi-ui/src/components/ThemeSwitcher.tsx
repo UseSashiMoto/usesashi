@@ -1,6 +1,6 @@
 import { DesktopIcon, MoonIcon, SunIcon } from "@radix-ui/react-icons";
-import { useState } from "react";
 import * as ToggleGroup from "@radix-ui/react-toggle-group";
+import React, { useState } from 'react';
 
 export function useLocalStorage<T extends Record<string, unknown>>(
   key: string,

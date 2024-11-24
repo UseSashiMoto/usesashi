@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import React from 'react';
 import { DataCardComponent } from './DataCardComponent';
 
 import { BotIcon, UserIcon } from './message-icons';
