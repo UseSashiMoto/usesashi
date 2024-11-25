@@ -1,5 +1,11 @@
 # @sashi/ui
 
+## 3.10.0
+
+### Minor Changes
+
+- b8b2c37: moving sentry breadcrumb
+
 ## 3.9.0
 
 ### Minor Changes
