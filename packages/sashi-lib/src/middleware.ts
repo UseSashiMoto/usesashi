@@ -128,7 +128,7 @@ export const validateRepoRequest = ({ sashiServerUrl, repoSecretKey }: {
                 const secretKey = req.headers[HEADER_REPO_TOKEN];
                 Sentry.addBreadcrumb({
                     category: "validation",
-                    message: `secretKey: ${secretKey}`,
+                    message: `isLocalhost: ${isLocalhost}, isSameDomain: ${isSameDomain}, secretKey: ${secretKey}: repoSecretKey: ${repoSecretKey}`,
                     level: "info",
                 });
                 if (!secretKey || secretKey !== repoSecretKey) {
@@ -137,6 +137,7 @@ export const validateRepoRequest = ({ sashiServerUrl, repoSecretKey }: {
                         message: `Unauthorized request`,
                         level: "error",
                     });
+                    Sentry.captureException(new Error('Unauthorized request'));
                     return res
                         .status(403)
                         .json({ error: 'Unauthorized request' });
