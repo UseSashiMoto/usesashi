@@ -1,5 +1,11 @@
 # sashi-lib
 
+## 3.11.0
+
+### Minor Changes
+
+-   f6f625c: more tracking for validation
+
 ## 3.10.0
 
 ### Minor Changes
