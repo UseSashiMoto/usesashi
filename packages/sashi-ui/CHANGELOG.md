@@ -1,5 +1,11 @@
 # @sashi/ui
 
+## 3.12.0
+
+### Minor Changes
+
+- 64ab877: fix for null origin bug
+
 ## 3.11.0
 
 ### Minor Changes
