@@ -50,7 +50,7 @@ interface MiddlewareOptions {
     repos?: string[]
     sashiServerUrl?: string //where the sashi server is hosted if you can't find it automatically
     apiSecretKey?: string // used to validate requests from and to the hub
-    repoSecretKey?: string // used to upload metadata for a specific repo
+    repoSecretKey?: string // used to upload metadata for a specific repo and used to validate request to the middleware
     hubUrl?: string // hub where all the repos are hosted
     version?: number //current version of your repo
     addStdLib?: boolean // add the standard library to the hub
@@ -74,48 +74,45 @@ export const validateRepoRequest = ({ sashiServerUrl, repoSecretKey }: {
 }) => {
 
     return (req: Request, res: Response, next: NextFunction) => {
-        const origin = req.headers.origin || '';
+        const origin = req.headers.origin;
         let currentUrl = sashiServerUrl ?? req.get('host') ?? '';
-
         try {
-
-            Sentry.addBreadcrumb({
-                category: "validation",
-                message: `origin: ${origin}, currentUrl: ${currentUrl}`,
-                level: "info",
-            });
-            // Parse the origin to get the hostname
-
-            let originUrl: URL | undefined;
-            try {
-                originUrl = new URL(origin);
-            } catch (err) {
-                Sentry.captureException(err);
-                console.error('Invalid origin URL:', err);
-                // Return empty URL if origin is invalid
-                originUrl = new URL('http://localhost');
+            let originHostname = '';
+            if (origin) {
+                try {
+                    const originUrl = new URL(origin);
+                    originHostname = originUrl.hostname;
+                } catch (err) {
+                    Sentry.captureException(err);
+                    console.error('Invalid origin:', err);
+                    // Handle invalid origin
+                    return res.status(403).json({ error: 'Invalid origin' });
+                }
             }
 
-            // Validate currentUrl and default to 'localhost' if invalid
             if (!currentUrl || typeof currentUrl !== 'string') {
                 currentUrl = 'localhost';
             }
 
             let currentUrlObj: URL;
             try {
-                currentUrlObj = new URL(`http://${currentUrl}`); // Ensure currentUrl is treated as a full URL
+                currentUrlObj = new URL(`http://${currentUrl}`);
             } catch (err) {
                 Sentry.captureException(err);
                 console.error('Invalid currentUrl:', err);
-                // Default to localhost if currentUrl is invalid
                 currentUrlObj = new URL('http://localhost');
             }
 
-            // Check if both are localhost or if the origin matches the current domain
+            Sentry.addBreadcrumb({
+                category: "validation",
+                message: `origin: ${origin}, currentUrl: ${currentUrl}`,
+                level: "info",
+            });
+
             const isLocalhost =
-                originUrl?.hostname === 'localhost' &&
+                originHostname === 'localhost' &&
                 currentUrlObj.hostname === 'localhost';
-            const isSameDomain = originUrl?.hostname === currentUrlObj.hostname;
+            const isSameDomain = !origin || originHostname === currentUrlObj.hostname;
 
             Sentry.addBreadcrumb({
                 category: "validation",

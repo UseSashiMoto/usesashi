@@ -272,4 +272,24 @@ describe('validateRepoRequest Middleware', () => {
         expect(response.status).toBe(200);
         expect(response.body).toEqual({ message: 'Middleware passed' });
     });
+
+
+    it('should allow request to proceed when origin is missing', async () => {
+        const response = await request
+            .get('/')
+            .set('x-repo-token', 'test-repo-secret-key');
+
+        expect(response.status).toBe(200);
+        expect(response.body).toEqual({ message: 'Middleware passed' });
+    });
+
+    it('should allow request to proceed when origin is an empty string', async () => {
+        const response = await request
+            .get('/')
+            .set('Origin', '')
+            .set('x-repo-token', 'test-repo-secret-key');
+
+        expect(response.status).toBe(200);
+        expect(response.body).toEqual({ message: 'Middleware passed' });
+    });
 });
