@@ -1,5 +1,11 @@
 # @sashi/client
 
+## 3.9.0
+
+### Minor Changes
+
+-   d81fab8: better debugging for invalid sessions
+
 ## 3.8.0
 
 ### Minor Changes
