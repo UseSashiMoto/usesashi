@@ -85,7 +85,16 @@ export const validateRepoRequest = ({ sashiServerUrl, repoSecretKey }: {
                 level: "info",
             });
             // Parse the origin to get the hostname
-            const originUrl = new URL(origin);
+
+            let originUrl: URL | undefined;
+            try {
+                originUrl = new URL(origin);
+            } catch (err) {
+                Sentry.captureException(err);
+                console.error('Invalid origin URL:', err);
+                // Return empty URL if origin is invalid
+                originUrl = new URL('http://localhost');
+            }
 
             // Validate currentUrl and default to 'localhost' if invalid
             if (!currentUrl || typeof currentUrl !== 'string') {
@@ -104,9 +113,9 @@ export const validateRepoRequest = ({ sashiServerUrl, repoSecretKey }: {
 
             // Check if both are localhost or if the origin matches the current domain
             const isLocalhost =
-                originUrl.hostname === 'localhost' &&
+                originUrl?.hostname === 'localhost' &&
                 currentUrlObj.hostname === 'localhost';
-            const isSameDomain = originUrl.hostname === currentUrlObj.hostname;
+            const isSameDomain = originUrl?.hostname === currentUrlObj.hostname;
 
             Sentry.addBreadcrumb({
                 category: "validation",
