@@ -198,7 +198,7 @@ export const Layout: FC<
           </div>
         </div>
 
-        <div className="bg-white px-4 py-3 dark:bg-[#121212] lg:px-10 lg:py-8">
+        <div className="bg-white  dark:bg-[#121212]">
           <div className="max-w-[1280px]">{children}</div>
         </div>
       </div>
