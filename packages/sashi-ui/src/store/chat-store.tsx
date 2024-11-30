@@ -7,6 +7,10 @@ interface MessageState {
   messages: MessageItem[];
   metadata: Metadata;
   connectedToHub: boolean;
+  apiUrl?: string;
+  sessionToken?: string;
+  setAPIUrl: (apiUrl: string) => void;
+  setSessionToken: (sessionToken: string) => void;
   addMessage: (newmessage: MessageItem) => void;
   setMetadata: (metadata: Metadata) => void;
   setConnectedToHub: (connected: boolean) => void;
@@ -30,6 +34,8 @@ const useAppStore = create<MessageState>()(
         repos: [],
         visualizations: [],
       },
+      setSessionToken: (sessionToken: string) => set({ sessionToken }),
+      setAPIUrl: (apiUrl: string) => set({ apiUrl }),
       setMetadata: (metadata: Metadata) => set({ metadata }),
       addMessage: (newmessage: MessageItem) => {
         let messages = get().messages.slice(0);

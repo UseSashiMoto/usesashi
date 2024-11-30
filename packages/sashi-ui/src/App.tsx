@@ -2,6 +2,7 @@ import axios from 'axios';
 import React, { useEffect, useState } from 'react';
 import type { UserPreferences } from './components/ThemeSwitcher';
 import { HomePage } from './pages/HomePage';
+import useAppStore from './store/chat-store';
 
 type PagesProps = {
   // URL to the API
@@ -12,7 +13,19 @@ type PagesProps = {
   sessionToken: string;
 };
 export const App = ({ apiUrl, basename, sessionToken }: PagesProps) => {
+  const setAPIUrl = useAppStore((state: { setAPIUrl: (apiUrl: string) => void }) => state.setAPIUrl);
+  const setSessionToken = useAppStore(
+    (state: { setSessionToken: (sessionToken: string) => void }) => state.setSessionToken
+  );
   const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    setAPIUrl(apiUrl);
+  }, [apiUrl]);
+
+  useEffect(() => {
+    setSessionToken(sessionToken);
+  }, [sessionToken]);
 
   useEffect(() => {
     console.log('Setting session token', sessionToken);

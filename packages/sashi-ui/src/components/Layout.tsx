@@ -1,55 +1,17 @@
 import { FunctionSwitch } from '@/models/function-switch';
-import { RepoMetadata } from '@/store/models';
+import useAppStore from '@/store/chat-store';
+import { Metadata } from '@/store/models';
+import { HEADER_SESSION_TOKEN } from '@/utils/contants';
 import { DashboardIcon, GitHubLogoIcon } from '@radix-ui/react-icons';
 import * as Toast from '@radix-ui/react-toast';
-import { ChevronDown, ChevronUp, GitBranchIcon } from 'lucide-react';
-import React, { useEffect, useState, type FC, type PropsWithChildren } from 'react';
+import axios from 'axios';
+import { ChevronDown, ChevronUp } from 'lucide-react';
+import React, { useEffect, useMemo, useState, type FC, type PropsWithChildren } from 'react';
 import { Button } from './Button';
 import { ThemeSwitcher } from './ThemeSwitcher';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { ScrollArea } from './ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
-
-// Add this new component
-export function ReposDropdown({ repos }: { repos: { id: string; name: string; url: string }[] }) {
-  const [isOpen, setIsOpen] = useState(false);
-
-  return (
-    <Collapsible open={isOpen} onOpenChange={setIsOpen} className="w-full">
-      <CollapsibleTrigger className="mb-4" asChild>
-        <Button variant="ghost" className="w-full justify-between" aria-expanded={isOpen}>
-          Connected Repositories
-          {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-        </Button>
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <ScrollArea className="h-[300px] w-full rounded-md border p-4">
-          <>
-            {repos.length === 0 && <p className="text-sm text-slate-500">No repositories connected</p>}
-            <ul className="space-y-2">
-              {repos.map((repo) => (
-                <li key={repo.id} className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <GitBranchIcon className="h-4 w-4" />
-                    <span className="text-sm font-medium">{repo.name}</span>
-                  </div>
-                  <a
-                    href={repo.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-blue-500 hover:underline"
-                  >
-                    View
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </>
-        </ScrollArea>
-      </CollapsibleContent>
-    </Collapsible>
-  );
-}
 
 export function FunctionsDropdown({
   functions,
@@ -121,14 +83,36 @@ export function FunctionsDropdown({
   );
 }
 
-export const Layout: FC<
-  {
-    connectedToHub: boolean;
-    functions: FunctionSwitch[];
-    repos: RepoMetadata[];
-    onFunctionSwitch: (id: string) => void;
-  } & PropsWithChildren
-> = ({ children, functions, repos, onFunctionSwitch, connectedToHub }) => {
+export const Layout: FC<{} & PropsWithChildren> = ({ children }) => {
+  const setMetadata = useAppStore((state: { setMetadata: any }) => state.setMetadata);
+  const sessionToken = useAppStore((state) => state.sessionToken);
+  const apiUrl = useAppStore((state) => state.apiUrl);
+  const metadata: Metadata | undefined = useAppStore((state: { metadata: any }) => state.metadata);
+  const connectedToHub: boolean = useAppStore((state: { connectedToHub: any }) => state.connectedToHub);
+
+  const functions: FunctionSwitch[] = useMemo<FunctionSwitch[]>(() => {
+    return (metadata?.functions.map((func) => ({
+      id: func.name,
+      name: func.name,
+      description: func.description,
+      isActive: func.active,
+      repo: '',
+    })) ?? []) satisfies FunctionSwitch[];
+  }, [metadata]);
+  const getMetadata = async () => {
+    const response = await axios.get(`${apiUrl}/metadata`, {
+      headers: {
+        [HEADER_SESSION_TOKEN]: sessionToken,
+      },
+    });
+
+    setMetadata(response.data);
+  };
+  const onFunctionSwitch = (id: string) => {
+    axios.get(`${apiUrl}/functions/${id}/toggle_active`).then(() => {
+      getMetadata();
+    });
+  };
   return (
     <Toast.Provider swipeDirection="right">
       <div className="grid xl:grid-cols-[auto,1fr]">
@@ -176,7 +160,6 @@ export const Layout: FC<
                     {connectedToHub ? 'Connected' : 'Disconnected'}
                   </span>
                 </div>
-                {/*<ReposDropdown repos={repos} /> */}
                 <FunctionsDropdown onFunctionSwitch={onFunctionSwitch} functions={functions} />
                 <div className="h-px w-full bg-slate-100 dark:bg-slate-700" />
                 <div className="w-full space-y-1"></div>

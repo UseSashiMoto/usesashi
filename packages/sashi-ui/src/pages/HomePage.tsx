@@ -1,5 +1,4 @@
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { FunctionSwitch } from '@/models/function-switch';
 import { HEADER_SESSION_TOKEN } from '@/utils/contants';
 import { Label } from '@radix-ui/react-dropdown-menu';
 import { PaperPlaneIcon } from '@radix-ui/react-icons';
@@ -384,30 +383,7 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
   );
 
   return (
-    <Layout
-      connectedToHub={connectedToHub}
-      onFunctionSwitch={(id: string) => {
-        axios.get(`${apiUrl}/functions/${id}/toggle_active`).then(() => {
-          getMetadata();
-        });
-      }}
-      repos={
-        subscribedRepos?.map((repo) => ({
-          id: repo.id,
-          name: repo.name,
-          url: repo.url,
-        })) ?? []
-      }
-      functions={
-        (metadata?.functions.map((func) => ({
-          id: func.name,
-          name: func.name,
-          description: func.description,
-          isActive: func.active,
-          repo: '',
-        })) ?? []) satisfies FunctionSwitch[]
-      }
-    >
+    <Layout>
       <div className="flex flex-row justify-center pb-20 h-dvh bg-white dark:bg-zinc-900">
         <div className="flex flex-col items-center justify-between gap-4">
           <div ref={messagesContainerRef} className="flex flex-col gap-3 h-full w-dvw items-center overflow-y-scroll">
@@ -483,7 +459,7 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
           </form>
         </div>
       </div>
-      <div style={{display: "none"}} data-testid="connected-status">
+      <div style={{ display: 'none' }} data-testid="connected-status">
         {connectedToHub ? 'Connected' : 'Not Connected'}
       </div>
     </Layout>
