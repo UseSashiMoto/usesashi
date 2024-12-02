@@ -73,8 +73,7 @@ app.use(
     createMiddleware({
         openAIKey: process.env.OPENAI_API_KEY || '',
         repos: ["usertwo-sub-to-userone"],
-
-        hubUrl: 'http://localhost:5002',
+        useCloud: true,
         apiSecretKey: 'usertwo-api-token',
         repoSecretKey: 'usertworeposecret',
     })

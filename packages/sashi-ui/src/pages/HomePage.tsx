@@ -11,7 +11,7 @@ import { Message } from 'src/components/MessageComponent';
 import { useScrollToBottom } from 'src/components/use-scroll-to-bottom';
 import { ChatCompletionMessage } from 'src/models/gpt';
 import useAppStore from 'src/store/chat-store';
-import { MessageItem, RepoMetadata, VisualizationContent } from 'src/store/models';
+import { MessageItem, VisualizationContent } from 'src/store/models';
 import { Layout } from '../components/Layout';
 import { PayloadObject, ResultTool } from '../models/payload';
 import { Metadata } from '../store/models';
@@ -73,18 +73,15 @@ export function ConfirmationCard({ confirmationData, onConfirm, onCancel }: Conf
   );
 }
 
-export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToken: string }) => {
+export const HomePage = () => {
   const storedMessages = useAppStore((state: { messages: any }) => state.messages);
 
   const clearMessages = useAppStore((state) => state.clearMessages);
 
   const addMessage = useAppStore((state: { addMessage: any }) => state.addMessage);
 
-  const setMetadata = useAppStore((state: { setMetadata: any }) => state.setMetadata);
   const setConnectedToHub = useAppStore((state: { setConnectedToHub: any }) => state.setConnectedToHub);
   const metadata: Metadata | undefined = useAppStore((state: { metadata: any }) => state.metadata);
-
-  const setSubscribedRepos = useAppStore((state: { setSubscribedRepos: any }) => state.setSubscribedRepos);
 
   const messageRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -99,6 +96,8 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
 
   const [confirmationData, setConfirmationData] = useState<ConfirmationData>();
   const connectedToHub: boolean = useAppStore((state: { connectedToHub: any }) => state.connectedToHub);
+  const apiUrl = useAppStore((state) => state.apiUrl);
+  const sessionToken = useAppStore((state) => state.sessionToken);
 
   useEffect(() => {
     setMounted(true);
@@ -116,7 +115,7 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
         const response = await fetch(`${apiUrl}/check_hub_connection`, {
           method: 'GET',
           headers: {
-            [HEADER_SESSION_TOKEN]: sessionToken,
+            [HEADER_SESSION_TOKEN]: sessionToken ?? '',
           },
         });
         const data = await response.json();
@@ -127,35 +126,6 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
     };
     checkConnectedToHub();
   }, [apiUrl, sessionToken]);
-
-  const getMetadata = async () => {
-    const response = await axios.get(`${apiUrl}/metadata`, {
-      headers: {
-        [HEADER_SESSION_TOKEN]: sessionToken,
-      },
-    });
-
-    setMetadata(response.data);
-  };
-  useEffect(() => {
-    getMetadata();
-  }, []);
-
-  const getSubscribedRepos = async () => {
-    const response = await axios.get(`${apiUrl}/repos`, {
-      headers: {
-        [HEADER_SESSION_TOKEN]: sessionToken,
-      },
-    });
-    return response.data.repos;
-  };
-
-  useEffect(() => {
-    getSubscribedRepos().then((repos) => {
-      setSubscribedRepos(repos);
-      console.log(repos);
-    });
-  }, []);
 
   const prepareMessageForPayload = (messages: MessageItem[]) => {
     return messages.map((message) => ({
@@ -377,10 +347,6 @@ export const HomePage = ({ apiUrl, sessionToken }: { apiUrl: string; sessionToke
       }, 100);
     }
   }
-
-  const subscribedRepos: RepoMetadata[] | undefined = useAppStore(
-    (state: { subscribedRepos: any }) => state.subscribedRepos
-  );
 
   return (
     <Layout>

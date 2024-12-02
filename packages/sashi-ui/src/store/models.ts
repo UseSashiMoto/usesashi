@@ -30,6 +30,7 @@ export type VisualizationMetadata = {
 };
 
 export type Metadata = {
+  hubUrl?: string
   name: string;
   description: string;
   functions: FunctionMetadata[];

@@ -9,8 +9,10 @@ interface MessageState {
   connectedToHub: boolean;
   apiUrl?: string;
   sessionToken?: string;
+  hubUrl?: string;
   setAPIUrl: (apiUrl: string) => void;
   setSessionToken: (sessionToken: string) => void;
+  setHubUrl: (hubUrl: string) => void;
   addMessage: (newmessage: MessageItem) => void;
   setMetadata: (metadata: Metadata) => void;
   setConnectedToHub: (connected: boolean) => void;
@@ -24,6 +26,7 @@ const useAppStore = create<MessageState>()(
     (set, get) => ({
       connectedToHub: false,
       setConnectedToHub: (connected: boolean) => set({ connectedToHub: connected }),
+      setHubUrl: (hubUrl: string) => set({ hubUrl }),
       subscribedRepos: [],
       setSubscribedRepos: (repos: RepoMetadata[]) => set({ subscribedRepos: repos }),
       messages: [],
@@ -32,7 +35,7 @@ const useAppStore = create<MessageState>()(
         description: '',
         functions: [],
         repos: [],
-        visualizations: [],
+        visualizations: []
       },
       setSessionToken: (sessionToken: string) => set({ sessionToken }),
       setAPIUrl: (apiUrl: string) => set({ apiUrl }),

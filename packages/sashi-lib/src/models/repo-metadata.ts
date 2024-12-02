@@ -13,5 +13,6 @@ export interface RepoMetadata {
 }
 
 export interface MetaData {
+    hubUrl: string
     functions: RepoFunctionMetadata[]
 }

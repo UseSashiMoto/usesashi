@@ -274,6 +274,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
     router.get('/metadata', validateRepoRequest({ sashiServerUrl, repoSecretKey }), asyncHandler(async (_req, res, next) => {
         const metadata: MetaData = {
+            hubUrl: hubUrl,
             functions: Array.from(getFunctionRegistry().values()).map(
                 (func) => {
                     const functionAttribute = getFunctionAttributes().get(

@@ -1,18 +1,20 @@
 import axios from 'axios';
 import React, { useEffect, useState } from 'react';
+import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import type { UserPreferences } from './components/ThemeSwitcher';
 import { HomePage } from './pages/HomePage';
+import { SettingPage } from './pages/SettingPage';
 import useAppStore from './store/chat-store';
 
 type PagesProps = {
   // URL to the API
   apiUrl: string;
-  // Base path for the app
-  basename: string;
+
   // Session token
   sessionToken: string;
 };
-export const App = ({ apiUrl, basename, sessionToken }: PagesProps) => {
+export const App = ({ apiUrl, sessionToken }: PagesProps) => {
+  const pathName = apiUrl.replace(/^https?:\/\/[^\/]+/, '').replace(/^[^\/]+/, '');
   const setAPIUrl = useAppStore((state: { setAPIUrl: (apiUrl: string) => void }) => state.setAPIUrl);
   const setSessionToken = useAppStore(
     (state: { setSessionToken: (sessionToken: string) => void }) => state.setSessionToken
@@ -76,9 +78,25 @@ export const App = ({ apiUrl, basename, sessionToken }: PagesProps) => {
     return null;
   }
 
+  const router = createBrowserRouter(
+    [
+      {
+        path: '/',
+        element: <HomePage />,
+      },
+      {
+        path: '/setting',
+        element: <SettingPage />,
+      },
+    ],
+    {
+      basename: `${pathName}/bot`,
+    }
+  );
+
   return (
     <>
-      <HomePage sessionToken={sessionToken} apiUrl={apiUrl} />
+      <RouterProvider router={router} />
     </>
   );
 };

@@ -2,11 +2,12 @@ import { FunctionSwitch } from '@/models/function-switch';
 import useAppStore from '@/store/chat-store';
 import { Metadata } from '@/store/models';
 import { HEADER_SESSION_TOKEN } from '@/utils/contants';
-import { DashboardIcon, GitHubLogoIcon } from '@radix-ui/react-icons';
+import { DashboardIcon, GearIcon, GitHubLogoIcon } from '@radix-ui/react-icons';
 import * as Toast from '@radix-ui/react-toast';
 import axios from 'axios';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, HomeIcon } from 'lucide-react';
 import React, { useEffect, useMemo, useState, type FC, type PropsWithChildren } from 'react';
+import { Link } from 'react-router-dom';
 import { Button } from './Button';
 import { ThemeSwitcher } from './ThemeSwitcher';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
@@ -90,6 +91,7 @@ export const Layout: FC<{} & PropsWithChildren> = ({ children }) => {
   const metadata: Metadata | undefined = useAppStore((state: { metadata: any }) => state.metadata);
   const connectedToHub: boolean = useAppStore((state: { connectedToHub: any }) => state.connectedToHub);
 
+  const setHubUrl = useAppStore((state) => state.setHubUrl);
   const functions: FunctionSwitch[] = useMemo<FunctionSwitch[]>(() => {
     return (metadata?.functions.map((func) => ({
       id: func.name,
@@ -99,6 +101,13 @@ export const Layout: FC<{} & PropsWithChildren> = ({ children }) => {
       repo: '',
     })) ?? []) satisfies FunctionSwitch[];
   }, [metadata]);
+
+  useEffect(() => {
+    if (metadata && metadata.hubUrl) {
+      setHubUrl(metadata.hubUrl);
+    }
+  }, [metadata]);
+
   const getMetadata = async () => {
     const response = await axios.get(`${apiUrl}/metadata`, {
       headers: {
@@ -108,6 +117,10 @@ export const Layout: FC<{} & PropsWithChildren> = ({ children }) => {
 
     setMetadata(response.data);
   };
+  useEffect(() => {
+    getMetadata();
+  }, [apiUrl, sessionToken]);
+
   const onFunctionSwitch = (id: string) => {
     axios.get(`${apiUrl}/functions/${id}/toggle_active`).then(() => {
       getMetadata();
@@ -167,14 +180,28 @@ export const Layout: FC<{} & PropsWithChildren> = ({ children }) => {
             </div>
 
             <div className="flex w-full items-center justify-between">
-              <a
-                href="https://github.com/radzell/sashi"
-                target="_blank"
-                rel="noreferrer"
-                className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-100 text-slate-900 shadow-sm transition duration-150 ease-in-out hover:bg-slate-200 active:bg-slate-300 dark:bg-slate-600 dark:text-slate-50 dark:hover:bg-slate-500"
-              >
-                <GitHubLogoIcon />
-              </a>
+              <div className="flex flex-row space-x-2">
+                <Link
+                  to="/"
+                  className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-100 text-slate-900 shadow-sm transition duration-150 ease-in-out hover:bg-slate-200 active:bg-slate-300 dark:bg-slate-600 dark:text-slate-50 dark:hover:bg-slate-500"
+                >
+                  <HomeIcon style={{ width: '12px', height: '12px' }} />
+                </Link>
+                <a
+                  href="https://github.com/radzell/sashi"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-100 text-slate-900 shadow-sm transition duration-150 ease-in-out hover:bg-slate-200 active:bg-slate-300 dark:bg-slate-600 dark:text-slate-50 dark:hover:bg-slate-500"
+                >
+                  <GitHubLogoIcon />
+                </a>
+                <Link
+                  to="setting"
+                  className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-100 text-slate-900 shadow-sm transition duration-150 ease-in-out hover:bg-slate-200 active:bg-slate-300 dark:bg-slate-600 dark:text-slate-50 dark:hover:bg-slate-500"
+                >
+                  <GearIcon />
+                </Link>
+              </div>
 
               <ThemeSwitcher />
             </div>
