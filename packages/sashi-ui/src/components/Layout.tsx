@@ -7,7 +7,7 @@ import * as Toast from '@radix-ui/react-toast';
 import axios from 'axios';
 import { ChevronDown, ChevronUp, HomeIcon } from 'lucide-react';
 import React, { useEffect, useMemo, useState, type FC, type PropsWithChildren } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Button } from './Button';
 import { ThemeSwitcher } from './ThemeSwitcher';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
@@ -90,6 +90,7 @@ export const Layout: FC<{} & PropsWithChildren> = ({ children }) => {
   const apiUrl = useAppStore((state) => state.apiUrl);
   const metadata: Metadata | undefined = useAppStore((state: { metadata: any }) => state.metadata);
   const connectedToHub: boolean = useAppStore((state: { connectedToHub: any }) => state.connectedToHub);
+  const location = useLocation();
 
   const setHubUrl = useAppStore((state) => state.setHubUrl);
   const hubUrl = useAppStore((state) => state.hubUrl);
@@ -200,12 +201,20 @@ export const Layout: FC<{} & PropsWithChildren> = ({ children }) => {
                 >
                   <GitHubLogoIcon />
                 </a>
-                <Link
-                  to="setting"
-                  className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-100 text-slate-900 shadow-sm transition duration-150 ease-in-out hover:bg-slate-200 active:bg-slate-300 dark:bg-slate-600 dark:text-slate-50 dark:hover:bg-slate-500"
-                >
-                  <GearIcon />
-                </Link>
+                {location.pathname === '/setting' ? (
+                  <span
+                    className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-200 text-slate-900 shadow-sm dark:bg-slate-500 dark:text-slate-50"
+                  >
+                    <GearIcon />
+                  </span>
+                ) : (
+                  <Link
+                    to="setting"
+                    className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-100 text-slate-900 shadow-sm transition duration-150 ease-in-out hover:bg-slate-200 active:bg-slate-300 dark:bg-slate-600 dark:text-slate-50 dark:hover:bg-slate-500"
+                  >
+                    <GearIcon />
+                  </Link>
+                )}
               </div>
 
               <ThemeSwitcher />
