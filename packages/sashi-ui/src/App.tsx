@@ -1,38 +1,85 @@
 import axios from 'axios';
 import React, { useEffect, useState } from 'react';
+import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import type { UserPreferences } from './components/ThemeSwitcher';
+import { Toaster } from './components/ui/toaster';
 import { HomePage } from './pages/HomePage';
+import { SettingPage } from './pages/SettingPage';
+import useAppStore from './store/chat-store';
 
 type PagesProps = {
   // URL to the API
   apiUrl: string;
-  // Base path for the app
-  basename: string;
+
   // Session token
   sessionToken: string;
 };
-export const App = ({ apiUrl, basename, sessionToken }: PagesProps) => {
+export const App = ({ apiUrl: oldApiUrl, sessionToken: initialSessionToken }: PagesProps) => {
+  const pathName = oldApiUrl.replace(/^https?:\/\/[^\/]+/, '').replace(/^[^\/]+/, '');
+  const apiUrl = useAppStore((state) => state.apiUrl);
+  const setAPIUrl = useAppStore((state) => state.setAPIUrl);
+  const sessionToken = useAppStore((state) => state.sessionToken);
+  const setSessionToken = useAppStore((state) => state.setSessionToken);
+  const rehydrated = useAppStore((state) => state.rehydrated);
   const [ready, setReady] = useState(false);
+
+  const debugMode = process.env.NODE_ENV !== 'production';
+
+  useEffect(() => {
+    if (rehydrated) {
+      if (!apiUrl && oldApiUrl) {
+        setAPIUrl(oldApiUrl);
+      }
+      if (!sessionToken && initialSessionToken) {
+        setSessionToken(initialSessionToken);
+      }
+      setReady(true);
+    }
+  }, [rehydrated]);
 
   useEffect(() => {
     console.log('Setting session token', sessionToken);
 
-    // Add the interceptor and store its ID to remove it later
-    const interceptor = axios.interceptors.request.use(
+    // Add the request interceptor
+    const requestInterceptor = axios.interceptors.request.use(
       (config) => {
         // Set headers for every request made within this middleware
         config.headers['x-sashi-session-token'] = sessionToken;
         return config;
       },
       (error) => {
-        // Handle the error if the request fails
         return Promise.reject(error);
       }
     );
 
-    // Cleanup: Remove the interceptor when the component unmounts or sessionToken changes
+    // Add the response interceptor
+    const responseInterceptor = axios.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        // Handle errors globally
+        console.error('Axios request failed:', error);
+
+        if (debugMode) {
+          // Show toast notification in debug mode using shadcn toast
+          const errorMessage = error.response?.data?.message || error.message || 'An error occurred';
+          import('@/hooks/use-toast').then(({ toast }) => {
+            toast({
+              variant: 'destructive',
+              title: 'Error',
+              description: errorMessage,
+            });
+          });
+        }
+
+        // Return a rejected promise to handle errors locally if needed
+        return Promise.reject(error);
+      }
+    );
+
+    // Cleanup: Remove the interceptors when the component unmounts
     return () => {
-      axios.interceptors.request.eject(interceptor);
+      axios.interceptors.request.eject(requestInterceptor);
+      axios.interceptors.response.eject(responseInterceptor);
     };
   }, [sessionToken]);
 
@@ -63,9 +110,26 @@ export const App = ({ apiUrl, basename, sessionToken }: PagesProps) => {
     return null;
   }
 
+  const router = createBrowserRouter(
+    [
+      {
+        path: '/',
+        element: <HomePage />,
+      },
+      {
+        path: '/setting',
+        element: <SettingPage />,
+      },
+    ],
+    {
+      basename: `${pathName}/bot`,
+    }
+  );
+
   return (
     <>
-      <HomePage sessionToken={sessionToken} apiUrl={apiUrl} />
+      <RouterProvider router={router} />
+      <Toaster />
     </>
   );
 };

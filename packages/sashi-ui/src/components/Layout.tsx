@@ -1,55 +1,18 @@
 import { FunctionSwitch } from '@/models/function-switch';
-import { RepoMetadata } from '@/store/models';
-import { DashboardIcon, GitHubLogoIcon } from '@radix-ui/react-icons';
+import useAppStore from '@/store/chat-store';
+import { Metadata } from '@/store/models';
+import { HEADER_SESSION_TOKEN } from '@/utils/contants';
+import { DashboardIcon, GearIcon, GitHubLogoIcon } from '@radix-ui/react-icons';
 import * as Toast from '@radix-ui/react-toast';
-import { ChevronDown, ChevronUp, GitBranchIcon } from 'lucide-react';
-import React, { useEffect, useState, type FC, type PropsWithChildren } from 'react';
+import axios from 'axios';
+import { ChevronDown, ChevronUp, HomeIcon } from 'lucide-react';
+import React, { useEffect, useMemo, useState, type FC, type PropsWithChildren } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { Button } from './Button';
 import { ThemeSwitcher } from './ThemeSwitcher';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { ScrollArea } from './ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
-
-// Add this new component
-export function ReposDropdown({ repos }: { repos: { id: string; name: string; url: string }[] }) {
-  const [isOpen, setIsOpen] = useState(false);
-
-  return (
-    <Collapsible open={isOpen} onOpenChange={setIsOpen} className="w-full">
-      <CollapsibleTrigger className="mb-4" asChild>
-        <Button variant="ghost" className="w-full justify-between" aria-expanded={isOpen}>
-          Connected Repositories
-          {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-        </Button>
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <ScrollArea className="h-[300px] w-full rounded-md border p-4">
-          <>
-            {repos.length === 0 && <p className="text-sm text-slate-500">No repositories connected</p>}
-            <ul className="space-y-2">
-              {repos.map((repo) => (
-                <li key={repo.id} className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <GitBranchIcon className="h-4 w-4" />
-                    <span className="text-sm font-medium">{repo.name}</span>
-                  </div>
-                  <a
-                    href={repo.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-blue-500 hover:underline"
-                  >
-                    View
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </>
-        </ScrollArea>
-      </CollapsibleContent>
-    </Collapsible>
-  );
-}
 
 export function FunctionsDropdown({
   functions,
@@ -121,14 +84,54 @@ export function FunctionsDropdown({
   );
 }
 
-export const Layout: FC<
-  {
-    connectedToHub: boolean;
-    functions: FunctionSwitch[];
-    repos: RepoMetadata[];
-    onFunctionSwitch: (id: string) => void;
-  } & PropsWithChildren
-> = ({ children, functions, repos, onFunctionSwitch, connectedToHub }) => {
+export const Layout: FC<{} & PropsWithChildren> = ({ children }) => {
+  const setMetadata = useAppStore((state: { setMetadata: any }) => state.setMetadata);
+  const sessionToken = useAppStore((state) => state.sessionToken);
+  const apiUrl = useAppStore((state) => state.apiUrl);
+  const metadata: Metadata | undefined = useAppStore((state: { metadata: any }) => state.metadata);
+  const connectedToHub: boolean = useAppStore((state: { connectedToHub: any }) => state.connectedToHub);
+  const location = useLocation();
+
+  const setHubUrl = useAppStore((state) => state.setHubUrl);
+  const hubUrl = useAppStore((state) => state.hubUrl);
+  const functions: FunctionSwitch[] = useMemo<FunctionSwitch[]>(() => {
+    return (metadata?.functions.map((func) => ({
+      id: func.name,
+      name: func.name,
+      description: func.description,
+      isActive: func.active,
+      repo: '',
+    })) ?? []) satisfies FunctionSwitch[];
+  }, [metadata]);
+
+  useEffect(() => {
+    if (metadata && metadata.hubUrl && !hubUrl) {
+      setHubUrl(metadata.hubUrl);
+    }
+  }, [metadata]);
+
+  const getMetadata = async () => {
+    try {
+      const response = await axios.get(`${apiUrl}/metadata`, {
+        headers: {
+          [HEADER_SESSION_TOKEN]: sessionToken,
+        },
+      });
+
+      setMetadata(response.data);
+    } catch (e) {
+      console.error('Error getting metadata', e);
+    }
+  };
+  useEffect(() => {
+    getMetadata();
+  }, [apiUrl, sessionToken]);
+
+  const onFunctionSwitch = (id: string) => {
+    axios.get(`${apiUrl}/functions/${id}/toggle_active`).then(() => {
+      getMetadata();
+    });
+  };
   return (
     <Toast.Provider swipeDirection="right">
       <div className="grid xl:grid-cols-[auto,1fr]">
@@ -176,7 +179,6 @@ export const Layout: FC<
                     {connectedToHub ? 'Connected' : 'Disconnected'}
                   </span>
                 </div>
-                {/*<ReposDropdown repos={repos} /> */}
                 <FunctionsDropdown onFunctionSwitch={onFunctionSwitch} functions={functions} />
                 <div className="h-px w-full bg-slate-100 dark:bg-slate-700" />
                 <div className="w-full space-y-1"></div>
@@ -184,21 +186,43 @@ export const Layout: FC<
             </div>
 
             <div className="flex w-full items-center justify-between">
-              <a
-                href="https://github.com/radzell/sashi"
-                target="_blank"
-                rel="noreferrer"
-                className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-100 text-slate-900 shadow-sm transition duration-150 ease-in-out hover:bg-slate-200 active:bg-slate-300 dark:bg-slate-600 dark:text-slate-50 dark:hover:bg-slate-500"
-              >
-                <GitHubLogoIcon />
-              </a>
+              <div className="flex flex-row space-x-2">
+                <Link
+                  to="/"
+                  className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-100 text-slate-900 shadow-sm transition duration-150 ease-in-out hover:bg-slate-200 active:bg-slate-300 dark:bg-slate-600 dark:text-slate-50 dark:hover:bg-slate-500"
+                >
+                  <HomeIcon style={{ width: '12px', height: '12px' }} />
+                </Link>
+                <a
+                  href="https://github.com/radzell/sashi"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-100 text-slate-900 shadow-sm transition duration-150 ease-in-out hover:bg-slate-200 active:bg-slate-300 dark:bg-slate-600 dark:text-slate-50 dark:hover:bg-slate-500"
+                >
+                  <GitHubLogoIcon />
+                </a>
+                {location.pathname === '/setting' ? (
+                  <span
+                    className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-200 text-slate-900 shadow-sm dark:bg-slate-500 dark:text-slate-50"
+                  >
+                    <GearIcon />
+                  </span>
+                ) : (
+                  <Link
+                    to="setting"
+                    className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-100 text-slate-900 shadow-sm transition duration-150 ease-in-out hover:bg-slate-200 active:bg-slate-300 dark:bg-slate-600 dark:text-slate-50 dark:hover:bg-slate-500"
+                  >
+                    <GearIcon />
+                  </Link>
+                )}
+              </div>
 
               <ThemeSwitcher />
             </div>
           </div>
         </div>
 
-        <div className="bg-white px-4 py-3 dark:bg-[#121212] lg:px-10 lg:py-8">
+        <div className="bg-white  dark:bg-[#121212]">
           <div className="max-w-[1280px]">{children}</div>
         </div>
       </div>
