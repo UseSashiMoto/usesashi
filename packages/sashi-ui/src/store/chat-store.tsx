@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { MessageItem, Metadata, RepoMetadata } from './models';
-export const APP_STORAGE_KEY = 'openai-api-function-call-sample-storage';
+export const APP_STORAGE_KEY = 'sashi-state-storage';
 
 interface MessageState {
   messages: MessageItem[];
@@ -10,6 +10,7 @@ interface MessageState {
   apiUrl?: string;
   sessionToken?: string;
   hubUrl?: string;
+  rehydrated: boolean;
   setAPIUrl: (apiUrl: string) => void;
   setSessionToken: (sessionToken: string) => void;
   setHubUrl: (hubUrl: string) => void;
@@ -19,27 +20,38 @@ interface MessageState {
   clearMessages: () => void;
   subscribedRepos: RepoMetadata[];
   setSubscribedRepos: (repos: RepoMetadata[]) => void;
+  setRehydrated: () => void;
 }
 
 const useAppStore = create<MessageState>()(
   persist(
     (set, get) => ({
       connectedToHub: false,
+      apiUrl: undefined,
+      sessionToken: undefined,
+      hubUrl: undefined,
       setConnectedToHub: (connected: boolean) => set({ connectedToHub: connected }),
       setHubUrl: (hubUrl: string) => set({ hubUrl }),
       subscribedRepos: [],
       setSubscribedRepos: (repos: RepoMetadata[]) => set({ subscribedRepos: repos }),
+      setRehydrated: () => set({ rehydrated: true }),
+
       messages: [],
+      rehydrated: false,
       metadata: {
         name: '',
         description: '',
         functions: [],
         repos: [],
-        visualizations: []
+        visualizations: [],
       },
       setSessionToken: (sessionToken: string) => set({ sessionToken }),
-      setAPIUrl: (apiUrl: string) => set({ apiUrl }),
+      setAPIUrl: (apiUrl: string) => {
+        console.log('setAPIUrl', apiUrl);
+        set({ apiUrl });
+      },
       setMetadata: (metadata: Metadata) => set({ metadata }),
+
       addMessage: (newmessage: MessageItem) => {
         let messages = get().messages.slice(0);
         messages.push(newmessage);
@@ -54,6 +66,14 @@ const useAppStore = create<MessageState>()(
       name: APP_STORAGE_KEY,
       storage: createJSONStorage(() => localStorage),
       version: 1,
+      // Add onRehydrateStorage callback
+      onRehydrateStorage: () => (state, error) => {
+        if (error) {
+          console.error('Error during rehydration', error);
+        } else {
+          state?.setRehydrated();
+        }
+      },
     }
   )
 );

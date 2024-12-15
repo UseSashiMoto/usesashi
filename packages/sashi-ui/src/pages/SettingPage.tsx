@@ -3,6 +3,7 @@ import { Layout } from '@/components/Layout';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useToast } from '@/hooks/use-toast';
 import useAppStore from '@/store/chat-store';
 import React, { FormEvent, useEffect, useState } from 'react';
 
@@ -15,12 +16,17 @@ export const SettingPage = () => {
 
   const [tempHubUrl, setTempHubUrl] = useState(hubUrl);
   const [tempApiUrl, setTempApiUrl] = useState(apiUrl);
+  const { toast } = useToast();
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     console.log('Form submitted with values:', { tempApiUrl, tempHubUrl });
     if (tempHubUrl) setHubUrl(tempHubUrl);
     if (tempApiUrl) setApiUrl(tempApiUrl);
+    toast({
+      title: 'Settings updated',
+      description: 'Your settings have been updated successfully',
+    });
   };
 
   useEffect(() => {

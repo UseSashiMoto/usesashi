@@ -92,6 +92,7 @@ export const Layout: FC<{} & PropsWithChildren> = ({ children }) => {
   const connectedToHub: boolean = useAppStore((state: { connectedToHub: any }) => state.connectedToHub);
 
   const setHubUrl = useAppStore((state) => state.setHubUrl);
+  const hubUrl = useAppStore((state) => state.hubUrl);
   const functions: FunctionSwitch[] = useMemo<FunctionSwitch[]>(() => {
     return (metadata?.functions.map((func) => ({
       id: func.name,
@@ -103,19 +104,23 @@ export const Layout: FC<{} & PropsWithChildren> = ({ children }) => {
   }, [metadata]);
 
   useEffect(() => {
-    if (metadata && metadata.hubUrl) {
+    if (metadata && metadata.hubUrl && !hubUrl) {
       setHubUrl(metadata.hubUrl);
     }
   }, [metadata]);
 
   const getMetadata = async () => {
-    const response = await axios.get(`${apiUrl}/metadata`, {
-      headers: {
-        [HEADER_SESSION_TOKEN]: sessionToken,
-      },
-    });
+    try {
+      const response = await axios.get(`${apiUrl}/metadata`, {
+        headers: {
+          [HEADER_SESSION_TOKEN]: sessionToken,
+        },
+      });
 
-    setMetadata(response.data);
+      setMetadata(response.data);
+    } catch (e) {
+      console.error('Error getting metadata', e);
+    }
   };
   useEffect(() => {
     getMetadata();

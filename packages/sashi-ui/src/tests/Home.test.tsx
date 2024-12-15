@@ -62,7 +62,7 @@ describe('HomePage', () => {
       .mockResolvedValueOnce({ data: { functions: [] } }) // metadata call
       .mockResolvedValueOnce({ data: { repos: [] } }); // repos call
 
-    render(<HomePage apiUrl={mockApiUrl} sessionToken={mockSessionToken} />);
+    render(<HomePage />);
 
     const statusElement = await screen.findByTestId('connected-status');
 
@@ -95,7 +95,7 @@ describe('HomePage', () => {
       .mockResolvedValueOnce({ data: { functions: [] } }) // metadata call
       .mockResolvedValueOnce({ data: { repos: [] } }); // repos call
 
-    render(<HomePage apiUrl={mockApiUrl} sessionToken={mockSessionToken} />);
+    render(<HomePage />);
 
     // Optionally debug the rendered component
     // screen.debug();
