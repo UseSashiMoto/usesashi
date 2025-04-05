@@ -13,7 +13,9 @@ import { ChatCompletionMessage } from 'src/models/gpt';
 import useAppStore from 'src/store/chat-store';
 import { MessageItem, VisualizationContent } from 'src/store/models';
 import { Layout } from '../components/Layout';
+import { WorkflowPreview } from '../components/WorkflowPreview';
 import { PayloadObject, ResultTool } from '../models/payload';
+import { Workflow } from '../models/workflow';
 import { Metadata } from '../store/models';
 
 function getUniqueId() {
@@ -98,6 +100,9 @@ export const HomePage = () => {
   const connectedToHub: boolean = useAppStore((state: { connectedToHub: any }) => state.connectedToHub);
   const apiUrl = useAppStore((state) => state.apiUrl);
   const sessionToken = useAppStore((state) => state.sessionToken);
+
+  const [workflowPreview, setWorkflowPreview] = useState<Workflow | null>(null);
+  const [showWorkflowPreview, setShowWorkflowPreview] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -348,6 +353,64 @@ export const HomePage = () => {
     }
   }
 
+  const handleExecuteWorkflow = async () => {
+    if (!workflowPreview) return;
+
+    setLoading(true);
+    setShowWorkflowPreview(false);
+
+    // Execute each step in the workflow
+    for (const step of workflowPreview.steps) {
+      const newAssistantMessage: MessageItem = {
+        id: getUniqueId(),
+        created_at: new Date().toISOString(),
+        role: 'assistant',
+        content: `Executing step: ${step.name}`,
+      };
+      setMessageItems((prev) => [...prev, newAssistantMessage]);
+      addMessage(newAssistantMessage);
+
+      // Execute the function
+      const result = await callFunctionFromRegistryFromObject(step.functionName, step.inputs || {});
+
+      // Show the result
+      const resultMessage: MessageItem = {
+        id: getUniqueId(),
+        created_at: new Date().toISOString(),
+        role: 'assistant',
+        content: `Result from ${step.name}: ${JSON.stringify(result)}`,
+      };
+      setMessageItems((prev) => [...prev, resultMessage]);
+      addMessage(resultMessage);
+    }
+
+    setLoading(false);
+    setWorkflowPreview(null);
+  };
+
+  const handleCreateWorkflowUI = async () => {
+    if (!workflowPreview) return;
+
+    // Here you would implement the logic to create a permanent UI
+    // This could involve:
+    // 1. Saving the workflow to a database
+    // 2. Generating a new page/route for the workflow
+    // 3. Creating a form based on the workflow inputs
+    // 4. Setting up the execution logic
+
+    const newAssistantMessage: MessageItem = {
+      id: getUniqueId(),
+      created_at: new Date().toISOString(),
+      role: 'assistant',
+      content: `Creating permanent UI for workflow: ${workflowPreview.name}`,
+    };
+    setMessageItems((prev) => [...prev, newAssistantMessage]);
+    addMessage(newAssistantMessage);
+
+    setShowWorkflowPreview(false);
+    setWorkflowPreview(null);
+  };
+
   return (
     <Layout>
       <div className="flex flex-row justify-center pb-20 h-dvh bg-white dark:bg-zinc-900">
@@ -385,6 +448,14 @@ export const HomePage = () => {
             ))}
 
             {loading && <Message role="assistant" isThinking={true} />}
+
+            {showWorkflowPreview && workflowPreview && (
+              <WorkflowPreview
+                steps={workflowPreview.steps}
+                onExecute={handleExecuteWorkflow}
+                onCreateUI={handleCreateWorkflowUI}
+              />
+            )}
 
             {!!confirmationData && (
               <ConfirmationCard
@@ -431,3 +502,7 @@ export const HomePage = () => {
     </Layout>
   );
 };
+function callFunctionFromRegistryFromObject(functionName: string, arg1: Record<string, any>) {
+  throw new Error('Function not implemented.');
+}
+
