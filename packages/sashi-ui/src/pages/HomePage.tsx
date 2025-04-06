@@ -2,6 +2,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { HEADER_SESSION_TOKEN } from '@/utils/contants';
 import { Label } from '@radix-ui/react-dropdown-menu';
 import { PaperPlaneIcon } from '@radix-ui/react-icons';
+import { AIFunction, callFunctionFromRegistryFromObject, getFunctionRegistry } from '@sashimo/lib';
 import axios from 'axios';
 import { motion } from 'framer-motion';
 import { X } from 'lucide-react';
@@ -75,6 +76,14 @@ export function ConfirmationCard({ confirmationData, onConfirm, onCancel }: Conf
   );
 }
 
+interface ChatResponse {
+  output?: {
+    content?: string;
+    tool_calls?: any[];
+  };
+  visualization?: any[];
+}
+
 export const HomePage = () => {
   const storedMessages = useAppStore((state: { messages: any }) => state.messages);
 
@@ -103,6 +112,7 @@ export const HomePage = () => {
 
   const [workflowPreview, setWorkflowPreview] = useState<Workflow | null>(null);
   const [showWorkflowPreview, setShowWorkflowPreview] = useState(false);
+  const [isCreatingWorkflow, setIsCreatingWorkflow] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -165,6 +175,162 @@ export const HomePage = () => {
     clearMessages();
   };
 
+  const handleCreateWorkflow = async (workflowDescription: string) => {
+    setIsCreatingWorkflow(true);
+    try {
+      // Get available functions from the registry
+      const availableFunctions = Array.from(getFunctionRegistry().values()) as AIFunction[];
+      
+      // Create a prompt to generate workflow steps
+      const prompt = `Create a workflow based on this description: "${workflowDescription}"
+      Available functions: ${availableFunctions.map(f => f.getName()).join(', ')}
+      Return a JSON object with steps that use these functions.`;
+
+      // Add the prompt as a user message
+      const newUserMessage: MessageItem = {
+        id: getUniqueId(),
+        created_at: new Date().toISOString(),
+        role: 'user',
+        content: prompt
+      };
+      setMessageItems((prev) => [...prev, newUserMessage]);
+      addMessage(newUserMessage);
+
+      // Process the chat and wait for the response
+      await processChat({ text: prompt });
+
+      // The response will be added to messageItems by processChat
+      // We need to wait for the last assistant message
+      const lastMessage = messageItems[messageItems.length - 1];
+      if (lastMessage?.role === 'assistant' && typeof lastMessage.content === 'string') {
+        try {
+          const workflowData = JSON.parse(lastMessage.content);
+          const workflow: Workflow = {
+            id: getUniqueId(),
+            name: workflowDescription,
+            description: "Generated workflow",
+            steps: workflowData.steps.map((step: any) => ({
+              name: step.name,
+              description: step.description,
+              functionName: step.functionName,
+              inputs: step.inputs || {},
+              outputs: step.outputs || {}
+            })),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          
+          setWorkflowPreview(workflow);
+          setShowWorkflowPreview(true);
+        } catch (e) {
+          console.error('Failed to parse workflow:', e);
+          addMessage({
+            id: getUniqueId(),
+            created_at: new Date().toISOString(),
+            role: 'assistant',
+            content: 'Failed to create workflow. Please try again with a clearer description.'
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error creating workflow:', error);
+      addMessage({
+        id: getUniqueId(),
+        created_at: new Date().toISOString(),
+        role: 'assistant',
+        content: 'An error occurred while creating the workflow. Please try again.'
+      });
+    } finally {
+      setIsCreatingWorkflow(false);
+    }
+  };
+
+  const handleExecuteWorkflow = async () => {
+    if (!workflowPreview) return;
+
+    setLoading(true);
+    setShowWorkflowPreview(false);
+
+    try {
+      // Execute each step in the workflow
+      for (const step of workflowPreview.steps) {
+        const newAssistantMessage: MessageItem = {
+          id: getUniqueId(),
+          created_at: new Date().toISOString(),
+          role: 'assistant',
+          content: `Executing step: ${step.name}`
+        };
+        setMessageItems((prev) => [...prev, newAssistantMessage]);
+        addMessage(newAssistantMessage);
+
+        // Execute the function
+        const result = await callFunctionFromRegistryFromObject(step.functionName, step.inputs || {});
+
+        // Show the result
+        const resultMessage: MessageItem = {
+          id: getUniqueId(),
+          created_at: new Date().toISOString(),
+          role: 'assistant',
+          content: `Result from ${step.name}: ${JSON.stringify(result)}`
+        };
+        setMessageItems((prev) => [...prev, resultMessage]);
+        addMessage(resultMessage);
+      }
+    } catch (error) {
+      console.error('Error executing workflow:', error);
+      addMessage({
+        id: getUniqueId(),
+        created_at: new Date().toISOString(),
+        role: 'assistant',
+        content: 'An error occurred while executing the workflow.'
+      });
+    } finally {
+      setLoading(false);
+      setWorkflowPreview(null);
+    }
+  };
+
+  const handleCreateWorkflowUI = async () => {
+    if (!workflowPreview) return;
+
+    try {
+      // Here you would implement the logic to create a permanent UI
+      // This could involve:
+      // 1. Saving the workflow to a database
+      // 2. Generating a new page/route for the workflow
+      // 3. Creating a form based on the workflow inputs
+      // 4. Setting up the execution logic
+
+      const newAssistantMessage: MessageItem = {
+        id: getUniqueId(),
+        created_at: new Date().toISOString(),
+        role: 'assistant',
+        content: `Creating permanent UI for workflow: ${workflowPreview.name}`
+      };
+      setMessageItems((prev) => [...prev, newAssistantMessage]);
+      addMessage(newAssistantMessage);
+
+      // TODO: Implement actual UI creation logic
+      addMessage({
+        id: getUniqueId(),
+        created_at: new Date().toISOString(),
+        role: 'assistant',
+        content: 'UI creation feature coming soon!'
+      });
+    } catch (error) {
+      console.error('Error creating workflow UI:', error);
+      addMessage({
+        id: getUniqueId(),
+        created_at: new Date().toISOString(),
+        role: 'assistant',
+        content: 'An error occurred while creating the workflow UI.'
+      });
+    } finally {
+      setShowWorkflowPreview(false);
+      setWorkflowPreview(null);
+    }
+  };
+
   const submitChatCompletion = async () => {
     if (inputText.length === 0) {
       return;
@@ -173,15 +339,20 @@ export const HomePage = () => {
     setLoading(true);
 
     const text = inputText;
-
     setInputText('');
     inputRef.current?.blur();
+
+    // Check if the message is a workflow creation request
+    if (text.toLowerCase().includes('create workflow') || text.toLowerCase().includes('make workflow')) {
+      handleCreateWorkflow(text);
+      return;
+    }
 
     const newUserMessage: MessageItem = {
       id: getUniqueId(),
       created_at: new Date().toISOString(),
       role: 'user',
-      content: text,
+      content: text
     };
     setMessageItems((prev) => [...prev, ...[newUserMessage]]);
     addMessage(newUserMessage);
@@ -353,64 +524,6 @@ export const HomePage = () => {
     }
   }
 
-  const handleExecuteWorkflow = async () => {
-    if (!workflowPreview) return;
-
-    setLoading(true);
-    setShowWorkflowPreview(false);
-
-    // Execute each step in the workflow
-    for (const step of workflowPreview.steps) {
-      const newAssistantMessage: MessageItem = {
-        id: getUniqueId(),
-        created_at: new Date().toISOString(),
-        role: 'assistant',
-        content: `Executing step: ${step.name}`,
-      };
-      setMessageItems((prev) => [...prev, newAssistantMessage]);
-      addMessage(newAssistantMessage);
-
-      // Execute the function
-      const result = await callFunctionFromRegistryFromObject(step.functionName, step.inputs || {});
-
-      // Show the result
-      const resultMessage: MessageItem = {
-        id: getUniqueId(),
-        created_at: new Date().toISOString(),
-        role: 'assistant',
-        content: `Result from ${step.name}: ${JSON.stringify(result)}`,
-      };
-      setMessageItems((prev) => [...prev, resultMessage]);
-      addMessage(resultMessage);
-    }
-
-    setLoading(false);
-    setWorkflowPreview(null);
-  };
-
-  const handleCreateWorkflowUI = async () => {
-    if (!workflowPreview) return;
-
-    // Here you would implement the logic to create a permanent UI
-    // This could involve:
-    // 1. Saving the workflow to a database
-    // 2. Generating a new page/route for the workflow
-    // 3. Creating a form based on the workflow inputs
-    // 4. Setting up the execution logic
-
-    const newAssistantMessage: MessageItem = {
-      id: getUniqueId(),
-      created_at: new Date().toISOString(),
-      role: 'assistant',
-      content: `Creating permanent UI for workflow: ${workflowPreview.name}`,
-    };
-    setMessageItems((prev) => [...prev, newAssistantMessage]);
-    addMessage(newAssistantMessage);
-
-    setShowWorkflowPreview(false);
-    setWorkflowPreview(null);
-  };
-
   return (
     <Layout>
       <div className="flex flex-row justify-center pb-20 h-dvh bg-white dark:bg-zinc-900">
@@ -443,10 +556,9 @@ export const HomePage = () => {
                 </div>
               </motion.div>
             )}
-            {messageItems.map((item) => (
-              <Message role={item.role} content={item.content} />
-            ))}
+      
 
+            <p>hello world</p>
             {loading && <Message role="assistant" isThinking={true} />}
 
             {showWorkflowPreview && workflowPreview && (
@@ -502,7 +614,4 @@ export const HomePage = () => {
     </Layout>
   );
 };
-function callFunctionFromRegistryFromObject(functionName: string, arg1: Record<string, any>) {
-  throw new Error('Function not implemented.');
-}
 

@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { WorkflowStep } from '@/models/workflow';
-import React from 'react';
+import React, { useEffect } from 'react';
 import { WorkflowVisualization } from './WorkflowVisualization';
 
 interface WorkflowPreviewProps {
@@ -11,6 +11,42 @@ interface WorkflowPreviewProps {
 }
 
 export function WorkflowPreview({ steps, onExecute, onCreateUI }: WorkflowPreviewProps) {
+  // Debug logging
+  useEffect(() => {
+    console.log('WorkflowPreview - Steps:', steps);
+    console.log('WorkflowPreview - Steps length:', steps?.length);
+    if (steps) {
+      steps.forEach((step, index) => {
+        console.log(`Step ${index + 1}:`, {
+          name: step.name,
+          description: step.description,
+          functionName: step.functionName,
+          inputs: step.inputs,
+          outputs: step.outputs
+        });
+      });
+    }
+  }, [steps]);
+
+  // Early return if no steps
+  if (!steps || steps.length === 0) {
+    return (
+      <Card className="w-full max-w-2xl">
+        <CardHeader>
+          <CardTitle>Workflow Preview</CardTitle>
+          <CardDescription>No workflow steps available</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
+            <p className="text-sm text-yellow-800 dark:text-yellow-200">
+              No workflow steps have been defined. Please add steps to see the workflow preview.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card className="w-full max-w-2xl">
       <CardHeader>
