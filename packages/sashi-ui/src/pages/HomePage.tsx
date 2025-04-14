@@ -1,4 +1,5 @@
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { WorkflowVisualizer } from '@/components/WorkflowVisualizer';
 import { HEADER_SESSION_TOKEN } from '@/utils/contants';
 import { Label } from '@radix-ui/react-dropdown-menu';
 import { PaperPlaneIcon } from '@radix-ui/react-icons';
@@ -9,15 +10,56 @@ import React, { useEffect, useState } from 'react';
 import { MasonryIcon, VercelIcon } from 'src/components/message-icons';
 import { Message } from 'src/components/MessageComponent';
 import { useScrollToBottom } from 'src/components/use-scroll-to-bottom';
-import { ChatCompletionMessage } from 'src/models/gpt';
 import useAppStore from 'src/store/chat-store';
-import { MessageItem, VisualizationContent } from 'src/store/models';
+import { MessageItem } from 'src/store/models';
 import { Layout } from '../components/Layout';
-import { PayloadObject, ResultTool } from '../models/payload';
-import { Metadata } from '../store/models';
+import { GeneralResponse, PayloadObject, WorkflowResponse } from '../models/payload';
 
 function getUniqueId() {
   return Math.random().toString(36).substring(2) + new Date().getTime().toString(36);
+}
+
+export interface WorkflowConfirmationCardProps {
+  workflow: WorkflowResponse;
+  onExecute: () => void;
+  onGenerateUI: () => void;
+  onCancel: () => void;
+}
+
+export interface WorkflowConfirmationCardProps {
+  workflow: WorkflowResponse;
+  onExecute: () => void;
+  onGenerateUI: () => void;
+  onCancel: () => void;
+}
+
+export function WorkflowConfirmationCard({
+  workflow,
+  onExecute,
+  onGenerateUI,
+  onCancel,
+}: WorkflowConfirmationCardProps) {
+
+
+  // If workflow is undefined, don't render anything
+  if (!workflow) {
+    return null;
+  }
+
+  return (
+    <Card className="w-full">
+      <CardHeader className="pb-2">
+        <CardTitle>Workflow</CardTitle>
+        <CardDescription>
+          This workflow contains {workflow.actions?.length || 0} action
+          {(workflow.actions?.length || 0) > 1 ? 's' : ''}.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <WorkflowVisualizer workflow={workflow} onExecute={onExecute} onGenerateUI={onGenerateUI} onCancel={onCancel} />
+      </CardContent>
+    </Card>
+  );
 }
 
 interface ConfirmationData {
@@ -81,7 +123,6 @@ export const HomePage = () => {
   const addMessage = useAppStore((state: { addMessage: any }) => state.addMessage);
 
   const setConnectedToHub = useAppStore((state: { setConnectedToHub: any }) => state.setConnectedToHub);
-  const metadata: Metadata | undefined = useAppStore((state: { metadata: any }) => state.metadata);
 
   const messageRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -95,6 +136,7 @@ export const HomePage = () => {
   const [messagesContainerRef, messagesEndRef] = useScrollToBottom<HTMLDivElement>();
 
   const [confirmationData, setConfirmationData] = useState<ConfirmationData>();
+  const [workflowConfirmationCard, setWorkflowConfirmationCard] = useState<WorkflowResponse>();
   const connectedToHub: boolean = useAppStore((state: { connectedToHub: any }) => state.connectedToHub);
   const apiUrl = useAppStore((state) => state.apiUrl);
   const sessionToken = useAppStore((state) => state.sessionToken);
@@ -148,11 +190,7 @@ export const HomePage = () => {
       previous: payload.previous ? prepareMessageForPayload(payload.previous) : undefined,
     };
     const response = await axios.post(`${apiUrl}/chat`, sanitizedPayload);
-
-    return response.data as {
-      output: ChatCompletionMessage | undefined;
-      visualization?: { name: string; type: string; parameters: any }[];
-    };
+    return response.data.output as GeneralResponse | WorkflowResponse;
   };
 
   const handleClearMessages = async () => {
@@ -225,6 +263,7 @@ export const HomePage = () => {
   };
 
   async function processChat({ text, continuation }: { text?: string; continuation?: PayloadObject }) {
+    console.log('processing chat', text, continuation);
     const previous = messageItems.map((item) => {
       return {
         role: item.role,
@@ -232,25 +271,57 @@ export const HomePage = () => {
       };
     });
     let result_tools: any[] = [];
-    let isCompleted = false;
-    const MAX_LOOP_COUNT = 10; // Don't want to let it run loose
-    let loopCount = 0;
     const sanitizedMessages = previous.map((message) => ({
       ...message,
       content: typeof message.content === 'object' ? JSON.stringify(message.content) : message.content,
     }));
-    try {
-      do {
-        const payload: PayloadObject = continuation
-          ? { ...continuation }
-          : result_tools.length > 0
-          ? {
-              tools: result_tools,
-              previous: sanitizedMessages,
-              type: '/chat/function',
-            }
-          : { inquiry: text, previous, type: '/chat/message' };
 
+    const payload: PayloadObject = continuation
+      ? { ...continuation }
+      : result_tools.length > 0
+      ? {
+          tools: result_tools,
+          previous: sanitizedMessages,
+          type: '/chat/function',
+        }
+      : { inquiry: text, previous, type: '/chat/message' };
+
+    try {
+      const result = await sendMessage({ payload });
+
+      console.log('result from server', result);
+      if (result.type === 'general') {
+        const generalResult: GeneralResponse = result;
+        // Only add text content if there were no visualizations
+        const newAssistantMessage: MessageItem = {
+          id: getUniqueId(),
+          created_at: new Date().toISOString(),
+          role: 'assistant',
+          content: generalResult.content,
+        };
+        setMessageItems((prev) => [...prev, newAssistantMessage]);
+        addMessage(newAssistantMessage);
+
+        resetScroll();
+      }
+
+      if (result.type === 'workflow') {
+        const workflowResult: WorkflowResponse = result;
+        console.log('workflowResult', workflowResult);
+        // show confirmation card
+        setWorkflowConfirmationCard(workflowResult);
+
+        resetScroll();
+      }
+    } catch (error: any) {
+      console.error('Error processing chat', error);
+    } finally {
+      setLoading(false);
+    }
+
+    /*
+        do {
+        try{
         // check for tools that need confirmation
         const toolsNeedingConfirmation: ResultTool[] | undefined = payload.tools
           ?.filter(
@@ -275,6 +346,8 @@ export const HomePage = () => {
         }
 
         const result = await sendMessage({ payload });
+
+        console.log('result from server', result);
 
         if (result.visualization) {
           result.visualization.forEach((viz) => {
@@ -346,6 +419,15 @@ export const HomePage = () => {
         inputRef.current?.focus();
       }, 100);
     }
+    */
+  }
+
+  function executeWorkflow(): void {
+   
+  }
+
+  function generateUI(): void {
+    throw new Error('Function not implemented.');
   }
 
   return (
@@ -391,6 +473,17 @@ export const HomePage = () => {
                 confirmationData={confirmationData!}
                 onConfirm={handleConfirm}
                 onCancel={handleCancel}
+              />
+            )}
+
+            {!!workflowConfirmationCard && (
+              <WorkflowConfirmationCard
+                workflow={workflowConfirmationCard!}
+                onExecute={executeWorkflow}
+                onGenerateUI={generateUI}
+                onCancel={function (): void {
+                  throw new Error('Function not implemented.');
+                }}
               />
             )}
             <div ref={messagesEndRef} />

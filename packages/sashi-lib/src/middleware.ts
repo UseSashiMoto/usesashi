@@ -43,6 +43,24 @@ function getUniqueId() {
 }
 
 
+export interface GeneralResponse {
+    type: 'general'
+    content: string
+}
+
+export interface WorkflowResponse {
+    type: 'workflow'
+    actions: {
+        id: string
+        tool: string
+        parameters: Record<string, any>
+    }[]
+    options: {
+        execute_immediately: boolean
+        generate_ui: boolean
+    }
+}
+
 
 interface MiddlewareOptions {
     debug?: boolean; // enable debug mode
@@ -361,6 +379,36 @@ export const createMiddleware = (options: MiddlewareOptions) => {
             const { inquiry, previous } = req.body;
             try {
                 const result = await processChatRequest({ inquiry, previous })
+
+
+
+                try {
+
+                    console.log("result before parsing", result.message.content)
+                    const parsedResult = JSON.parse(result.message.content)
+
+                    console.log("parsedResult", parsedResult)
+                    if (parsedResult.type === 'workflow') {
+                        const result: WorkflowResponse = parsedResult
+
+                        return res.json({
+                            output: result,
+                        })
+                    }
+
+                    if (parsedResult.type === 'general') {
+                        const result: GeneralResponse = parsedResult
+                        return res.status(200).json({
+                            output: result,
+                        }).send()
+                    }
+
+
+                } catch (e) {
+                    res.json({
+                        output: "I'm sorry, I'm having trouble processing your request. Please try again later.",
+                    });
+                }
 
                 res.json({
                     output: result?.message,

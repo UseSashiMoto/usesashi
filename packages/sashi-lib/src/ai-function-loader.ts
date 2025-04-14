@@ -676,3 +676,12 @@ export async function callFunctionFromRegistryFromObject<F extends AIFunction>(
         return 'This function is not active';
     }
 }
+
+export function generateToolSchemas() {
+    const registry = getFunctionRegistry();
+
+    const tools = Array.from(registry.values()).map((fn) => fn.description());
+
+    return { tools };
+}
+
