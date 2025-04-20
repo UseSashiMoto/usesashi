@@ -682,6 +682,8 @@ export const HomePage = () => {
               event.preventDefault();
               handleSubmit(event);
               setInputText('');
+              setWorkflowConfirmationCard(undefined);
+              setUiWorkflowCard(undefined);
             }}
           >
             <input
