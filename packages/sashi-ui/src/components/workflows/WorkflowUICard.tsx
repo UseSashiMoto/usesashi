@@ -11,7 +11,7 @@ import { TooltipContent, TooltipProvider, TooltipTrigger } from '@radix-ui/react
 import axios from 'axios';
 import { Check, Copy, GripVertical, Pin, PinOff, X } from 'lucide-react';
 import React, { useState } from 'react';
-import { UIWorkflowDefinition, WorkflowResult } from '../../models/payload';
+import { FormPayload, LabelPayload, UIWorkflowDefinition, WorkflowResult } from '../../models/payload';
 import { WorkflowResultViewer } from './WorkflowResultViewer';
 
 interface WorkflowUICardProps {
@@ -42,9 +42,10 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
 
   // Form field validation
   const isFormValid = () => {
-    if (!workflow.entry.fields) return true;
+    const formPayload = workflow.entry.payload as FormPayload;
+    if (!formPayload?.fields) return true;
 
-    return workflow.entry.fields.every((field) => {
+    return formPayload.fields.every((field) => {
       if (field.required) {
         return formData[field.key] !== undefined && formData[field.key] !== '';
       }
@@ -257,7 +258,7 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
                 }}
                 className="space-y-4"
               >
-                {workflow.entry.fields?.map((field) => (
+                {(workflow.entry.payload as FormPayload)?.fields?.map((field) => (
                   <div key={field.key} className="space-y-2">
                     <Label htmlFor={field.key}>
                       {field.label || field.key}
@@ -271,6 +272,21 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
                   {isExecuting ? 'Running...' : 'Execute'}
                 </Button>
               </form>
+            ) : workflow.entry.entryType === 'label' ? (
+              <div className="space-y-4">
+                <div
+                  className={`p-4 rounded-md ${
+                    (workflow.entry.payload as LabelPayload)?.isError
+                      ? 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300'
+                      : 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
+                  }`}
+                >
+                  <div className="font-medium mb-1">{workflow.entry.description || 'Message'}</div>
+                  {(workflow.entry.payload as LabelPayload)?.message && (
+                    <div className="text-sm">{(workflow.entry.payload as LabelPayload).message}</div>
+                  )}
+                </div>
+              </div>
             ) : (
               <div className="text-center py-4">Unknown UI type: {workflow.entry.entryType}</div>
             )}

@@ -52,7 +52,44 @@ export interface WorkflowResult {
   uiElement: WorkflowUIElement;
 }
 
-export type WorkflowEntryType = 'form' | 'button' | 'auto_update';
+export type WorkflowEntryType = 'form' | 'button' | 'auto_update' | 'label';
+
+// Type-specific payloads
+export interface FormPayload {
+  fields: {
+    key: string;
+    label?: string;
+    type?: 'string' | 'number' | 'boolean' | 'date';
+    required?: boolean;
+  }[];
+}
+
+export interface AutoUpdatePayload {
+  updateInterval: string; // e.g., '10s', '30s'
+}
+
+export interface LabelPayload {
+  isError?: boolean;
+  message?: string;
+}
+
+export interface ButtonPayload {
+  // Future button-specific properties could go here
+  icon?: string;
+  variant?: 'primary' | 'secondary' | 'outline' | 'ghost';
+}
+
+export interface WorkflowAction {
+  label: string;
+  isPrimary?: boolean;
+  onClick?: () => void;
+}
+
+export interface WorkflowEntryMetadata {
+  entryType: WorkflowEntryType; // how the user will trigger the workflow
+  description?: string; // summary of interaction (optional)
+  payload?: FormPayload | AutoUpdatePayload | LabelPayload | ButtonPayload;
+}
 
 export interface UIWorkflowDefinition {
   workflow: WorkflowResponse;
@@ -61,17 +98,4 @@ export interface UIWorkflowDefinition {
     layout?: 'card' | 'table' | 'badge';
     config?: Record<string, any>; // Optional: charts, colors, etc.
   };
-}
-
-
-export interface WorkflowEntryMetadata {
-  entryType: WorkflowEntryType; // how the user will trigger the workflow
-  description?: string; // summary of interaction (optional)
-  updateInterval?: string; // for auto_update only (e.g., '10s', '30s')
-  fields?: {
-    key: string;
-    label?: string;
-    type?: 'string' | 'number' | 'boolean' | 'date';
-    required?: boolean;
-  }[]; // Only for 'form'
 }

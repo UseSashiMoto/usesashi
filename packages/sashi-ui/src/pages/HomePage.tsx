@@ -19,7 +19,9 @@ import useAppStore from 'src/store/chat-store';
 import { MessageItem } from 'src/store/models';
 import { Layout } from '../components/Layout';
 import {
+  FormPayload,
   GeneralResponse,
+  LabelPayload,
   PayloadObject,
   UIWorkflowDefinition,
   WorkflowResponse,
@@ -244,9 +246,10 @@ const DynamicWorkflowUI: React.FC<DynamicWorkflowUIProps> = ({ uiDef, apiEndpoin
   if (uiDef.entry.entryType === 'form') {
     // Validate if all required fields are filled
     const isFormValid = () => {
-      if (!uiDef.entry.fields) return true;
+      const formPayload = uiDef.entry.payload as FormPayload;
+      if (!formPayload?.fields) return true;
 
-      return uiDef.entry.fields.every((field) => {
+      return formPayload.fields.every((field) => {
         if (field.required) {
           return !!formData[field.key];
         }
@@ -296,6 +299,8 @@ const DynamicWorkflowUI: React.FC<DynamicWorkflowUIProps> = ({ uiDef, apiEndpoin
       }
     };
 
+    const formPayload = uiDef.entry.payload as FormPayload;
+
     return (
       <div className="space-y-6 px-4 w-full md:w-[500px] md:px-0">
         <Card className="w-full">
@@ -304,7 +309,7 @@ const DynamicWorkflowUI: React.FC<DynamicWorkflowUIProps> = ({ uiDef, apiEndpoin
           </CardHeader>
           <CardContent className="space-y-4">
             <form onSubmit={handleFormSubmit}>
-              {uiDef.entry.fields?.map((field) => (
+              {formPayload?.fields?.map((field) => (
                 <div key={field.key} className="space-y-2 mb-4">
                   <div className="text-sm font-medium">{field.label || field.key}</div>
                   <Input
@@ -566,13 +571,16 @@ export const HomePage = () => {
       // Check if we have an error in the response, even with status 200
       if (response.data.error) {
         console.error('Error from API:', response.data.error);
-        // Use default button UI
+        // Use default error label UI
         const defaultUI: UIWorkflowDefinition = {
           workflow: workflowConfirmationCard,
           entry: {
-            entryType: 'button',
-            description: 'Run workflow',
-            fields: [],
+            entryType: 'label',
+            description: 'Error Processing Workflow',
+            payload: {
+              isError: true,
+              message: response.data.message || 'Unable to determine how to display this workflow',
+            } as LabelPayload,
           },
         };
         setUiWorkflowCard(defaultUI);
@@ -590,14 +598,17 @@ export const HomePage = () => {
     } catch (error: any) {
       console.error('Error generating UI', error);
 
-      // If request fails completely, still show a button UI
+      // If request fails completely, still show a label UI with error
       if (workflowConfirmationCard) {
         const defaultUI: UIWorkflowDefinition = {
           workflow: workflowConfirmationCard,
           entry: {
-            entryType: 'button',
-            description: 'Run workflow',
-            fields: [],
+            entryType: 'label',
+            description: 'Error Processing Workflow',
+            payload: {
+              isError: true,
+              message: "We couldn't connect to the server to process this workflow",
+            } as LabelPayload,
           },
         };
         setUiWorkflowCard(defaultUI);

@@ -434,22 +434,34 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                 - "form": if the workflow requires one or more inputs
                 - "button": if it requires no inputs and is simply triggered
                 - "auto_update": if it should fetch data periodically without user input
+                - "label": if it should only display information without any action
 
                 Respond with strictly valid JSON in this format:
 
                 {
-                "entryType": "form" | "button" | "auto_update",
+                "entryType": "form" | "button" | "auto_update" | "label",
                 "description": "<short summary>",
-                "updateInterval": "optional, only if auto_update",
-                "fields": [
+                "payload": {
+                  // For form:
+                  "fields": [
                     {
-                    "key": "parameter name",
-                    "label": "optional label",
-                    "type": "string" | "number" | "boolean" | "date",
-                    "required": true
+                      "key": "parameter name",
+                      "label": "optional label",
+                      "type": "string" | "number" | "boolean" | "date",
+                      "required": true
                     }
-                ]
+                  ],
+                  
+                  // For auto_update:
+                  "updateInterval": "optional, only if auto_update, like '10s'",
+                  
+                  // For label:
+                  "isError": false,
+                  "message": "optional additional message"
                 }
+                }
+
+                Your response should only include fields relevant to the selected entryType. For example, "fields" should only be included for "form" type.
 
                 Here is the workflow:
                 \`\`\`
@@ -464,11 +476,12 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                 { role: "system", content: "You are a helpful assistant." },
                 { role: "user", content: prompt }
             ],
-            temperature: 0.2
+            temperature: .8
         });
 
+        console.log("ai ui response", response)
         try {
-            const content = response.choices[0]?.message?.content;
+            const content = response.message?.content;
             if (!content) {
                 throw new Error('No content in AI response');
             }
@@ -481,7 +494,11 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                 jsonContent = match[1];
             }
 
+            console.log("jsonContent", jsonContent)
+
             const parsed = JSON.parse(jsonContent);
+
+            console.log("parsed", parsed)
             res.json({ entry: parsed });
         } catch (e) {
             console.error("Failed to parse AI response cause", e);
@@ -489,9 +506,12 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                 error: "Failed to parse entry metadata",
                 message: "Unable to determine the form type for this workflow. Please try again or contact support.",
                 entry: {
-                    entryType: "button",
-                    description: "Run workflow",
-                    fields: []
+                    entryType: "label",
+                    description: "Error Processing Workflow",
+                    payload: {
+                        isError: true,
+                        message: "We couldn't determine how to display this workflow. The AI response was not in the expected format."
+                    }
                 }
             });
         }
