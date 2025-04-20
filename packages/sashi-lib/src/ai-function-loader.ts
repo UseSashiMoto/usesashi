@@ -682,6 +682,8 @@ export function generateToolSchemas() {
 
     const tools = Array.from(registry.values()).map((fn) => fn.description());
 
+    console.log('generatedtools', tools);
+
     return { tools };
 }
 

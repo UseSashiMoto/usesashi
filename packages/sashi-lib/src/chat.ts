@@ -35,7 +35,8 @@ const getSystemPrompt = () => {
                 "actions": [
                     {
                         "id": "<unique_action_id>",
-                        "tool": "<backend_function_name>",
+                        "tool": "<backend_function_name the list of tools is available in the tool_schema and each has a name, description and parameters. use name here>",
+                        "description": "<description of the action>",
                         "parameters": {
                             "<parameter_name>": "<parameter_value_or_reference>"
                         }
@@ -76,6 +77,8 @@ export const processChatRequest = async ({ inquiry, previous }: { inquiry: strin
         { role: 'system', content: system_prompt },
         { role: "system", content: `Available backend functions:\n ${JSON.stringify(toolsSchema, null, 2)}` }
     ];
+
+    console.log("toolsSchema", `Available backend functions:\n ${JSON.stringify(toolsSchema, null, 2)}`)
     if (context.length > 0) {
         messages = messages.concat(context);
     }

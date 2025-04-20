@@ -21,7 +21,7 @@ export function WorkflowVisualizer({ workflow, onExecute, onGenerateUI, onCancel
   const actions = workflow?.actions || []
 
   return (
-    <div className="workflow-visualizer p-1">
+    <div className="workflow-visualizer px-4 w-full md:w-[500px] md:px-0">
       <div className="flex flex-col space-y-3">
         {actions.map((action, index) => (
           <div key={action.id || `step-${index}`} className="workflow-step">
@@ -31,16 +31,16 @@ export function WorkflowVisualizer({ workflow, onExecute, onGenerateUI, onCancel
                 onClick={() => setExpandedStep(expandedStep === action.id ? null : action.id)}
               >
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center">
-                    <h3 className="font-medium">{action.tool}</h3>
-                    <Badge variant="outline" className="ml-2 text-xs">
+                  <div className="flex items-center min-w-0">
+                    <h3 className="font-medium truncate">{action.description}</h3>
+                    <Badge variant="outline" className="ml-2 text-xs shrink-0">
                       Step {index + 1}
                     </Badge>
                   </div>
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-6 w-6 p-0"
+                    className="h-6 w-4 p-0 shrink-0"
                     onClick={(e) => {
                       e.stopPropagation()
                       setExpandedStep(expandedStep === action.id ? null : action.id)
@@ -60,14 +60,14 @@ export function WorkflowVisualizer({ workflow, onExecute, onGenerateUI, onCancel
                     <div className="grid gap-2">
                       {Object.entries(action.parameters || {}).map(([key, value]) => (
                         <div key={key} className="flex flex-col">
-                          <span className="font-medium text-xs">{key}</span>
-                          <div className="bg-gray-50 dark:bg-zinc-800 p-2 rounded text-xs overflow-x-auto">
+                          <span className="font-medium text-xs truncate">{key}</span>
+                          <div className="bg-gray-50 dark:bg-zinc-800 p-2 rounded text-xs overflow-x-auto max-w-full">
                             {typeof value === "string" ? (
-                              value
+                              <div className="break-words whitespace-pre-wrap">{value}</div>
                             ) : typeof value === "object" && value !== null ? (
-                              <pre>{JSON.stringify(value, null, 2)}</pre>
+                              <pre className="whitespace-pre-wrap break-words">{JSON.stringify(value, null, 2)}</pre>
                             ) : (
-                              String(value)
+                              <div className="break-words whitespace-pre-wrap">{String(value)}</div>
                             )}
                           </div>
                         </div>

@@ -1,4 +1,9 @@
+import { Button } from '@/components/Button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { WorkflowResultViewer } from '@/components/workflows/WorkflowResultViewer';
+import { WorkflowSaveForm } from '@/components/workflows/WorkflowSaveForm';
+import { WorkflowUICard } from '@/components/workflows/WorkflowUICard';
 import { WorkflowVisualizer } from '@/components/WorkflowVisualizer';
 import { HEADER_SESSION_TOKEN } from '@/utils/contants';
 import { Label } from '@radix-ui/react-dropdown-menu';
@@ -13,11 +18,81 @@ import { useScrollToBottom } from 'src/components/use-scroll-to-bottom';
 import useAppStore from 'src/store/chat-store';
 import { MessageItem } from 'src/store/models';
 import { Layout } from '../components/Layout';
-import { GeneralResponse, PayloadObject, WorkflowResponse } from '../models/payload';
+import {
+  GeneralResponse,
+  PayloadObject,
+  UIWorkflowDefinition,
+  WorkflowResponse,
+  WorkflowResult,
+} from '../models/payload';
 
 function getUniqueId() {
   return Math.random().toString(36).substring(2) + new Date().getTime().toString(36);
 }
+
+interface WorkflowFormProps {
+  workflow: WorkflowResponse;
+  apiUrl: string;
+}
+
+const WorkflowForm: React.FC<WorkflowFormProps> = ({ workflow, apiUrl }) => {
+  const [formData, setFormData] = useState<Record<string, string>>({});
+  const [results, setResults] = useState<WorkflowResult[]>([]);
+  const sessionToken = useAppStore((state) => state.sessionToken);
+
+  const handleExecute = async () => {
+    const updatedActions = workflow.actions.map((action) => {
+      const updatedParams = { ...action.parameters };
+      for (const key of Object.keys(updatedParams)) {
+        const val = updatedParams[key];
+        if (typeof val === 'string' && val.startsWith('userInput.')) {
+          const inputKey = val.split('.')[1];
+          updatedParams[key] = formData[inputKey];
+        }
+      }
+      return { ...action, parameters: updatedParams };
+    });
+
+    const finalWorkflow = { ...workflow, actions: updatedActions };
+    const response = await axios.post(`${apiUrl}/workflow/execute`, {
+      workflow: finalWorkflow,
+    });
+
+    console.log('handleExecute response', response.data);
+
+    setResults(response.data.results);
+  };
+
+  const userInputKeys = new Set<string>();
+  workflow.actions.forEach((action) => {
+    for (const val of Object.values(action.parameters)) {
+      if (typeof val === 'string' && val.startsWith('userInput.')) {
+        userInputKeys.add(val.split('.')[1]);
+      }
+    }
+  });
+
+  return (
+    <div className="space-y-6 px-4 w-full md:w-[500px] md:px-0">
+      {Array.from(userInputKeys).map((key) => (
+        <Input
+          key={key}
+          placeholder={key}
+          value={formData[key] ?? ''}
+          onChange={(e) => setFormData((prev) => ({ ...prev, [key]: e.target.value }))}
+        />
+      ))}
+      <Button onClick={handleExecute}>Run Workflow</Button>
+      {results.length > 0 && <WorkflowResultViewer results={results.map((result) => result.uiElement)} />}
+      <WorkflowSaveForm
+        workflow={workflow}
+        onSave={(encoded) => {
+          console.log('Saved:', encoded); // store or log it
+        }}
+      />
+    </div>
+  );
+};
 
 export interface WorkflowConfirmationCardProps {
   workflow: WorkflowResponse;
@@ -39,15 +114,13 @@ export function WorkflowConfirmationCard({
   onGenerateUI,
   onCancel,
 }: WorkflowConfirmationCardProps) {
-
-
   // If workflow is undefined, don't render anything
   if (!workflow) {
     return null;
   }
 
   return (
-    <Card className="w-full">
+    <Card className="w-full md:w-[600px]">
       <CardHeader className="pb-2">
         <CardTitle>Workflow</CardTitle>
         <CardDescription>
@@ -115,6 +188,152 @@ export function ConfirmationCard({ confirmationData, onConfirm, onCancel }: Conf
   );
 }
 
+interface DynamicWorkflowUIProps {
+  uiDef: UIWorkflowDefinition;
+  apiEndpoint: string;
+  onComplete?: () => void;
+}
+
+const DynamicWorkflowUI: React.FC<DynamicWorkflowUIProps> = ({ uiDef, apiEndpoint, onComplete }) => {
+  const [formData, setFormData] = useState<Record<string, string>>({});
+  const [workflowResults, setWorkflowResults] = useState<WorkflowResult[]>([]);
+  const [isExecuting, setIsExecuting] = useState(false);
+
+  const handleExecute = async () => {
+    setIsExecuting(true);
+    try {
+      const response = await axios.post(`${apiEndpoint}/workflow/execute`, {
+        workflow: uiDef.workflow,
+      });
+
+      setWorkflowResults(response.data.results || []);
+      if (onComplete) onComplete();
+    } catch (error) {
+      console.error('Error executing workflow:', error);
+    } finally {
+      setIsExecuting(false);
+    }
+  };
+
+  // Handle form input changes
+  const handleInputChange = (key: string, value: string) => {
+    setFormData((prev) => ({ ...prev, [key]: value }));
+  };
+
+  if (uiDef.entry.entryType === 'button') {
+    return (
+      <div className="space-y-6 px-4 w-full md:w-[500px] md:px-0">
+        <Card className="w-full">
+          <CardHeader className="pb-2">
+            <CardTitle>{uiDef.entry.description || 'Run Workflow'}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={handleExecute} disabled={isExecuting} className="w-full">
+              {isExecuting ? 'Running...' : 'Execute'}
+            </Button>
+          </CardContent>
+        </Card>
+
+        {workflowResults.length > 0 && (
+          <WorkflowResultViewer results={workflowResults.map((result) => result.uiElement)} />
+        )}
+      </div>
+    );
+  }
+
+  if (uiDef.entry.entryType === 'form') {
+    // Validate if all required fields are filled
+    const isFormValid = () => {
+      if (!uiDef.entry.fields) return true;
+
+      return uiDef.entry.fields.every((field) => {
+        if (field.required) {
+          return !!formData[field.key];
+        }
+        return true;
+      });
+    };
+
+    const handleFormSubmit = async (e: React.FormEvent) => {
+      e.preventDefault();
+
+      // Create a copy of the workflow with form data
+      const workflowWithFormData = { ...uiDef.workflow };
+
+      // Update actions to include form data
+      if (workflowWithFormData.actions) {
+        workflowWithFormData.actions = workflowWithFormData.actions.map((action) => {
+          const updatedParams = { ...action.parameters };
+
+          // Replace parameter values with form data where appropriate
+          for (const key in updatedParams) {
+            const paramValue = updatedParams[key];
+            // Check if field exists in our form data
+            if (formData[key] !== undefined) {
+              updatedParams[key] = formData[key];
+            }
+          }
+
+          return {
+            ...action,
+            parameters: updatedParams,
+          };
+        });
+      }
+
+      setIsExecuting(true);
+      try {
+        const response = await axios.post(`${apiEndpoint}/workflow/execute`, {
+          workflow: workflowWithFormData,
+        });
+
+        setWorkflowResults(response.data.results || []);
+        if (onComplete) onComplete();
+      } catch (error) {
+        console.error('Error executing workflow:', error);
+      } finally {
+        setIsExecuting(false);
+      }
+    };
+
+    return (
+      <div className="space-y-6 px-4 w-full md:w-[500px] md:px-0">
+        <Card className="w-full">
+          <CardHeader className="pb-2">
+            <CardTitle>{uiDef.entry.description || 'Workflow Form'}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <form onSubmit={handleFormSubmit}>
+              {uiDef.entry.fields?.map((field) => (
+                <div key={field.key} className="space-y-2 mb-4">
+                  <div className="text-sm font-medium">{field.label || field.key}</div>
+                  <Input
+                    key={field.key}
+                    placeholder={field.label || field.key}
+                    value={formData[field.key] || ''}
+                    onChange={(e) => handleInputChange(field.key, e.target.value)}
+                    required={field.required}
+                    type={field.type === 'number' ? 'number' : 'text'}
+                  />
+                </div>
+              ))}
+              <Button type="submit" disabled={isExecuting || !isFormValid()} className="w-full mt-4">
+                {isExecuting ? 'Running...' : 'Execute'}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        {workflowResults.length > 0 && (
+          <WorkflowResultViewer results={workflowResults.map((result) => result.uiElement)} />
+        )}
+      </div>
+    );
+  }
+
+  return <div className="text-center py-4">Unknown UI type: {uiDef.entry.entryType}</div>;
+};
+
 export const HomePage = () => {
   const storedMessages = useAppStore((state: { messages: any }) => state.messages);
 
@@ -137,6 +356,8 @@ export const HomePage = () => {
 
   const [confirmationData, setConfirmationData] = useState<ConfirmationData>();
   const [workflowConfirmationCard, setWorkflowConfirmationCard] = useState<WorkflowResponse>();
+  const [uiPreviewCard, setUiPreviewCards] = useState<WorkflowResponse>();
+  const [uiWorkflowCard, setUiWorkflowCard] = useState<UIWorkflowDefinition>();
   const connectedToHub: boolean = useAppStore((state: { connectedToHub: any }) => state.connectedToHub);
   const apiUrl = useAppStore((state) => state.apiUrl);
   const sessionToken = useAppStore((state) => state.sessionToken);
@@ -318,116 +539,71 @@ export const HomePage = () => {
     } finally {
       setLoading(false);
     }
+  }
 
-    /*
-        do {
-        try{
-        // check for tools that need confirmation
-        const toolsNeedingConfirmation: ResultTool[] | undefined = payload.tools
-          ?.filter(
-            (tool: { function: { name: string } }) =>
-              metadata?.functions.find((func) => func.name === tool.function.name)?.needConfirmation ?? false
-          )
-          .filter((tool) => !tool.confirmed);
+  async function executeWorkflow(): Promise<void> {
+    if (!workflowConfirmationCard) return;
 
-        if (!!toolsNeedingConfirmation && (toolsNeedingConfirmation?.length ?? 0 > 0)) {
-          const description = metadata?.functions.find(
-            (func) => func.name === toolsNeedingConfirmation[0].function.name
-          )?.description;
+    setLoading(true);
 
-          //show confirmation card
-          setConfirmationData({
-            name: toolsNeedingConfirmation[0].function.name,
-            description: description ?? '',
-            args: JSON.parse(toolsNeedingConfirmation[0].function.arguments),
-            payload: payload,
-          });
-          return;
-        }
+    const response = await axios.post(`${apiUrl}/workflow/execute`, {
+      workflow: workflowConfirmationCard,
+    });
 
-        const result = await sendMessage({ payload });
+    console.log('response', response);
 
-        console.log('result from server', result);
+    setLoading(false);
+  }
 
-        if (result.visualization) {
-          result.visualization.forEach((viz) => {
-            const newVisualizationMessage: MessageItem = {
-              id: getUniqueId(),
-              created_at: new Date().toISOString(),
-              role: 'assistant',
-              content: {
-                type: viz.type,
-                data: viz.parameters,
-              },
-            };
-            setMessageItems((prev) => [...prev, newVisualizationMessage]);
-            addMessage(newVisualizationMessage);
-          });
-        }
-        if (result.output?.tool_calls) {
-          result.output.tool_calls.forEach((toolCall) => {
-            if (toolCall.function.name.toLowerCase().includes('visualization')) {
-              const visualizationContent: VisualizationContent = {
-                type: toolCall.function.name.replace(/visualization/i, '').toLowerCase(),
-                data: JSON.parse(toolCall.function.arguments),
-              };
+  async function generateUI() {
+    if (!workflowConfirmationCard) return;
 
-              const newVisualizationMessage: MessageItem = {
-                id: getUniqueId(),
-                created_at: new Date().toISOString(),
-                role: 'assistant',
-                content: visualizationContent,
-              };
+    try {
+      const response = await axios.post(`${apiUrl}/workflow/ui-entry-type`, {
+        workflow: workflowConfirmationCard,
+      });
 
-              setMessageItems((prev) => [...prev, newVisualizationMessage]);
-              addMessage(newVisualizationMessage);
-            }
-          });
+      // Check if we have an error in the response, even with status 200
+      if (response.data.error) {
+        console.error('Error from API:', response.data.error);
+        // Use default button UI
+        const defaultUI: UIWorkflowDefinition = {
+          workflow: workflowConfirmationCard,
+          entry: {
+            entryType: 'button',
+            description: 'Run workflow',
+            fields: [],
+          },
+        };
+        setUiWorkflowCard(defaultUI);
+        setWorkflowConfirmationCard(undefined);
+        return;
+      }
 
-          resetScroll();
-        } else if (result.output?.content) {
-          // Only add text content if there were no visualizations
-          const newAssistantMessage: MessageItem = {
-            id: getUniqueId(),
-            created_at: new Date().toISOString(),
-            role: 'assistant',
-            content: result.output.content,
-          };
-          setMessageItems((prev) => [...prev, newAssistantMessage]);
-          addMessage(newAssistantMessage);
+      const uiDef: UIWorkflowDefinition = {
+        workflow: workflowConfirmationCard,
+        entry: response.data.entry,
+      };
 
-          resetScroll();
-        }
-
-        if (result.output?.tool_calls) {
-          loopCount++;
-
-          if (loopCount >= MAX_LOOP_COUNT) {
-            isCompleted = true;
-          } else {
-            result_tools = result.output.tool_calls;
-          }
-        } else {
-          isCompleted = true;
-        }
-      } while (!isCompleted);
+      setUiWorkflowCard(uiDef);
+      setWorkflowConfirmationCard(undefined);
     } catch (error: any) {
-    } finally {
-      setLoading(false);
+      console.error('Error generating UI', error);
 
-      setTimeout(() => {
-        inputRef.current?.focus();
-      }, 100);
+      // If request fails completely, still show a button UI
+      if (workflowConfirmationCard) {
+        const defaultUI: UIWorkflowDefinition = {
+          workflow: workflowConfirmationCard,
+          entry: {
+            entryType: 'button',
+            description: 'Run workflow',
+            fields: [],
+          },
+        };
+        setUiWorkflowCard(defaultUI);
+        setWorkflowConfirmationCard(undefined);
+      }
     }
-    */
-  }
-
-  function executeWorkflow(): void {
-   
-  }
-
-  function generateUI(): void {
-    throw new Error('Function not implemented.');
   }
 
   return (
@@ -481,11 +657,20 @@ export const HomePage = () => {
                 workflow={workflowConfirmationCard!}
                 onExecute={executeWorkflow}
                 onGenerateUI={generateUI}
-                onCancel={function (): void {
-                  throw new Error('Function not implemented.');
-                }}
+                onCancel={() => setWorkflowConfirmationCard(undefined)}
               />
             )}
+
+            {uiWorkflowCard && apiUrl && (
+              <WorkflowUICard
+                workflow={uiWorkflowCard}
+                apiUrl={apiUrl || ''}
+                onClose={() => setUiWorkflowCard(undefined)}
+              />
+            )}
+
+            {uiPreviewCard && apiUrl && <WorkflowForm workflow={uiPreviewCard} apiUrl={apiUrl} />}
+
             <div ref={messagesEndRef} />
           </div>
 
@@ -500,6 +685,7 @@ export const HomePage = () => {
             }}
           >
             <input
+              disabled={!!uiPreviewCard}
               ref={inputRef}
               className="bg-zinc-100 rounded-md px-2 py-1.5 w-full outline-none dark:bg-zinc-700 text-zinc-800 dark:text-zinc-300 md:max-w-[500px] max-w-[calc(100dvw-32px)]"
               placeholder="Send a message..."

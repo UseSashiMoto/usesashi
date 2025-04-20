@@ -10,9 +10,10 @@ import {
     getRepoRegistry,
     toggleFunctionActive
 } from "./ai-function-loader"
-import { createAIBot } from "./aibot"
+import { createAIBot, getAIBot } from "./aibot"
 
 import { processChatRequest, processFunctionRequest } from "./chat"
+import { GeneralResponse, WorkflowResponse, WorkflowResult } from "./models/models"
 import { MetaData, RepoMetadata } from './models/repo-metadata'
 import { createSashiHtml, createSessionToken } from './utils'
 
@@ -35,31 +36,9 @@ const asyncHandler = (fn: (req: Request, res: Response, next?: NextFunction) => 
     });
 };
 
-function getUniqueId() {
-    return (
-        Math.random().toString(36).substring(2) +
-        new Date().getTime().toString(36)
-    )
-}
 
 
-export interface GeneralResponse {
-    type: 'general'
-    content: string
-}
 
-export interface WorkflowResponse {
-    type: 'workflow'
-    actions: {
-        id: string
-        tool: string
-        parameters: Record<string, any>
-    }[]
-    options: {
-        execute_immediately: boolean
-        generate_ui: boolean
-    }
-}
 
 
 interface MiddlewareOptions {
@@ -316,6 +295,16 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         throw new Error('Test error for Sentry');
     }));
 
+    function guessUIType(result: any): 'card' | 'table' | 'badge' {
+        if (Array.isArray(result) && result.every(row => typeof row === 'object')) {
+            return 'table';
+        }
+        if (typeof result === 'object' && Object.keys(result).length <= 3) {
+            return 'badge';
+        }
+        return 'card';
+    }
+
     router.get('/call-function', validateRepoRequest({ sashiServerUrl, repoSecretKey }), async (req, res) => {
         const { functionName, args } = req.body;
 
@@ -389,11 +378,19 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
                     console.log("parsedResult", parsedResult)
                     if (parsedResult.type === 'workflow') {
-                        const result: WorkflowResponse = parsedResult
+                        const workflowResult: WorkflowResponse = parsedResult
 
-                        return res.json({
-                            output: result,
-                        })
+                        // Clean up function. prefix from tool names before sending to client
+                        if (workflowResult.type === 'workflow' && workflowResult.actions) {
+                            workflowResult.actions = workflowResult.actions.map(action => ({
+                                ...action,
+                                tool: action.tool.replace(/^functions\./, '')
+                            }))
+                        }
+
+                        console.log("result after parsing", workflowResult)
+
+                        res.json({ output: workflowResult })
                     }
 
                     if (parsedResult.type === 'general') {
@@ -419,6 +416,157 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                     error: e.message,
                 });
             }
+        }
+    });
+
+
+    router.post('/workflow/ui-entry-type', asyncHandler(async (req, res) => {
+        const { workflow } = req.body;
+
+        if (!workflow || !workflow.actions || !Array.isArray(workflow.actions)) {
+            return res.status(400).json({ error: 'Invalid workflow format' });
+        }
+
+        const prompt = `
+                You are an assistant that classifies how a given backend workflow should be presented to a user.
+
+                Given the following workflow JSON, identify how the user should interact with it using one of the following entry types:
+                - "form": if the workflow requires one or more inputs
+                - "button": if it requires no inputs and is simply triggered
+                - "auto_update": if it should fetch data periodically without user input
+
+                Respond with strictly valid JSON in this format:
+
+                {
+                "entryType": "form" | "button" | "auto_update",
+                "description": "<short summary>",
+                "updateInterval": "optional, only if auto_update",
+                "fields": [
+                    {
+                    "key": "parameter name",
+                    "label": "optional label",
+                    "type": "string" | "number" | "boolean" | "date",
+                    "required": true
+                    }
+                ]
+                }
+
+                Here is the workflow:
+                \`\`\`
+                ${JSON.stringify(workflow, null, 2)}
+                \`\`\`
+                `;
+
+        const aibot = getAIBot();
+        const response = await aibot.chatCompletion({
+            model: "gpt-4o-mini",
+            messages: [
+                { role: "system", content: "You are a helpful assistant." },
+                { role: "user", content: prompt }
+            ],
+            temperature: 0.2
+        });
+
+        try {
+            const content = response.choices[0]?.message?.content;
+            if (!content) {
+                throw new Error('No content in AI response');
+            }
+
+            // Extract JSON from markdown code blocks if present
+            let jsonContent = content;
+            const jsonRegex = /```(?:json)?\s*\n([\s\S]*?)\n```/;
+            const match = content.match(jsonRegex);
+            if (match && match[1]) {
+                jsonContent = match[1];
+            }
+
+            const parsed = JSON.parse(jsonContent);
+            res.json({ entry: parsed });
+        } catch (e) {
+            console.error("Failed to parse AI response cause", e);
+            res.status(200).json({
+                error: "Failed to parse entry metadata",
+                message: "Unable to determine the form type for this workflow. Please try again or contact support.",
+                entry: {
+                    entryType: "button",
+                    description: "Run workflow",
+                    fields: []
+                }
+            });
+        }
+    }));
+
+
+    router.post('/workflow/execute', async (req, res) => {
+        const { workflow } = req.body;
+
+        if (!workflow || !workflow.actions || !Array.isArray(workflow.actions)) {
+            return res.status(400).json({ error: 'Invalid workflow format' });
+        }
+
+        const functionRegistry = getFunctionRegistry();
+        const actionResults: Record<string, any> = {};
+
+        try {
+            for (let i = 0; i < workflow.actions.length; i++) {
+                const action = workflow.actions[i];
+                const toolName = action.tool.replace(/^functions\./, '');
+                const { parameters } = action;
+                const registeredFunction = functionRegistry.get(toolName);
+
+                if (!registeredFunction) {
+                    throw new Error(`Function ${toolName} not found in registry`);
+                }
+
+                const processedParameters: Record<string, any> = { ...parameters };
+                for (const [key, value] of Object.entries(parameters)) {
+                    if (typeof value === 'string' && value.includes('.')) {
+                        const [refActionId, field] = value.split('.');
+                        if (!!refActionId) {
+                            const refResult = actionResults[refActionId];
+                            if (refResult && field) {
+                                processedParameters[key] = refResult[field];
+                            }
+                        }
+                    }
+                }
+
+                const result = await callFunctionFromRegistryFromObject(toolName, processedParameters);
+                actionResults[action.id] = result;
+            }
+
+            const finalAction = workflow.actions[workflow.actions.length - 1];
+            const finalResult = actionResults[finalAction.id];
+            const guessedType = guessUIType(finalResult);
+
+            const finalWorkflowResult: WorkflowResult = {
+                actionId: finalAction.id,
+                result: typeof finalResult === 'object' ? finalResult : { value: finalResult },
+                uiElement: {
+                    type: 'result',
+                    actionId: finalAction.id,
+                    tool: finalAction.tool,
+                    content: {
+                        type: guessedType,
+                        title: finalAction.tool,
+                        content: typeof finalResult === 'object' ? JSON.stringify(finalResult, null, 2) : String(finalResult),
+                        timestamp: new Date().toISOString()
+                    }
+                }
+            };
+
+            res.json({
+                success: true,
+                results: [finalWorkflowResult]
+            });
+
+        } catch (error: unknown) {
+            console.error('Error executing workflow:', error);
+            res.status(500).json({
+                error: 'Failed to execute workflow',
+                details: error instanceof Error ? error.message : 'Unknown error'
+            });
         }
     });
 
