@@ -134,6 +134,17 @@ export const WorkflowResultViewer = ({ results }: WorkflowResultViewerProps) => 
     );
   };
   
+  // Function to check if a value is a JSON string
+  const isJsonString = (value: any): boolean => {
+    if (typeof value !== 'string') return false;
+    try {
+      const result = JSON.parse(value);
+      return typeof result === 'object' && result !== null;
+    } catch (e) {
+      return false;
+    }
+  };
+
   // Function to render appropriate content based on the content type
   const renderContent = (ui: WorkflowUIElement) => {
     // Generate a unique ID for this result
@@ -158,6 +169,51 @@ export const WorkflowResultViewer = ({ results }: WorkflowResultViewerProps) => 
       if (value === null || value === undefined) return '';
       if (typeof value === 'object') return JSON.stringify(value, null, 2);
       return String(value);
+    };
+    
+    // Function to render a JSON value with proper formatting in a textarea
+    const renderJsonValue = (value: any, isExpanded: boolean = false) => {
+      const jsonStr = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+      const uniqueId = `json-${Math.random().toString(36).substring(2, 9)}`;
+      
+      return (
+        <div className="relative">
+          <div className="flex justify-end gap-2 mb-2">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => copyToClipboard(jsonStr)}
+              className="h-7 px-2 text-xs"
+            >
+              <CopyIcon className="h-3.5 w-3.5 mr-1" />
+              Copy
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => toggleExpand(uniqueId)}
+              className="h-7 px-2 text-xs"
+            >
+              {expandedResults[uniqueId] ? <MinusIcon className="h-3.5 w-3.5 mr-1" /> : <ExpandIcon className="h-3.5 w-3.5 mr-1" />}
+              {expandedResults[uniqueId] ? "Collapse" : "Expand"}
+            </Button>
+          </div>
+          
+          {expandedResults[uniqueId] ? (
+            <Textarea 
+              value={jsonStr}
+              readOnly
+              className="min-h-[150px] max-h-[300px] w-full font-mono text-sm"
+            />
+          ) : (
+            <ScrollArea className="h-[100px] w-full rounded-md border p-2">
+              <pre className="whitespace-pre-wrap text-xs font-mono">
+                {jsonStr}
+              </pre>
+            </ScrollArea>
+          )}
+        </div>
+      );
     };
     
     // Handle large text content
@@ -212,6 +268,49 @@ export const WorkflowResultViewer = ({ results }: WorkflowResultViewerProps) => 
           </div>
         );
         
+      case 'textarea':
+        // Dedicated type for complex JSON structures or large text blocks
+        return (
+          <div className="p-2">
+            <div className="flex justify-end gap-2 mb-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => copyToClipboard(ui.content.content)}
+                className="h-7 px-2 text-xs"
+              >
+                <CopyIcon className="h-3.5 w-3.5 mr-1" />
+                Copy
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => toggleExpand(resultId)}
+                className="h-7 px-2 text-xs"
+              >
+                {isExpanded ? <MinusIcon className="h-3.5 w-3.5 mr-1" /> : <ExpandIcon className="h-3.5 w-3.5 mr-1" />}
+                {isExpanded ? "Collapse" : "Expand"}
+              </Button>
+            </div>
+            
+            {isExpanded ? (
+              <Textarea 
+                value={ui.content.content}
+                readOnly
+                className="min-h-[300px] w-full font-mono text-sm"
+              />
+            ) : (
+              <ScrollArea className="h-[200px] w-full rounded-md border p-4">
+                <pre className="whitespace-pre-wrap text-sm font-mono">
+                  {typeof parsedContent === 'object' 
+                    ? JSON.stringify(parsedContent, null, 2) 
+                    : ui.content.content}
+                </pre>
+              </ScrollArea>
+            )}
+          </div>
+        );
+        
       case 'table':
         // Render a table if the content is an array of objects
         if (Array.isArray(parsedContent) && parsedContent.length > 0) {
@@ -238,7 +337,13 @@ export const WorkflowResultViewer = ({ results }: WorkflowResultViewerProps) => 
                     <TableRow key={index}>
                       {Array.from(allKeys).map(key => (
                         <TableCell key={`${index}-${key}`}>
-                          {safeStringify(item[key])}
+                          {typeof item[key] === 'object' || isJsonString(item[key]) ? (
+                            <div className="max-w-[300px]">
+                              {renderJsonValue(item[key])}
+                            </div>
+                          ) : (
+                            <span>{safeStringify(item[key])}</span>
+                          )}
                         </TableCell>
                       ))}
                     </TableRow>
@@ -259,10 +364,8 @@ export const WorkflowResultViewer = ({ results }: WorkflowResultViewerProps) => 
                 <div key={key} className="space-y-1">
                   <div className="text-sm font-medium">{key}</div>
                   <div className="rounded-md bg-muted p-2">
-                    {typeof value === 'object' ? (
-                      <pre className="text-xs overflow-auto max-h-[150px]">
-                        {JSON.stringify(value, null, 2)}
-                      </pre>
+                    {typeof value === 'object' || isJsonString(value) ? (
+                      renderJsonValue(value)
                     ) : (
                       <div className="text-sm break-words">{String(value)}</div>
                     )}
@@ -277,9 +380,63 @@ export const WorkflowResultViewer = ({ results }: WorkflowResultViewerProps) => 
       case 'badge':
         // Render badge content (simple key-value pairs)
         if (parsedContent && typeof parsedContent === 'object') {
+          // If the entire parsed content is an object or array, render it as a textarea
+          if (Array.isArray(parsedContent) || Object.keys(parsedContent).length > 3) {
+            return (
+              <div className="p-2">
+                <div className="flex justify-end gap-2 mb-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => copyToClipboard(JSON.stringify(parsedContent, null, 2))}
+                    className="h-7 px-2 text-xs"
+                  >
+                    <CopyIcon className="h-3.5 w-3.5 mr-1" />
+                    Copy
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => toggleExpand(resultId)}
+                    className="h-7 px-2 text-xs"
+                  >
+                    {isExpanded ? <MinusIcon className="h-3.5 w-3.5 mr-1" /> : <ExpandIcon className="h-3.5 w-3.5 mr-1" />}
+                    {isExpanded ? "Collapse" : "Expand"}
+                  </Button>
+                </div>
+                
+                {isExpanded ? (
+                  <Textarea 
+                    value={JSON.stringify(parsedContent, null, 2)}
+                    readOnly
+                    className="min-h-[200px] w-full font-mono text-sm"
+                  />
+                ) : (
+                  <ScrollArea className="h-[150px] w-full rounded-md border p-4">
+                    <pre className="whitespace-pre-wrap text-sm font-mono">
+                      {JSON.stringify(parsedContent, null, 2)}
+                    </pre>
+                  </ScrollArea>
+                )}
+              </div>
+            );
+          }
+
+          // For simple key-value pairs only (3 or fewer items), show as badges
           return (
             <div className="flex flex-wrap gap-2">
               {Object.entries(parsedContent).map(([key, value]) => {
+                // Only display as badge if the value is a simple type (not an object)
+                if (typeof value === 'object' && value !== null) {
+                  return (
+                    <div key={key} className="w-full space-y-1 mb-2">
+                      <div className="text-sm font-medium">{key}</div>
+                      {renderJsonValue(value)}
+                    </div>
+                  );
+                }
+                
+                // Simple values can be badges
                 const displayValue = safeStringify(value).length > 20
                   ? safeStringify(value).substring(0, 17) + '...'
                   : safeStringify(value);

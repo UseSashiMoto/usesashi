@@ -298,26 +298,64 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         throw new Error('Test error for Sentry');
     }));
 
-    function guessUIType(result: any): 'card' | 'table' | 'badge' | 'text' | 'graph' {
+    function guessUIType(result: any): 'card' | 'table' | 'badge' | 'text' | 'textarea' | 'graph' {
         // Handle null, undefined or primitive values as text
         if (result === null || result === undefined) {
             return 'text';
         }
 
-        // Handle strings based on length
+        // Handle strings based on length and content
         if (typeof result === 'string') {
+            // Check if it's a JSON string
+            try {
+                const parsed = JSON.parse(result);
+                // If it's a JSON object or array with multiple items, use textarea
+                if (typeof parsed === 'object' && parsed !== null) {
+                    if (Array.isArray(parsed) && parsed.length > 1) {
+                        return 'textarea';
+                    }
+                    // If it's an object with multiple keys or nested structure, use textarea
+                    if (!Array.isArray(parsed) && Object.keys(parsed).length > 1) {
+                        return 'textarea';
+                    }
+                    // Otherwise, use the type based on the parsed content
+                    return guessUIType(parsed);
+                }
+            } catch (e) {
+                // Not JSON, continue with other string checks
+            }
+
             // Long text gets the text treatment
             if (result.length > 300) {
                 return 'text';
             }
-            // Check if it might be JSON
-            try {
-                const parsed = JSON.parse(result);
-                // If we successfully parsed, recursively determine the type of the parsed content
-                return guessUIType(parsed);
-            } catch (e) {
-                // Not JSON, treat as text
-                return 'text';
+
+            return 'text';
+        }
+
+        // Check for large nested objects (should use textarea)
+        if (typeof result === 'object' && result !== null && !Array.isArray(result)) {
+            const json = JSON.stringify(result);
+            if (json.length > 300) {
+                return 'textarea';
+            }
+
+            // Check if we have deeply nested objects
+            const hasComplexNesting = (obj: any, depth: number = 0): boolean => {
+                if (depth > 2) return true; // If nesting is deeper than 2 levels
+                if (typeof obj !== 'object' || obj === null) return false;
+
+                if (Array.isArray(obj)) {
+                    return obj.some(item => typeof item === 'object' && item !== null && hasComplexNesting(item, depth + 1));
+                }
+
+                return Object.values(obj).some(val =>
+                    typeof val === 'object' && val !== null && hasComplexNesting(val, depth + 1)
+                );
+            };
+
+            if (hasComplexNesting(result)) {
+                return 'textarea';
             }
         }
 
@@ -326,6 +364,11 @@ export const createMiddleware = (options: MiddlewareOptions) => {
             // Empty arrays are just text
             if (result.length === 0) {
                 return 'text';
+            }
+
+            // Large arrays should be textareas
+            if (result.length > 20) {
+                return 'textarea';
             }
 
             // Check if it's an array of objects with consistent keys (table)
@@ -390,7 +433,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
     // Function to enhance UI type determination with LLM
     async function enhanceUIWithLLM(result: any, initialType: string, aibot: any): Promise<{
-        type: 'card' | 'table' | 'badge' | 'text' | 'graph';
+        type: 'card' | 'table' | 'badge' | 'text' | 'textarea' | 'graph';
         config?: Record<string, any>;
     }> {
         try {
@@ -409,13 +452,19 @@ export const createMiddleware = (options: MiddlewareOptions) => {
             The system's initial guess is that this should be displayed as: ${initialType}
             
             Please provide a JSON response with:
-            1. The best UI component type to use ('table', 'card', 'badge', 'text', or 'graph')
+            1. The best UI component type to use ('table', 'card', 'badge', 'text', 'textarea', or 'graph')
+               - 'table' for tabular data with rows and columns
+               - 'card' for object display with key-value pairs in a card format
+               - 'badge' for simple key-value pairs
+               - 'text' for plain text display
+               - 'textarea' for complex JSON structures or large text blocks that need a scrollable area
+               - 'graph' for data that should be visualized as a chart
             2. If 'graph' is selected, specify what type of chart would be best (line, bar, pie, etc.)
             3. Any configuration parameters that would help render this data effectively
             
             Your response should be valid JSON in this format:
             {
-              "type": "card" | "table" | "badge" | "text" | "graph",
+              "type": "card" | "table" | "badge" | "text" | "textarea" | "graph",
               "chartType": "line" | "bar" | "pie" | "scatter" | "area" | null, // Only if type is graph
               "config": {
                 // Any relevant configuration like titles, labels, colors, etc.
@@ -459,7 +508,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
             // Validate the response has a valid type
             if (jsonResponse &&
-                ['card', 'table', 'badge', 'text', 'graph'].includes(jsonResponse.type)) {
+                ['card', 'table', 'badge', 'text', 'textarea', 'graph'].includes(jsonResponse.type)) {
                 return {
                     type: jsonResponse.type,
                     config: jsonResponse.config || {}

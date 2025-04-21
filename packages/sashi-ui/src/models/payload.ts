@@ -40,7 +40,7 @@ export interface WorkflowUIElement {
   actionId: string;
   tool: string;
   content: {
-    type: 'card' | 'table' | 'badge' | 'text' | 'graph';
+    type: 'card' | 'table' | 'badge' | 'text' | 'textarea' | 'graph';
     title: string;
     content: string;
     timestamp: string;
