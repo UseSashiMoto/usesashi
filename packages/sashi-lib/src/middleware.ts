@@ -4,6 +4,9 @@ import cors from "cors"
 import { NextFunction, Request, Response, Router } from "express"
 
 import {
+    AIArray,
+    AIFieldEnum,
+    AIObject,
     callFunctionFromRegistryFromObject,
     getFunctionAttributes,
     getFunctionRegistry,
@@ -295,14 +298,181 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         throw new Error('Test error for Sentry');
     }));
 
-    function guessUIType(result: any): 'card' | 'table' | 'badge' {
-        if (Array.isArray(result) && result.every(row => typeof row === 'object')) {
-            return 'table';
+    function guessUIType(result: any): 'card' | 'table' | 'badge' | 'text' | 'graph' {
+        // Handle null, undefined or primitive values as text
+        if (result === null || result === undefined) {
+            return 'text';
         }
-        if (typeof result === 'object' && Object.keys(result).length <= 3) {
-            return 'badge';
+
+        // Handle strings based on length
+        if (typeof result === 'string') {
+            // Long text gets the text treatment
+            if (result.length > 300) {
+                return 'text';
+            }
+            // Check if it might be JSON
+            try {
+                const parsed = JSON.parse(result);
+                // If we successfully parsed, recursively determine the type of the parsed content
+                return guessUIType(parsed);
+            } catch (e) {
+                // Not JSON, treat as text
+                return 'text';
+            }
         }
-        return 'card';
+
+        // Check for arrays that could be table data
+        if (Array.isArray(result)) {
+            // Empty arrays are just text
+            if (result.length === 0) {
+                return 'text';
+            }
+
+            // Check if it's an array of objects with consistent keys (table)
+            if (result.every(item => typeof item === 'object' && item !== null)) {
+                // Get all keys from the first item
+                const firstItemKeys = Object.keys(result[0] || {});
+
+                // If every item has at least some of these keys, it's likely a table
+                if (firstItemKeys.length > 0 && result.length > 1) {
+                    return 'table';
+                }
+            }
+
+            // Check if it's an array of simple values (potential graph data)
+            if (result.every(item =>
+                typeof item === 'number' ||
+                (typeof item === 'object' && item !== null && 'x' in item && 'y' in item)
+            )) {
+                return 'graph';
+            }
+
+            // Default arrays to card view
+            return 'card';
+        }
+
+        // Check for graph data structure
+        if (typeof result === 'object' && result !== null) {
+            // Check for common graph data structures
+            if (
+                ('data' in result && Array.isArray(result.data)) ||
+                ('datasets' in result && Array.isArray(result.datasets)) ||
+                ('series' in result && Array.isArray(result.series))
+            ) {
+                return 'graph';
+            }
+
+            // Small objects (2-3 keys) are badges
+            const keys = Object.keys(result);
+            if (keys.length <= 3) {
+                return 'badge';
+            }
+
+            // Check for nested structures (more complex objects)
+            const hasNestedObjects = Object.values(result).some(
+                val => typeof val === 'object' && val !== null
+            );
+
+            // Complex objects with nested data are cards
+            if (hasNestedObjects) {
+                return 'card';
+            }
+        }
+
+        // Default to card for objects
+        if (typeof result === 'object' && result !== null) {
+            return 'card';
+        }
+
+        // Default for everything else
+        return 'text';
+    }
+
+    // Function to enhance UI type determination with LLM
+    async function enhanceUIWithLLM(result: any, initialType: string, aibot: any): Promise<{
+        type: 'card' | 'table' | 'badge' | 'text' | 'graph';
+        config?: Record<string, any>;
+    }> {
+        try {
+            const stringifiedResult = typeof result === 'string'
+                ? result
+                : JSON.stringify(result, null, 2);
+
+            const prompt = `
+            You are an AI that specializes in data visualization and UI design.
+            
+            Analyze this data and determine the best way to display it in a UI:
+            \`\`\`
+            ${stringifiedResult}
+            \`\`\`
+            
+            The system's initial guess is that this should be displayed as: ${initialType}
+            
+            Please provide a JSON response with:
+            1. The best UI component type to use ('table', 'card', 'badge', 'text', or 'graph')
+            2. If 'graph' is selected, specify what type of chart would be best (line, bar, pie, etc.)
+            3. Any configuration parameters that would help render this data effectively
+            
+            Your response should be valid JSON in this format:
+            {
+              "type": "card" | "table" | "badge" | "text" | "graph",
+              "chartType": "line" | "bar" | "pie" | "scatter" | "area" | null, // Only if type is graph
+              "config": {
+                // Any relevant configuration like titles, labels, colors, etc.
+              }
+            }
+            `;
+
+            const response = await aibot.chatCompletion({
+                model: "gpt-4o-mini",
+                messages: [
+                    { role: "system", content: "You are a helpful assistant." },
+                    { role: "user", content: prompt }
+                ],
+                temperature: 0.3
+            });
+
+            let jsonResponse;
+            const content = response.message?.content || '';
+
+            // Try to extract JSON from the response
+            try {
+                // First try direct parsing
+                jsonResponse = JSON.parse(content);
+            } catch (e) {
+                // If that fails, try to extract JSON from markdown
+                const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+                if (jsonMatch && jsonMatch[1]) {
+                    try {
+                        jsonResponse = JSON.parse(jsonMatch[1]);
+                    } catch (jsonErr) {
+                        // If extraction fails, fall back to the initial guess
+                        console.error("Failed to parse LLM response JSON:", jsonErr);
+                        return { type: initialType as any };
+                    }
+                } else {
+                    // No JSON found, fall back to initial guess
+                    console.error("No JSON found in LLM response");
+                    return { type: initialType as any };
+                }
+            }
+
+            // Validate the response has a valid type
+            if (jsonResponse &&
+                ['card', 'table', 'badge', 'text', 'graph'].includes(jsonResponse.type)) {
+                return {
+                    type: jsonResponse.type,
+                    config: jsonResponse.config || {}
+                };
+            } else {
+                console.error("Invalid UI type from LLM:", jsonResponse?.type);
+                return { type: initialType as any };
+            }
+
+        } catch (error) {
+            console.error("Error using LLM for UI enhancement:", error);
+            return { type: initialType as any };
+        }
     }
 
     router.get('/call-function', validateRepoRequest({ sashiServerUrl, repoSecretKey }), async (req, res) => {
@@ -519,46 +689,200 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
 
     router.post('/workflow/execute', async (req, res) => {
-        const { workflow } = req.body;
+        const { workflow, debug = false } = req.body;
 
         if (!workflow || !workflow.actions || !Array.isArray(workflow.actions)) {
             return res.status(400).json({ error: 'Invalid workflow format' });
         }
 
+        if (debug) {
+            console.log("Executing workflow:", JSON.stringify(workflow, null, 2));
+        }
+
         const functionRegistry = getFunctionRegistry();
         const actionResults: Record<string, any> = {};
+        const errors: Array<{ actionId: string, error: string }> = [];
 
         try {
             for (let i = 0; i < workflow.actions.length; i++) {
                 const action = workflow.actions[i];
+                const actionId = action.id || `action_${i}`;
                 const toolName = action.tool.replace(/^functions\./, '');
                 const { parameters } = action;
                 const registeredFunction = functionRegistry.get(toolName);
 
                 if (!registeredFunction) {
-                    throw new Error(`Function ${toolName} not found in registry`);
+                    throw new Error(`Function ${toolName} not found in registry for action "${actionId}"`);
+                }
+
+                // Debug logging
+                if (debug) {
+                    console.log(`\n[Workflow Step ${i + 1}] Processing action "${actionId}" using tool "${toolName}"`);
+                    console.log(`Original parameters:`, parameters);
                 }
 
                 const processedParameters: Record<string, any> = { ...parameters };
+
+                // Clear any previous errors for this action
+                const actionErrors: Array<{ actionId: string, error: string }> = [];
+
+                // Process parameter references
                 for (const [key, value] of Object.entries(parameters)) {
                     if (typeof value === 'string' && value.includes('.')) {
-                        const [refActionId, field] = value.split('.');
-                        if (!!refActionId) {
-                            const refResult = actionResults[refActionId];
-                            if (refResult && field) {
-                                processedParameters[key] = refResult[field];
+                        try {
+                            const parts = value.split('.');
+                            if (parts.length >= 2) {
+                                const refActionId = parts[0];
+                                if (refActionId) {
+                                    const refResult = actionResults[refActionId];
+
+                                    if (!refResult) {
+                                        throw new Error(`Referenced action "${refActionId}" not found or didn't produce a result`);
+                                    }
+
+                                    // For deeply nested properties, traverse the object
+                                    let currentValue = refResult;
+
+                                    // Start from 1 to skip the action ID
+                                    for (let j = 1; j < parts.length; j++) {
+                                        const field = parts[j];
+                                        if (field && typeof currentValue === 'object' && currentValue !== null && field in currentValue) {
+                                            currentValue = currentValue[field];
+                                        } else {
+                                            throw new Error(`Field "${parts.slice(1).join('.')}" not found in the result of action "${refActionId}"`);
+                                        }
+                                    }
+
+                                    // Handle type conversions based on the expected parameter type
+                                    let expectedType = null;
+                                    try {
+                                        if (typeof registeredFunction.getParams === 'function') {
+                                            const functionParam = registeredFunction.getParams().find(param => {
+                                                if (param instanceof AIObject) {
+                                                    return param.getName() === key;
+                                                } else if (param instanceof AIArray) {
+                                                    return param.getName() === key;
+                                                } else if (param instanceof AIFieldEnum) {
+                                                    return param.getName() === key;
+                                                } else if ('name' in param) {
+                                                    return param.name === key;
+                                                }
+                                                return false;
+                                            });
+
+                                            if (functionParam) {
+                                                // Only apply type conversion if we found a matching parameter
+                                                if (functionParam instanceof AIObject) {
+                                                    // Ensure object is actually an object
+                                                    if (typeof currentValue !== 'object' || currentValue === null) {
+                                                        throw new Error(`Expected object for parameter "${key}" but got ${typeof currentValue}`);
+                                                    }
+                                                } else if (functionParam instanceof AIArray) {
+                                                    // Ensure array is actually an array
+                                                    if (!Array.isArray(currentValue)) {
+                                                        throw new Error(`Expected array for parameter "${key}" but got ${typeof currentValue}`);
+                                                    }
+                                                } else if ('type' in functionParam) {
+                                                    // Basic type conversions for primitive types
+                                                    expectedType = functionParam.type;
+                                                }
+                                            }
+                                        }
+
+                                        // Apply type conversions based on expected type if found
+                                        if (expectedType) {
+                                            if (expectedType === 'string' && typeof currentValue !== 'string') {
+                                                currentValue = String(currentValue);
+                                            } else if (expectedType === 'number' && typeof currentValue !== 'number') {
+                                                const num = Number(currentValue);
+                                                if (isNaN(num)) {
+                                                    throw new Error(`Cannot convert "${currentValue}" to number for parameter "${key}"`);
+                                                }
+                                                currentValue = num;
+                                            } else if (expectedType === 'boolean' && typeof currentValue !== 'boolean') {
+                                                if (currentValue === 'true') currentValue = true;
+                                                else if (currentValue === 'false') currentValue = false;
+                                                else if (currentValue === 1) currentValue = true;
+                                                else if (currentValue === 0) currentValue = false;
+                                                else {
+                                                    throw new Error(`Cannot convert "${currentValue}" to boolean for parameter "${key}"`);
+                                                }
+                                            }
+                                        }
+
+                                        processedParameters[key] = currentValue;
+
+                                        if (debug) {
+                                            console.log(`Resolved parameter "${key}" from "${value}" to:`, currentValue);
+                                        }
+                                    } catch (typeError: unknown) {
+                                        // If we can't validate the type, just use the value as is
+                                        processedParameters[key] = currentValue;
+                                        if (debug) {
+                                            console.warn(`Skipping type validation for parameter "${key}" (using as-is):`,
+                                                typeError instanceof Error ? typeError.message : String(typeError));
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (paramError) {
+                            // Collect errors but continue with other parameters if possible
+                            const errorMessage = paramError instanceof Error ? paramError.message : String(paramError);
+                            actionErrors.push({ actionId, error: `Parameter error for "${key}": ${errorMessage}` });
+                            if (debug) {
+                                console.error(`Error resolving parameter "${key}":`, errorMessage);
                             }
                         }
                     }
                 }
 
-                const result = await callFunctionFromRegistryFromObject(toolName, processedParameters);
-                actionResults[action.id] = result;
+                // If we have any parameter errors, throw now before executing the function
+                if (actionErrors.length > 0) {
+                    errors.push(...actionErrors);
+                    throw new Error(`Failed to resolve parameters for action "${actionId}": ${actionErrors.map(e => e.error).join(', ')}`);
+                }
+
+                if (debug) {
+                    console.log(`Processed parameters for "${actionId}":`, processedParameters);
+                }
+
+                try {
+                    console.log(`Executing function ${toolName} with parameters:`, processedParameters);
+                    const result = await callFunctionFromRegistryFromObject(toolName, processedParameters);
+                    actionResults[action.id] = result;
+
+                    if (debug) {
+                        console.log(`Result from "${actionId}":`, result);
+                    }
+                } catch (functionError) {
+                    // Enhance the error message with context about which step failed
+                    const errorMessage = functionError instanceof Error ? functionError.message : String(functionError);
+                    throw new Error(`Error executing function "${toolName}" for action "${actionId}": ${errorMessage}`);
+                }
             }
 
             const finalAction = workflow.actions[workflow.actions.length - 1];
             const finalResult = actionResults[finalAction.id];
-            const guessedType = guessUIType(finalResult);
+            const initialUIType = guessUIType(finalResult);
+
+            // Always try to use LLM for UI determination (useLLMForUI defaults to true)
+            let uiType = initialUIType;
+            let uiConfig = {};
+
+            try {
+                const aibot = getAIBot();
+                const enhancedUI = await enhanceUIWithLLM(finalResult, initialUIType, aibot);
+                uiType = enhancedUI.type;
+                uiConfig = enhancedUI.config || {};
+
+                if (debug) {
+                    console.log(`Enhanced UI type: ${uiType} (was: ${initialUIType})`);
+                    console.log('UI config:', JSON.stringify(uiConfig, null, 2));
+                }
+            } catch (error) {
+                console.error("Error enhancing UI with LLM:", error);
+            }
+
 
             const finalWorkflowResult: WorkflowResult = {
                 actionId: finalAction.id,
@@ -568,10 +892,11 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                     actionId: finalAction.id,
                     tool: finalAction.tool,
                     content: {
-                        type: guessedType,
+                        type: uiType,
                         title: finalAction.tool,
                         content: typeof finalResult === 'object' ? JSON.stringify(finalResult, null, 2) : String(finalResult),
-                        timestamp: new Date().toISOString()
+                        timestamp: new Date().toISOString(),
+                        config: uiConfig
                     }
                 }
             };
@@ -583,9 +908,12 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
         } catch (error: unknown) {
             console.error('Error executing workflow:', error);
+
+            // Include all collected errors in the response for better debugging
             res.status(500).json({
                 error: 'Failed to execute workflow',
-                details: error instanceof Error ? error.message : 'Unknown error'
+                details: error instanceof Error ? error.message : 'Unknown error',
+                stepErrors: errors.length > 0 ? errors : undefined
             });
         }
     });

@@ -20,17 +20,7 @@ export interface WorkflowResponse {
 export interface WorkflowResult {
     actionId: string;
     result: Record<string, any>;
-    uiElement: {
-        type: string;
-        actionId: string;
-        tool: string;
-        content: {
-            type: string;
-            title: string;
-            content: string;
-            timestamp: string;
-        };
-    };
+    uiElement: WorkflowUIElement;
 }
 
 export type WorkflowEntryType = 'form' | 'button';
@@ -53,5 +43,18 @@ export interface UIWorkflowDefinition {
     outputUI?: {
         layout?: 'card' | 'table' | 'badge';
         config?: Record<string, any>; // Optional: charts, colors, etc.
+    };
+}
+
+export interface WorkflowUIElement {
+    type: string;
+    actionId: string;
+    tool: string;
+    content: {
+        type: 'card' | 'table' | 'badge' | 'text' | 'graph';
+        title: string;
+        content: string;
+        timestamp: string;
+        config?: Record<string, any>; // Configuration for visual elements like charts
     };
 }

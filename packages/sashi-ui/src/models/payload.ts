@@ -32,6 +32,7 @@ export interface WorkflowResponse {
     execute_immediately: boolean
     generate_ui: boolean
   }
+  executionResults?: WorkflowResult[]
 }
 
 export interface WorkflowUIElement {
@@ -39,10 +40,18 @@ export interface WorkflowUIElement {
   actionId: string;
   tool: string;
   content: {
-    type: string;
+    type: 'card' | 'table' | 'badge' | 'text' | 'graph';
     title: string;
     content: string;
     timestamp: string;
+    config?: {
+      chartType?: 'line' | 'bar' | 'pie' | 'area' | 'radar' | 'radial' | 'scatter';
+      xAxis?: string;
+      yAxis?: string;
+      labels?: string[];
+      colors?: string[];
+      [key: string]: any;
+    };
   };
 }
 

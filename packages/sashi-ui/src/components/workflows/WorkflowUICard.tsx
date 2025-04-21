@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tooltip } from '@/components/ui/tooltip';
 import { TooltipContent, TooltipProvider, TooltipTrigger } from '@radix-ui/react-tooltip';
 import axios from 'axios';
-import { Check, Copy, GripVertical, Pin, PinOff, X } from 'lucide-react';
+import { Check, Code, Copy, GripVertical, Pin, PinOff, X } from 'lucide-react';
 import React, { useState } from 'react';
 import { FormPayload, LabelPayload, UIWorkflowDefinition, WorkflowResult } from '../../models/payload';
 import { WorkflowResultViewer } from './WorkflowResultViewer';
@@ -237,8 +237,9 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
       </CardHeader>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="workflow">Workflow</TabsTrigger>
+          <TabsTrigger value="steps">Steps</TabsTrigger>
           <TabsTrigger value="results" disabled={results.length === 0}>
             Results
           </TabsTrigger>
@@ -290,6 +291,71 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
             ) : (
               <div className="text-center py-4">Unknown UI type: {workflow.entry.entryType}</div>
             )}
+          </CardContent>
+        </TabsContent>
+
+        <TabsContent value="steps">
+          <CardContent>
+            <div className="space-y-4">
+              <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-md">
+                <h3 className="text-sm font-medium text-blue-800 dark:text-blue-300">About this workflow</h3>
+                <p className="text-sm text-blue-600 dark:text-blue-400 mt-1">
+                  Review the steps that will be executed when you run this workflow. This helps you understand exactly
+                  what will happen.
+                </p>
+              </div>
+
+              <h3 className="text-sm font-medium mb-2">This workflow will execute these steps:</h3>
+
+              <div className="border rounded-md divide-y">
+                {workflow.workflow.actions.map((action, index) => (
+                  <div key={index} className="p-3 bg-slate-50 dark:bg-slate-900">
+                    <div className="flex items-start">
+                      <div className="h-6 w-6 flex items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300 mr-2 flex-shrink-0 mt-0.5">
+                        {index + 1}
+                      </div>
+                      <div className="flex-1">
+                        <div className="font-medium flex items-center">
+                          <span className="mr-1">{action.tool.replace(/^functions\./, '')}</span>
+                          <Badge variant="outline" className="ml-1 text-xs">
+                            Function
+                          </Badge>
+                        </div>
+                        <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">{action.description}</div>
+
+                        {Object.keys(action.parameters).length > 0 && (
+                          <div className="mt-2 text-xs bg-slate-100 dark:bg-slate-800 p-2 rounded overflow-hidden">
+                            <div className="font-mono flex items-center text-xs mb-1">
+                              <Code className="h-3 w-3 mr-1" /> Parameters:
+                            </div>
+                            {Object.entries(action.parameters).map(([key, value]) => (
+                              <div key={key} className="pl-3 font-mono break-all">
+                                {key}:{' '}
+                                {typeof value === 'string'
+                                  ? `"${value.length > 30 ? value.substring(0, 30) + '...' : value}"`
+                                  : JSON.stringify(value)}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {workflow.workflow.actions.length === 0 && (
+                <div className="text-center py-6 text-slate-500 dark:text-slate-400">
+                  This workflow doesn't have any steps defined.
+                </div>
+              )}
+
+              <div className="flex justify-center mt-4">
+                <Button variant="outline" onClick={() => setActiveTab('workflow')} className="w-full">
+                  Continue to Execution
+                </Button>
+              </div>
+            </div>
           </CardContent>
         </TabsContent>
 

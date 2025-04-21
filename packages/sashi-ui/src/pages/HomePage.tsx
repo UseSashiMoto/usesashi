@@ -1,6 +1,7 @@
 import { Button } from '@/components/Button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { WorkflowResultViewer } from '@/components/workflows/WorkflowResultViewer';
 import { WorkflowSaveForm } from '@/components/workflows/WorkflowSaveForm';
 import { WorkflowUICard } from '@/components/workflows/WorkflowUICard';
@@ -27,6 +28,13 @@ import {
   WorkflowResponse,
   WorkflowResult,
 } from '../models/payload';
+
+// Custom event type for workflow execution
+interface WorkflowExecutedEvent extends CustomEvent {
+  detail: {
+    results: WorkflowResult[];
+  };
+}
 
 function getUniqueId() {
   return Math.random().toString(36).substring(2) + new Date().getTime().toString(36);
@@ -103,19 +111,37 @@ export interface WorkflowConfirmationCardProps {
   onCancel: () => void;
 }
 
-export interface WorkflowConfirmationCardProps {
-  workflow: WorkflowResponse;
-  onExecute: () => void;
-  onGenerateUI: () => void;
-  onCancel: () => void;
-}
-
+// Component for displaying a workflow and its execution options
 export function WorkflowConfirmationCard({
   workflow,
   onExecute,
   onGenerateUI,
   onCancel,
 }: WorkflowConfirmationCardProps) {
+  const [activeTab, setActiveTab] = useState('workflow');
+
+  // If workflow execution results are present, default to showing results tab
+  useEffect(() => {
+    if (workflow.executionResults && workflow.executionResults.length > 0) {
+      setActiveTab('results');
+    }
+  }, [workflow.executionResults]);
+
+  // Listen for workflow execution events
+  useEffect(() => {
+    const handleWorkflowExecuted = (event: WorkflowExecutedEvent) => {
+      if (event.detail && event.detail.results) {
+        setActiveTab('results');
+      }
+    };
+
+    window.addEventListener('workflow-executed', handleWorkflowExecuted as EventListener);
+
+    return () => {
+      window.removeEventListener('workflow-executed', handleWorkflowExecuted as EventListener);
+    };
+  }, []);
+
   // If workflow is undefined, don't render anything
   if (!workflow) {
     return null;
@@ -131,7 +157,69 @@ export function WorkflowConfirmationCard({
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <WorkflowVisualizer workflow={workflow} onExecute={onExecute} onGenerateUI={onGenerateUI} onCancel={onCancel} />
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="workflow">Workflow</TabsTrigger>
+            <TabsTrigger value="steps">Steps</TabsTrigger>
+            <TabsTrigger
+              value="results"
+              disabled={!workflow.executionResults || workflow.executionResults.length === 0}
+            >
+              Results
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="workflow">
+            <WorkflowVisualizer
+              workflow={workflow}
+              onExecute={onExecute}
+              onGenerateUI={onGenerateUI}
+              onCancel={onCancel}
+            />
+          </TabsContent>
+
+          <TabsContent value="steps">
+            <div className="p-4 space-y-4">
+              <p className="text-sm text-muted-foreground mb-4">
+                This tab shows the steps that will be executed in this workflow.
+              </p>
+              {workflow.actions.map((action, index) => (
+                <div key={action.id} className="border rounded-md p-3 space-y-2">
+                  <h3 className="font-medium flex items-center">
+                    <span className="mr-2 inline-block bg-primary text-primary-foreground rounded-full h-5 w-5 text-xs flex items-center justify-center">
+                      {index + 1}
+                    </span>
+                    {action.description || action.tool}
+                  </h3>
+                  <div className="text-sm text-muted-foreground">
+                    <code className="text-xs bg-muted px-1 py-0.5 rounded">{action.tool}</code>
+                    <div className="mt-1">
+                      <span className="font-semibold">Parameters:</span>
+                      <pre className="mt-1 text-xs p-2 bg-muted rounded-md overflow-auto">
+                        {JSON.stringify(action.parameters, null, 2)}
+                      </pre>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="results">
+            {workflow.executionResults && workflow.executionResults.length > 0 ? (
+              <div className="p-4">
+                <WorkflowResultViewer results={workflow.executionResults.map((result) => result.uiElement)} />
+              </div>
+            ) : (
+              <div className="p-4 text-center text-muted-foreground">
+                <p>No results yet. Execute the workflow to see results here.</p>
+                <Button onClick={onExecute} className="mt-4">
+                  Execute Workflow
+                </Button>
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
       </CardContent>
     </Card>
   );
@@ -551,13 +639,33 @@ export const HomePage = () => {
 
     setLoading(true);
 
-    const response = await axios.post(`${apiUrl}/workflow/execute`, {
-      workflow: workflowConfirmationCard,
-    });
+    try {
+      const response = await axios.post(`${apiUrl}/workflow/execute`, {
+        workflow: workflowConfirmationCard,
+        debug: true, // Enable debug mode to get detailed logs
+      });
 
-    console.log('response', response);
+      console.log('workflow execution response', response.data);
 
-    setLoading(false);
+      // Store the results in the workflowConfirmationCard to be displayed
+      if (response.data.success && response.data.results) {
+        // Update the workflow confirmation card to include results
+        setWorkflowConfirmationCard({
+          ...workflowConfirmationCard,
+          executionResults: response.data.results,
+        } as WorkflowResponse);
+
+        // Set the active tab to 'results' in the WorkflowUICard
+        const event = new CustomEvent('workflow-executed', {
+          detail: { results: response.data.results },
+        }) as WorkflowExecutedEvent;
+        window.dispatchEvent(event);
+      }
+    } catch (error) {
+      console.error('Error executing workflow:', error);
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function generateUI() {

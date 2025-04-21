@@ -23,6 +23,7 @@
         "lint": "TIMING=1 eslint --fix",
         "seed": "ts-node ./scripts/seed.ts",
         "test": "dotenv --  jest --passWithNoTests",
+        "test:workflow": "jest src/tests/workflow.test.ts",
         "publish": "yarn build lint test && changeset version && changeset publish"
     },
     "peerDependencies": {
