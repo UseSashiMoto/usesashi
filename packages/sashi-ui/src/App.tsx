@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import type { UserPreferences } from './components/ThemeSwitcher';
 import { Toaster } from './components/ui/toaster';
+import { DashboardPage } from './pages/DashboardPage';
 import { HomePage } from './pages/HomePage';
 import { SettingPage } from './pages/SettingPage';
 import useAppStore from './store/chat-store';
@@ -115,6 +116,10 @@ export const App = ({ apiUrl: oldApiUrl, sessionToken: initialSessionToken }: Pa
       {
         path: '/',
         element: <HomePage />,
+      },
+      {
+        path: '/dashboard',
+        element: <DashboardPage />,
       },
       {
         path: '/setting',

@@ -7,6 +7,7 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip } from '@/components/ui/tooltip';
+import { WorkflowStorage } from '@/utils/workflowStorage';
 import { TooltipContent, TooltipProvider, TooltipTrigger } from '@radix-ui/react-tooltip';
 import axios from 'axios';
 import { Check, Code, Copy, GripVertical, Pin, PinOff, X } from 'lucide-react';
@@ -20,6 +21,7 @@ interface WorkflowUICardProps {
   onClose?: () => void;
   onSave?: (workflowId: string) => void;
   onPin?: (isPinned: boolean) => void;
+  onExecute?: () => void;
   isDraggable?: boolean;
   isInChat?: boolean;
 }
@@ -30,14 +32,21 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
   onClose,
   onSave,
   onPin,
+  onExecute,
   isDraggable = false,
   isInChat = true,
 }) => {
   const [formData, setFormData] = useState<Record<string, any>>({});
-  const [results, setResults] = useState<WorkflowResult[]>([]);
+  const [results, setResults] = useState<WorkflowResult[]>(() => {
+    // Initialize with existing results if available
+    return workflow.workflow.executionResults || [];
+  });
   const [isExecuting, setIsExecuting] = useState(false);
   const [isPinned, setIsPinned] = useState(false);
-  const [activeTab, setActiveTab] = useState('workflow');
+  const [activeTab, setActiveTab] = useState(() => {
+    // Default to results tab if results are available
+    return workflow.workflow.executionResults && workflow.workflow.executionResults.length > 0 ? 'results' : 'workflow';
+  });
   const [isCopied, setIsCopied] = useState(false);
 
   // Form field validation
@@ -60,6 +69,13 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
 
   // Execute workflow with form data
   const handleExecute = async () => {
+    // If external execution handler is provided, use that
+    if (onExecute) {
+      onExecute();
+      return;
+    }
+
+    // Otherwise, use internal execution logic
     setIsExecuting(true);
 
     try {
@@ -116,9 +132,35 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
 
   // Save workflow
   const saveWorkflow = () => {
-    if (onSave) {
+    try {
+      const workflowStorage = new WorkflowStorage();
+
+      // Create a SavedWorkflow object with a unique ID based on timestamp
       const workflowId = `workflow-${Date.now()}`;
-      onSave(workflowId);
+      const savedWorkflow = {
+        id: workflowId,
+        name: workflow.entry.description || 'Unnamed Workflow',
+        description: `Saved from ${workflow.entry.entryType} workflow`,
+        timestamp: new Date().toISOString(),
+        workflow: workflow.workflow,
+        results: results.length > 0 ? results.map((result) => result.uiElement) : undefined,
+        tags: ['saved'],
+        favorited: false,
+      };
+
+      // Save to storage
+      workflowStorage.saveWorkflow(savedWorkflow);
+
+      // Call onSave callback if provided
+      if (onSave) {
+        onSave(workflowId);
+      }
+
+      // Show confirmation
+      alert(`Workflow saved to dashboard as "${savedWorkflow.name}"`);
+    } catch (error) {
+      console.error('Error saving workflow to dashboard:', error);
+      alert('Failed to save workflow to dashboard');
     }
   };
 

@@ -1,152 +1,188 @@
 import { Button } from '@/components/Button';
 import { Card, CardContent } from '@/components/ui/card';
+import { UIWorkflowDefinition, WorkflowEntryMetadata } from '@/models/payload';
+import { SavedWorkflow } from '@/pages/DashboardPage';
 import { motion, Reorder } from 'framer-motion';
-import { Grid2X2, List, Plus, Save } from 'lucide-react';
+import { Grid2X2, List, Plus } from 'lucide-react';
 import React, { useState } from 'react';
-import { UIWorkflowDefinition } from '../../models/payload';
 import { WorkflowUICard } from './WorkflowUICard';
 
 interface WorkflowDashboardProps {
-  workflows: UIWorkflowDefinition[];
+  workflows: SavedWorkflow[];
   apiUrl: string;
-  onSaveLayout?: (layout: any) => void;
+  onRerunWorkflow: (workflow: SavedWorkflow) => Promise<void>;
+  onDeleteWorkflow: (workflowId: string) => void;
+  onToggleFavorite: (workflowId: string) => void;
   onAddWorkflow?: () => void;
-  onRemoveWorkflow?: (workflowId: string) => void;
 }
 
 export const WorkflowDashboard: React.FC<WorkflowDashboardProps> = ({
   workflows,
   apiUrl,
-  onSaveLayout,
+  onRerunWorkflow,
+  onDeleteWorkflow,
+  onToggleFavorite,
   onAddWorkflow,
-  onRemoveWorkflow,
 }) => {
-  const [savedWorkflows, setSavedWorkflows] = useState<UIWorkflowDefinition[]>(workflows);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [isEditing, setIsEditing] = useState(false);
+  const [items, setItems] = useState(workflows);
 
-  // Add a workflow to dashboard
-  const handleAddWorkflow = (workflow: UIWorkflowDefinition) => {
-    setSavedWorkflows((prev) => [...prev, workflow]);
+  // Update items when workflows change
+  React.useEffect(() => {
+    setItems(workflows);
+  }, [workflows]);
+
+  const handleRerun = async (workflow: SavedWorkflow) => {
+    await onRerunWorkflow(workflow);
   };
 
-  // Remove a workflow from dashboard
-  const handleRemoveWorkflow = (index: number) => {
-    const newWorkflows = [...savedWorkflows];
-    newWorkflows.splice(index, 1);
-    setSavedWorkflows(newWorkflows);
+  // Helper function to create UI workflow definition from saved workflow
+  const createUIWorkflowDefinition = (workflow: SavedWorkflow): UIWorkflowDefinition => {
+    // If the workflow doesn't have an entry field, create one based on name and description
+    const entryType = workflow.workflow.options?.generate_ui ? 'form' : 'button';
 
-    if (onRemoveWorkflow) {
-      onRemoveWorkflow(`workflow-${index}`);
+    // If there's an execution error, show a label entry type with the error message
+    if (workflow.lastExecutionError) {
+      const entry: WorkflowEntryMetadata = {
+        entryType: 'label',
+        description: `Error executing workflow: ${workflow.name}`,
+        payload: {
+          isError: true,
+          message: workflow.lastExecutionError,
+        },
+      };
+
+      return {
+        workflow: workflow.workflow,
+        entry,
+      };
     }
-  };
 
-  // Save dashboard layout
-  const saveLayout = () => {
-    if (onSaveLayout) {
-      onSaveLayout({
-        workflows: savedWorkflows,
-        layout: viewMode,
+    // If the workflow is currently executing, use a label to show the loading state
+    if (workflow.executing) {
+      const entry: WorkflowEntryMetadata = {
+        entryType: 'label',
+        description: `Executing: ${workflow.name}`,
+        payload: {
+          isError: false,
+          message: 'This workflow is currently running. Please wait...',
+        },
+      };
+
+      return {
+        workflow: workflow.workflow,
+        entry,
+      };
+    }
+
+    // Default case - normal workflow entry
+    const entry: WorkflowEntryMetadata = {
+      entryType,
+      description: workflow.name,
+      payload: entryType === 'form' ? { fields: [] } : {},
+    };
+
+    // Create a copy of the workflow response and add the execution results if available
+    const workflowCopy = {
+      ...workflow.workflow,
+    };
+
+    // Set the execution results if they exist in the saved workflow
+    if (workflow.results && workflow.results.length > 0) {
+      // Map results to the format expected by WorkflowResult
+      const executionResults = workflow.results.map((uiElement) => {
+        return {
+          actionId: uiElement.actionId,
+          result: {}, // We don't have the raw result data, but the UI element has what we need
+          uiElement,
+        };
       });
-    }
-    setIsEditing(false);
-  };
 
-  if (savedWorkflows.length === 0) {
-    return (
-      <Card className="w-full h-64 flex flex-col items-center justify-center">
-        <CardContent className="text-center">
-          <p className="text-muted-foreground mb-4">No workflows saved to dashboard yet</p>
-          {onAddWorkflow && (
-            <Button onClick={onAddWorkflow} className="gap-2">
-              <Plus className="h-4 w-4" />
-              Add Workflow
-            </Button>
-          )}
-        </CardContent>
-      </Card>
-    );
-  }
+      workflowCopy.executionResults = executionResults;
+    }
+
+    return {
+      workflow: workflowCopy,
+      entry,
+    };
+  };
 
   return (
-    <div className="w-full space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold">Workflow Dashboard</h2>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setViewMode('grid')}
-            className={viewMode === 'grid' ? 'bg-muted' : ''}
-          >
-            <Grid2X2 className="h-4 w-4" />
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <div className="flex gap-2">
+          <Button variant={viewMode === 'grid' ? 'default' : 'outline'} size="sm" onClick={() => setViewMode('grid')}>
+            <Grid2X2 className="h-4 w-4 mr-1" />
+            Grid
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setViewMode('list')}
-            className={viewMode === 'list' ? 'bg-muted' : ''}
-          >
-            <List className="h-4 w-4" />
+          <Button variant={viewMode === 'list' ? 'default' : 'outline'} size="sm" onClick={() => setViewMode('list')}>
+            <List className="h-4 w-4 mr-1" />
+            List
           </Button>
-          <Button variant={isEditing ? 'default' : 'outline'} size="sm" onClick={() => setIsEditing(!isEditing)}>
-            {isEditing ? 'Done' : 'Edit'}
+        </div>
+        {onAddWorkflow && (
+          <Button size="sm" onClick={onAddWorkflow}>
+            <Plus className="h-4 w-4 mr-1" />
+            Add Workflow
           </Button>
-          {isEditing && (
-            <Button variant="default" size="sm" onClick={saveLayout}>
-              <Save className="h-4 w-4 mr-2" />
-              Save Layout
-            </Button>
-          )}
+        )}
+      </div>
+
+      {items.length === 0 ? (
+        <div className="text-center py-8 border rounded-md bg-muted/20">
+          <p className="text-muted-foreground mb-3">No workflows found</p>
           {onAddWorkflow && (
-            <Button variant="outline" size="sm" onClick={onAddWorkflow}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add
+            <Button onClick={onAddWorkflow} variant="outline" size="sm">
+              <Plus className="h-4 w-4 mr-1" />
+              Add your first workflow
             </Button>
           )}
         </div>
-      </div>
-
-      {isEditing ? (
+      ) : (
         <Reorder.Group
-          as="div"
           axis="y"
-          values={savedWorkflows}
-          onReorder={setSavedWorkflows}
-          className={`grid ${viewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2 gap-4' : 'grid-cols-1 gap-2'}`}
+          values={items}
+          onReorder={setItems}
+          className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 gap-4' : 'space-y-4'}
         >
-          {savedWorkflows.map((workflow, index) => (
-            <Reorder.Item
-              key={`workflow-${index}`}
-              value={workflow}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.2 }}
-            >
-              <WorkflowUICard
-                workflow={workflow}
-                apiUrl={apiUrl}
-                isDraggable={true}
-                isInChat={false}
-                onClose={() => handleRemoveWorkflow(index)}
-              />
+          {items.map((workflow) => (
+            <Reorder.Item key={workflow.id} value={workflow} className={viewMode === 'grid' ? '' : 'w-full'}>
+              <motion.div
+                layout
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={{ duration: 0.2 }}
+              >
+                {viewMode === 'grid' ? (
+                  <WorkflowUICard
+                    workflow={createUIWorkflowDefinition(workflow)}
+                    apiUrl={apiUrl}
+                    isDraggable={true}
+                    isInChat={false}
+                    onClose={() => onDeleteWorkflow(workflow.id)}
+                    onPin={() => onToggleFavorite(workflow.id)}
+                    onExecute={() => handleRerun(workflow)}
+                  />
+                ) : (
+                  <Card className="w-full">
+                    <CardContent className="p-4">
+                      <WorkflowUICard
+                        workflow={createUIWorkflowDefinition(workflow)}
+                        apiUrl={apiUrl}
+                        isDraggable={true}
+                        isInChat={false}
+                        onClose={() => onDeleteWorkflow(workflow.id)}
+                        onPin={() => onToggleFavorite(workflow.id)}
+                        onExecute={() => handleRerun(workflow)}
+                      />
+                    </CardContent>
+                  </Card>
+                )}
+              </motion.div>
             </Reorder.Item>
           ))}
         </Reorder.Group>
-      ) : (
-        <div className={`grid ${viewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2 gap-4' : 'grid-cols-1 gap-2'}`}>
-          {savedWorkflows.map((workflow, index) => (
-            <motion.div
-              key={`workflow-${index}`}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.2 }}
-            >
-              <WorkflowUICard workflow={workflow} apiUrl={apiUrl} isInChat={false} />
-            </motion.div>
-          ))}
-        </div>
       )}
     </div>
   );

@@ -7,6 +7,7 @@ import { WorkflowSaveForm } from '@/components/workflows/WorkflowSaveForm';
 import { WorkflowUICard } from '@/components/workflows/WorkflowUICard';
 import { WorkflowVisualizer } from '@/components/WorkflowVisualizer';
 import { HEADER_SESSION_TOKEN } from '@/utils/contants';
+import { WorkflowStorage } from '@/utils/workflowStorage';
 import { Label } from '@radix-ui/react-dropdown-menu';
 import { PaperPlaneIcon } from '@radix-ui/react-icons';
 import axios from 'axios';
@@ -109,6 +110,7 @@ export interface WorkflowConfirmationCardProps {
   onExecute: () => void;
   onGenerateUI: () => void;
   onCancel: () => void;
+  onSaveToDashboard?: (name: string) => boolean;
 }
 
 // Component for displaying a workflow and its execution options
@@ -117,8 +119,12 @@ export function WorkflowConfirmationCard({
   onExecute,
   onGenerateUI,
   onCancel,
+  onSaveToDashboard,
 }: WorkflowConfirmationCardProps) {
   const [activeTab, setActiveTab] = useState('workflow');
+  const [isSaving, setIsSaving] = useState(false);
+  const [workflowName, setWorkflowName] = useState('');
+  const [showSaveForm, setShowSaveForm] = useState(false);
 
   // If workflow execution results are present, default to showing results tab
   useEffect(() => {
@@ -142,86 +148,128 @@ export function WorkflowConfirmationCard({
     };
   }, []);
 
+  // Function to save workflow to dashboard
+  const saveWorkflowToDashboard = () => {
+    if (!workflowName.trim()) {
+      setShowSaveForm(true);
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      // Use the provided save function if available
+      if (onSaveToDashboard) {
+        const success = onSaveToDashboard(workflowName);
+        if (success) {
+          setShowSaveForm(false);
+          setWorkflowName('');
+        }
+      } else {
+        // Fallback to local implementation
+        const workflowStorage = new WorkflowStorage();
+
+        // Create a SavedWorkflow object
+        const savedWorkflow = {
+          id: `workflow-${Date.now()}`,
+          name: workflowName,
+          description: `Saved from chat on ${new Date().toLocaleDateString()}`,
+          timestamp: new Date().toISOString(),
+          workflow: workflow,
+          // Map WorkflowResult to WorkflowUIElement for the results
+          results: workflow.executionResults ? workflow.executionResults.map((result) => result.uiElement) : undefined,
+          tags: ['chat'],
+          favorited: false,
+        };
+
+        // Save to storage
+        workflowStorage.saveWorkflow(savedWorkflow);
+
+        // Show confirmation
+        alert(`Workflow saved to dashboard as "${workflowName}"`);
+        setShowSaveForm(false);
+        setWorkflowName('');
+      }
+    } catch (error) {
+      console.error('Error saving workflow to dashboard:', error);
+      alert('Failed to save workflow to dashboard');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   // If workflow is undefined, don't render anything
   if (!workflow) {
     return null;
   }
 
   return (
-    <Card className="w-full md:w-[600px]">
-      <CardHeader className="pb-2">
-        <CardTitle>Workflow</CardTitle>
-        <CardDescription>
-          This workflow contains {workflow.actions?.length || 0} action
-          {(workflow.actions?.length || 0) > 1 ? 's' : ''}.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="workflow">Workflow</TabsTrigger>
-            <TabsTrigger value="steps">Steps</TabsTrigger>
-            <TabsTrigger
-              value="results"
-              disabled={!workflow.executionResults || workflow.executionResults.length === 0}
-            >
-              Results
-            </TabsTrigger>
-          </TabsList>
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="w-full md:w-[500px] p-4 rounded-lg bg-white dark:bg-slate-900 shadow-lg mx-auto mb-6"
+    >
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex justify-between items-start">
+            <CardTitle>Workflow</CardTitle>
+            <Button variant="ghost" size="icon" onClick={onCancel}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          <CardDescription>
+            This workflow has {workflow.actions.length} action{workflow.actions.length === 1 ? '' : 's'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="workflow">Workflow</TabsTrigger>
+              <TabsTrigger value="steps">Steps</TabsTrigger>
+              <TabsTrigger
+                value="results"
+                disabled={!workflow.executionResults || workflow.executionResults.length === 0}
+              >
+                Results
+              </TabsTrigger>
+            </TabsList>
 
-          <TabsContent value="workflow">
-            <WorkflowVisualizer
-              workflow={workflow}
-              onExecute={onExecute}
-              onGenerateUI={onGenerateUI}
-              onCancel={onCancel}
-            />
-          </TabsContent>
+            <TabsContent value="workflow">
+              <div className="space-y-2 mt-2">
+                <WorkflowVisualizer
+                  workflow={workflow}
+                  onExecute={onExecute}
+                  onGenerateUI={onGenerateUI}
+                  onCancel={onCancel}
+                />
+              </div>
+            </TabsContent>
 
-          <TabsContent value="steps">
-            <div className="p-4 space-y-4">
-              <p className="text-sm text-muted-foreground mb-4">
-                This tab shows the steps that will be executed in this workflow.
-              </p>
-              {workflow.actions.map((action, index) => (
-                <div key={action.id} className="border rounded-md p-3 space-y-2">
-                  <h3 className="font-medium flex items-center">
-                    <span className="mr-2 inline-block bg-primary text-primary-foreground rounded-full h-5 w-5 text-xs flex items-center justify-center">
-                      {index + 1}
-                    </span>
-                    {action.description || action.tool}
-                  </h3>
-                  <div className="text-sm text-muted-foreground">
-                    <code className="text-xs bg-muted px-1 py-0.5 rounded">{action.tool}</code>
-                    <div className="mt-1">
-                      <span className="font-semibold">Parameters:</span>
-                      <pre className="mt-1 text-xs p-2 bg-muted rounded-md overflow-auto">
-                        {JSON.stringify(action.parameters, null, 2)}
-                      </pre>
+            <TabsContent value="steps">
+              <div className="space-y-2 mt-2">
+                <div className="text-sm p-2 bg-slate-100 dark:bg-slate-800 rounded-md space-y-3">
+                  {workflow.actions.map((action, index) => (
+                    <div key={index} className="border-l-2 border-slate-400 pl-3">
+                      <div className="font-semibold">{action.tool}</div>
+                      <div className="text-xs">{action.description}</div>
                     </div>
-                  </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </TabsContent>
+              </div>
+            </TabsContent>
 
-          <TabsContent value="results">
-            {workflow.executionResults && workflow.executionResults.length > 0 ? (
-              <div className="p-4">
-                <WorkflowResultViewer results={workflow.executionResults.map((result) => result.uiElement)} />
+            <TabsContent value="results">
+              <div className="mt-2">
+                {workflow.executionResults && workflow.executionResults.length > 0 ? (
+                  <WorkflowResultViewer results={workflow.executionResults.map((r) => r.uiElement)} />
+                ) : (
+                  <div className="text-center py-4 text-slate-500">No results to display</div>
+                )}
               </div>
-            ) : (
-              <div className="p-4 text-center text-muted-foreground">
-                <p>No results yet. Execute the workflow to see results here.</p>
-                <Button onClick={onExecute} className="mt-4">
-                  Execute Workflow
-                </Button>
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
-      </CardContent>
-    </Card>
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
+    </motion.div>
   );
 }
 
@@ -725,6 +773,42 @@ export const HomePage = () => {
     }
   }
 
+  // Function to save any workflow to dashboard with a specific name
+  const saveWorkflowToDashboard = (workflow: WorkflowResponse, name: string) => {
+    try {
+      const workflowStorage = new WorkflowStorage();
+
+      // Create a SavedWorkflow object
+      const savedWorkflow = {
+        id: `workflow-${Date.now()}`,
+        name: name || 'Unnamed Workflow',
+        description: `Saved from chat on ${new Date().toLocaleDateString()}`,
+        timestamp: new Date().toISOString(),
+        workflow: workflow,
+        // Map WorkflowResult to WorkflowUIElement for the results
+        results: workflow.executionResults ? workflow.executionResults.map((result) => result.uiElement) : undefined,
+        tags: ['chat'],
+        favorited: false,
+      };
+
+      // Save to storage
+      workflowStorage.saveWorkflow(savedWorkflow);
+
+      // Show confirmation
+      alert(`Workflow saved to dashboard as "${savedWorkflow.name}"`);
+
+      // Log for debugging
+      console.log('Saved workflow to dashboard:', savedWorkflow);
+      workflowStorage.debugWorkflows();
+
+      return true;
+    } catch (error) {
+      console.error('Error saving workflow to dashboard:', error);
+      alert('Failed to save workflow to dashboard');
+      return false;
+    }
+  };
+
   return (
     <Layout>
       <div className="flex flex-row justify-center pb-20 h-dvh bg-white dark:bg-zinc-900">
@@ -777,14 +861,16 @@ export const HomePage = () => {
                 onExecute={executeWorkflow}
                 onGenerateUI={generateUI}
                 onCancel={() => setWorkflowConfirmationCard(undefined)}
+                onSaveToDashboard={(name) => saveWorkflowToDashboard(workflowConfirmationCard, name)}
               />
             )}
 
             {uiWorkflowCard && apiUrl && (
               <WorkflowUICard
                 workflow={uiWorkflowCard}
-                apiUrl={apiUrl || ''}
+                apiUrl={apiUrl}
                 onClose={() => setUiWorkflowCard(undefined)}
+                isInChat={true}
               />
             )}
 
