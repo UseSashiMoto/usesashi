@@ -294,6 +294,122 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         return res.json(metadata);
     }))
 
+    // =============== WORKFLOW ENDPOINTS ===============
+
+    // Helper to forward workflow requests to hub if available, or handle locally
+    const handleWorkflowRequest = async (req: Request, res: Response, hubPath: string, method: string, useLocalFallback = true) => {
+        // Get session token from request
+        const sessionToken = req.headers['x-session-token'] as string;
+        let sessionId = sessionToken;
+
+        // If getSession is provided, use it to get the session ID
+        if (getSession) {
+            try {
+                sessionId = await getSession(req, res);
+            } catch (error) {
+                console.error('Error getting session ID:', error);
+            }
+        }
+
+        // Check if hub is available and we have a secret key
+        if (hubUrl && apiSecretKey) {
+            try {
+                const headers: Record<string, string> = {
+                    'Content-Type': 'application/json',
+                    [HEADER_API_TOKEN]: apiSecretKey,
+                };
+
+                // Add session ID if available
+                if (sessionId) {
+                    headers['X-Session-ID'] = sessionId;
+                }
+
+                // Prepare the request options
+                const fetchOptions: RequestInit = {
+                    method,
+                    headers,
+                };
+
+                // Add request body for POST/PUT requests
+                if (method === 'POST' || method === 'PUT') {
+                    fetchOptions.body = JSON.stringify(req.body);
+                }
+
+                // Make the request to the hub
+                const hubResponse = await fetch(`${hubUrl}${hubPath}`, fetchOptions);
+
+                // If request was successful, return the response
+                if (hubResponse.ok) {
+                    // For GET requests, return the JSON data
+                    if (method === 'GET') {
+                        const data = await hubResponse.json();
+                        return res.json(data);
+                    }
+
+                    // For other methods, return success status
+                    return res.status(hubResponse.status).json({ success: true });
+                }
+
+                // If hub request failed and we're not using local fallback, return the error
+                if (!useLocalFallback) {
+                    const errorText = await hubResponse.text();
+                    return res.status(hubResponse.status).json({
+                        error: `Hub server error: ${hubResponse.statusText}`,
+                        details: errorText
+                    });
+                }
+
+                // If we get here, hub request failed but we'll try local fallback
+                console.warn(`Hub request failed for ${hubPath}, falling back to local handling`);
+            } catch (error) {
+                console.error(`Error forwarding workflow request to hub (${hubPath}):`, error);
+
+                // If we're not using local fallback, return the error
+                if (!useLocalFallback) {
+                    return res.status(500).json({ error: 'Failed to connect to hub server' });
+                }
+
+                // Otherwise, we'll continue to local handling
+                console.warn(`Hub request failed for ${hubPath}, falling back to local handling`);
+            }
+        }
+
+        // If we get here, either hub is not available, or hub request failed and we're using local fallback
+        // Implement your local workflow storage logic here
+        // For now, we'll return a not implemented error
+        return res.status(501).json({ error: 'Local workflow storage not implemented' });
+    };
+
+    // Get all workflows
+    router.get('/workflows', asyncHandler(async (req, res) => {
+        return handleWorkflowRequest(req, res, '/workflows', 'GET');
+    }));
+
+    // Get a specific workflow by ID
+    router.get('/workflows/:id', asyncHandler(async (req, res) => {
+        return handleWorkflowRequest(req, res, `/workflows/${req.params.id}`, 'GET');
+    }));
+
+    // Create a new workflow
+    router.post('/workflows', asyncHandler(async (req, res) => {
+        return handleWorkflowRequest(req, res, '/workflows', 'POST');
+    }));
+
+    // Update an existing workflow
+    router.put('/workflows/:id', asyncHandler(async (req, res) => {
+        return handleWorkflowRequest(req, res, `/workflows/${req.params.id}`, 'PUT');
+    }));
+
+    // Delete a specific workflow
+    router.delete('/workflows/:id', asyncHandler(async (req, res) => {
+        return handleWorkflowRequest(req, res, `/workflows/${req.params.id}`, 'DELETE');
+    }));
+
+    // Delete all workflows
+    router.delete('/workflows', asyncHandler(async (req, res) => {
+        return handleWorkflowRequest(req, res, '/workflows', 'DELETE');
+    }));
+
     router.get('/test-error', asyncHandler(async (req, res) => {
         throw new Error('Test error for Sentry');
     }));

@@ -2,6 +2,7 @@ import { FunctionSwitch } from '@/models/function-switch';
 import useAppStore from '@/store/chat-store';
 import { Metadata } from '@/store/models';
 import { HEADER_SESSION_TOKEN } from '@/utils/contants';
+import { WorkflowStorage } from '@/utils/workflowStorage';
 import { DashboardIcon, GearIcon, GitHubLogoIcon } from '@radix-ui/react-icons';
 import * as Toast from '@radix-ui/react-toast';
 import axios from 'axios';
@@ -132,6 +133,12 @@ export const Layout: FC<{} & PropsWithChildren> = ({ children }) => {
       getMetadata();
     });
   };
+
+  const storage = new WorkflowStorage({
+    storageType: 'server',
+    serverUrl: apiUrl,
+  });
+
   return (
     <Toast.Provider swipeDirection="right">
       <div className="grid xl:grid-cols-[auto,1fr]">
