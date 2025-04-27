@@ -2,7 +2,7 @@
 const nextConfig = {
   reactStrictMode: true,
   experimental: {
-    transpilePackages: [],
+    transpilePackages: ['sashi-ui'],
   },
   webpack: (config) => {
     config.node = {

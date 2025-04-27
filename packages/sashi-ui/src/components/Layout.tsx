@@ -2,6 +2,7 @@ import { FunctionSwitch } from '@/models/function-switch';
 import useAppStore from '@/store/chat-store';
 import { Metadata } from '@/store/models';
 import { HEADER_SESSION_TOKEN } from '@/utils/contants';
+import { WorkflowStorage } from '@/utils/workflowStorage';
 import { DashboardIcon, GearIcon, GitHubLogoIcon } from '@radix-ui/react-icons';
 import * as Toast from '@radix-ui/react-toast';
 import axios from 'axios';
@@ -132,6 +133,12 @@ export const Layout: FC<{} & PropsWithChildren> = ({ children }) => {
       getMetadata();
     });
   };
+
+  const storage = new WorkflowStorage({
+    storageType: 'server',
+    serverUrl: apiUrl,
+  });
+
   return (
     <Toast.Provider swipeDirection="right">
       <div className="grid xl:grid-cols-[auto,1fr]">
@@ -193,6 +200,18 @@ export const Layout: FC<{} & PropsWithChildren> = ({ children }) => {
                 >
                   <HomeIcon style={{ width: '12px', height: '12px' }} />
                 </Link>
+                {location.pathname === '/dashboard' ? (
+                  <span className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-200 text-slate-900 shadow-sm dark:bg-slate-500 dark:text-slate-50">
+                    <DashboardIcon />
+                  </span>
+                ) : (
+                  <Link
+                    to="/dashboard"
+                    className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-100 text-slate-900 shadow-sm transition duration-150 ease-in-out hover:bg-slate-200 active:bg-slate-300 dark:bg-slate-600 dark:text-slate-50 dark:hover:bg-slate-500"
+                  >
+                    <DashboardIcon />
+                  </Link>
+                )}
                 <a
                   href="https://github.com/radzell/sashi"
                   target="_blank"
@@ -202,9 +221,7 @@ export const Layout: FC<{} & PropsWithChildren> = ({ children }) => {
                   <GitHubLogoIcon />
                 </a>
                 {location.pathname === '/setting' ? (
-                  <span
-                    className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-200 text-slate-900 shadow-sm dark:bg-slate-500 dark:text-slate-50"
-                  >
+                  <span className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-200 text-slate-900 shadow-sm dark:bg-slate-500 dark:text-slate-50">
                     <GearIcon />
                   </span>
                 ) : (

@@ -1,6 +1,7 @@
-import {defineConfig} from "tsup"
+import { defineConfig } from "tsup"
 
 const isProduction = process.env.NODE_ENV === "production"
+const isWatch = process.argv.includes("--watch")
 
 export default defineConfig([
     {
@@ -9,6 +10,10 @@ export default defineConfig([
         entry: ["src/index.ts"],
         format: ["cjs", "esm"],
         minify: isProduction,
-        sourcemap: true
+        sourcemap: true,
+        watch: isWatch ? ["src/**/*.ts"] : false,
+        onSuccess: isWatch
+            ? "echo '✅ Build succeeded - watching for changes...'"
+            : undefined
     }
 ])
