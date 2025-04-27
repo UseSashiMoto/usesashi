@@ -64,7 +64,6 @@ const getSystemPrompt = () => {
 
 export const processChatRequest = async ({ inquiry, previous }: { inquiry: string, previous: any[] }) => {
 
-    console.log("openai key", process.env.OPENAI_API_KEY)
     const aiBot = getAIBot()
 
     const context = trim_array(previous, 20);
@@ -93,7 +92,6 @@ export const processChatRequest = async ({ inquiry, previous }: { inquiry: strin
         )
     })
 
-    console.log("json chat result", JSON.stringify(result, null, 2))
 
     return result
 }

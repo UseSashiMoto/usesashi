@@ -19,11 +19,9 @@
         "build": "echo 'Starting build...' && tsc && tsup src/index.ts --format cjs, esm --dts&& echo 'Build completed!' ",
         "prepublish": "yarn build",
         "dev": "NODE_ENV=development tsup --watch",
-        "dev:verbose": "NODE_ENV=development tsup --watch --onSuccess=\"echo Compiled successfully at $(date)\"",
         "lint": "TIMING=1 eslint --fix",
         "seed": "ts-node ./scripts/seed.ts",
         "test": "dotenv --  jest --passWithNoTests",
-        "test:workflow": "jest src/tests/workflow.test.ts",
         "publish": "yarn build lint test && changeset version && changeset publish"
     },
     "peerDependencies": {

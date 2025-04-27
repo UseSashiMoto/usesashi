@@ -150,7 +150,7 @@ export const WorkflowResultViewer = ({ results }: WorkflowResultViewerProps) => 
     // Generate a unique ID for this result
     const resultId = `result-${ui.actionId}`;
     const isExpanded = expandedResults[resultId] || false;
-    
+
     // Check if content is a JSON string and try to parse it
     let parsedContent: any;
     try {
@@ -162,67 +162,53 @@ export const WorkflowResultViewer = ({ results }: WorkflowResultViewerProps) => 
       parsedContent = null;
     }
 
-    console.log("rendering content", JSON.stringify(ui, null, 2));
-    
     // Function to safely stringify any value
     const safeStringify = (value: any): string => {
       if (value === null || value === undefined) return '';
       if (typeof value === 'object') return JSON.stringify(value, null, 2);
       return String(value);
     };
-    
+
     // Function to render a JSON value with proper formatting in a textarea
     const renderJsonValue = (value: any, isExpanded: boolean = false) => {
       const jsonStr = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
       const uniqueId = `json-${Math.random().toString(36).substring(2, 9)}`;
-      
+
       return (
         <div className="relative">
           <div className="flex justify-end gap-2 mb-2">
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => copyToClipboard(jsonStr)}
-              className="h-7 px-2 text-xs"
-            >
+            <Button variant="outline" size="sm" onClick={() => copyToClipboard(jsonStr)} className="h-7 px-2 text-xs">
               <CopyIcon className="h-3.5 w-3.5 mr-1" />
               Copy
             </Button>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => toggleExpand(uniqueId)}
-              className="h-7 px-2 text-xs"
-            >
-              {expandedResults[uniqueId] ? <MinusIcon className="h-3.5 w-3.5 mr-1" /> : <ExpandIcon className="h-3.5 w-3.5 mr-1" />}
-              {expandedResults[uniqueId] ? "Collapse" : "Expand"}
+            <Button variant="outline" size="sm" onClick={() => toggleExpand(uniqueId)} className="h-7 px-2 text-xs">
+              {expandedResults[uniqueId] ? (
+                <MinusIcon className="h-3.5 w-3.5 mr-1" />
+              ) : (
+                <ExpandIcon className="h-3.5 w-3.5 mr-1" />
+              )}
+              {expandedResults[uniqueId] ? 'Collapse' : 'Expand'}
             </Button>
           </div>
-          
+
           {expandedResults[uniqueId] ? (
-            <Textarea 
-              value={jsonStr}
-              readOnly
-              className="min-h-[150px] max-h-[300px] w-full font-mono text-sm"
-            />
+            <Textarea value={jsonStr} readOnly className="min-h-[150px] max-h-[300px] w-full font-mono text-sm" />
           ) : (
             <ScrollArea className="h-[100px] w-full rounded-md border p-2">
-              <pre className="whitespace-pre-wrap text-xs font-mono">
-                {jsonStr}
-              </pre>
+              <pre className="whitespace-pre-wrap text-xs font-mono">{jsonStr}</pre>
             </ScrollArea>
           )}
         </div>
       );
     };
-    
+
     // Handle large text content
     if (typeof ui.content.content === 'string' && !parsedContent && ui.content.content.length > 300) {
       return (
         <div className="relative">
           <div className="flex justify-end gap-2 mb-2">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               size="sm"
               onClick={() => copyToClipboard(ui.content.content)}
               className="h-7 px-2 text-xs"
