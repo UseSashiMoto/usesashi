@@ -7,7 +7,6 @@ import { WorkflowSaveForm } from '@/components/workflows/WorkflowSaveForm';
 import { WorkflowUICard } from '@/components/workflows/WorkflowUICard';
 import { WorkflowVisualizer } from '@/components/WorkflowVisualizer';
 import { HEADER_SESSION_TOKEN } from '@/utils/contants';
-import { WorkflowStorage } from '@/utils/workflowStorage';
 import { Label } from '@radix-ui/react-dropdown-menu';
 import { PaperPlaneIcon } from '@radix-ui/react-icons';
 import axios from 'axios';
@@ -21,7 +20,6 @@ import useAppStore from 'src/store/chat-store';
 import { MessageItem } from 'src/store/models';
 import { Layout } from '../components/Layout';
 import {
-  FormPayload,
   GeneralResponse,
   LabelPayload,
   PayloadObject,
@@ -49,7 +47,6 @@ interface WorkflowFormProps {
 const WorkflowForm: React.FC<WorkflowFormProps> = ({ workflow, apiUrl }) => {
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [results, setResults] = useState<WorkflowResult[]>([]);
-  const sessionToken = useAppStore((state) => state.sessionToken);
 
   const handleExecute = async () => {
     const updatedActions = workflow.actions.map((action) => {
@@ -110,7 +107,7 @@ export interface WorkflowConfirmationCardProps {
   onExecute: () => void;
   onGenerateUI: () => void;
   onCancel: () => void;
-  onSaveToDashboard?: (name: string) => boolean;
+  onSave?: (workflowId: string) => void;
 }
 
 // Component for displaying a workflow and its execution options
@@ -119,7 +116,6 @@ export function WorkflowConfirmationCard({
   onExecute,
   onGenerateUI,
   onCancel,
-  onSaveToDashboard,
 }: WorkflowConfirmationCardProps) {
   const [activeTab, setActiveTab] = useState('workflow');
   const [isSaving, setIsSaving] = useState(false);
@@ -149,53 +145,6 @@ export function WorkflowConfirmationCard({
   }, []);
 
   // Function to save workflow to dashboard
-  const saveWorkflowToDashboard = () => {
-    if (!workflowName.trim()) {
-      setShowSaveForm(true);
-      return;
-    }
-
-    setIsSaving(true);
-    try {
-      // Use the provided save function if available
-      if (onSaveToDashboard) {
-        const success = onSaveToDashboard(workflowName);
-        if (success) {
-          setShowSaveForm(false);
-          setWorkflowName('');
-        }
-      } else {
-        // Fallback to local implementation
-        const workflowStorage = new WorkflowStorage();
-
-        // Create a SavedWorkflow object
-        const savedWorkflow = {
-          id: `workflow-${Date.now()}`,
-          name: workflowName,
-          description: `Saved from chat on ${new Date().toLocaleDateString()}`,
-          timestamp: new Date().toISOString(),
-          workflow: workflow,
-          // Map WorkflowResult to WorkflowUIElement for the results
-          results: workflow.executionResults ? workflow.executionResults.map((result) => result.uiElement) : undefined,
-          tags: ['chat'],
-          favorited: false,
-        };
-
-        // Save to storage
-        workflowStorage.saveWorkflow(savedWorkflow);
-
-        // Show confirmation
-        alert(`Workflow saved to dashboard as "${workflowName}"`);
-        setShowSaveForm(false);
-        setWorkflowName('');
-      }
-    } catch (error) {
-      console.error('Error saving workflow to dashboard:', error);
-      alert('Failed to save workflow to dashboard');
-    } finally {
-      setIsSaving(false);
-    }
-  };
 
   // If workflow is undefined, don't render anything
   if (!workflow) {
@@ -331,149 +280,6 @@ interface DynamicWorkflowUIProps {
   apiEndpoint: string;
   onComplete?: () => void;
 }
-
-const DynamicWorkflowUI: React.FC<DynamicWorkflowUIProps> = ({ uiDef, apiEndpoint, onComplete }) => {
-  const [formData, setFormData] = useState<Record<string, string>>({});
-  const [workflowResults, setWorkflowResults] = useState<WorkflowResult[]>([]);
-  const [isExecuting, setIsExecuting] = useState(false);
-
-  const handleExecute = async () => {
-    setIsExecuting(true);
-    try {
-      const response = await axios.post(`${apiEndpoint}/workflow/execute`, {
-        workflow: uiDef.workflow,
-      });
-
-      setWorkflowResults(response.data.results || []);
-      if (onComplete) onComplete();
-    } catch (error) {
-      console.error('Error executing workflow:', error);
-    } finally {
-      setIsExecuting(false);
-    }
-  };
-
-  // Handle form input changes
-  const handleInputChange = (key: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [key]: value }));
-  };
-
-  if (uiDef.entry.entryType === 'button') {
-    return (
-      <div className="space-y-6 px-4 w-full md:w-[500px] md:px-0">
-        <Card className="w-full">
-          <CardHeader className="pb-2">
-            <CardTitle>{uiDef.entry.description || 'Run Workflow'}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Button onClick={handleExecute} disabled={isExecuting} className="w-full">
-              {isExecuting ? 'Running...' : 'Execute'}
-            </Button>
-          </CardContent>
-        </Card>
-
-        {workflowResults.length > 0 && (
-          <WorkflowResultViewer results={workflowResults.map((result) => result.uiElement)} />
-        )}
-      </div>
-    );
-  }
-
-  if (uiDef.entry.entryType === 'form') {
-    // Validate if all required fields are filled
-    const isFormValid = () => {
-      const formPayload = uiDef.entry.payload as FormPayload;
-      if (!formPayload?.fields) return true;
-
-      return formPayload.fields.every((field) => {
-        if (field.required) {
-          return !!formData[field.key];
-        }
-        return true;
-      });
-    };
-
-    const handleFormSubmit = async (e: React.FormEvent) => {
-      e.preventDefault();
-
-      // Create a copy of the workflow with form data
-      const workflowWithFormData = { ...uiDef.workflow };
-
-      // Update actions to include form data
-      if (workflowWithFormData.actions) {
-        workflowWithFormData.actions = workflowWithFormData.actions.map((action) => {
-          const updatedParams = { ...action.parameters };
-
-          // Replace parameter values with form data where appropriate
-          for (const key in updatedParams) {
-            const paramValue = updatedParams[key];
-            // Check if field exists in our form data
-            if (formData[key] !== undefined) {
-              updatedParams[key] = formData[key];
-            }
-          }
-
-          return {
-            ...action,
-            parameters: updatedParams,
-          };
-        });
-      }
-
-      setIsExecuting(true);
-      try {
-        const response = await axios.post(`${apiEndpoint}/workflow/execute`, {
-          workflow: workflowWithFormData,
-        });
-
-        setWorkflowResults(response.data.results || []);
-        if (onComplete) onComplete();
-      } catch (error) {
-        console.error('Error executing workflow:', error);
-      } finally {
-        setIsExecuting(false);
-      }
-    };
-
-    const formPayload = uiDef.entry.payload as FormPayload;
-
-    return (
-      <div className="space-y-6 px-4 w-full md:w-[500px] md:px-0">
-        <Card className="w-full">
-          <CardHeader className="pb-2">
-            <CardTitle>{uiDef.entry.description || 'Workflow Form'}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <form onSubmit={handleFormSubmit}>
-              {formPayload?.fields?.map((field) => (
-                <div key={field.key} className="space-y-2 mb-4">
-                  <div className="text-sm font-medium">{field.label || field.key}</div>
-                  <Input
-                    key={field.key}
-                    placeholder={field.label || field.key}
-                    value={formData[field.key] || ''}
-                    onChange={(e) => handleInputChange(field.key, e.target.value)}
-                    required={field.required}
-                    type={field.type === 'number' ? 'number' : 'text'}
-                  />
-                </div>
-              ))}
-              <Button type="submit" disabled={isExecuting || !isFormValid()} className="w-full mt-4">
-                {isExecuting ? 'Running...' : 'Execute'}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-
-        {workflowResults.length > 0 && (
-          <WorkflowResultViewer results={workflowResults.map((result) => result.uiElement)} />
-        )}
-      </div>
-    );
-  }
-
-  return <div className="text-center py-4">Unknown UI type: {uiDef.entry.entryType}</div>;
-};
 
 export const HomePage = () => {
   const storedMessages = useAppStore((state: { messages: any }) => state.messages);
@@ -773,40 +579,29 @@ export const HomePage = () => {
     }
   }
 
-  // Function to save any workflow to dashboard with a specific name
-  const saveWorkflowToDashboard = (workflow: WorkflowResponse, name: string) => {
-    try {
-      const workflowStorage = new WorkflowStorage();
+  // Function to provide feedback when a workflow is saved to dashboard
+  const handleWorkflowSave = (workflowId: string) => {
+    // Get a default name for the workflow
+    let workflowName = 'Unnamed Workflow';
 
-      // Create a SavedWorkflow object
-      const savedWorkflow = {
-        id: `workflow-${Date.now()}`,
-        name: name || 'Unnamed Workflow',
-        description: `Saved from chat on ${new Date().toLocaleDateString()}`,
-        timestamp: new Date().toISOString(),
-        workflow: workflow,
-        // Map WorkflowResult to WorkflowUIElement for the results
-        results: workflow.executionResults ? workflow.executionResults.map((result) => result.uiElement) : undefined,
-        tags: ['chat'],
-        favorited: false,
-      };
-
-      // Save to storage
-      workflowStorage.saveWorkflow(savedWorkflow);
-
-      // Show confirmation
-      alert(`Workflow saved to dashboard as "${savedWorkflow.name}"`);
-
-      // Log for debugging
-      console.log('Saved workflow to dashboard:', savedWorkflow);
-      workflowStorage.debugWorkflows();
-
-      return true;
-    } catch (error) {
-      console.error('Error saving workflow to dashboard:', error);
-      alert('Failed to save workflow to dashboard');
-      return false;
+    // Try to get the workflow name from the current context
+    if (uiWorkflowCard && uiWorkflowCard.entry.description) {
+      workflowName = uiWorkflowCard.entry.description;
     }
+
+    // Add a message to the chat to show feedback
+    const newAssistantMessage: MessageItem = {
+      id: getUniqueId(),
+      created_at: new Date().toISOString(),
+      role: 'assistant',
+      content: `✅ Workflow "${workflowName}" has been saved to your dashboard with ID: ${workflowId}. You can access it anytime from the Workflows section.`,
+    };
+    setMessageItems((prev) => [...prev, newAssistantMessage]);
+    addMessage(newAssistantMessage);
+    setUiWorkflowCard(undefined);
+
+    // Scroll to show the message
+    resetScroll();
   };
 
   return (
@@ -861,7 +656,7 @@ export const HomePage = () => {
                 onExecute={executeWorkflow}
                 onGenerateUI={generateUI}
                 onCancel={() => setWorkflowConfirmationCard(undefined)}
-                onSaveToDashboard={(name) => saveWorkflowToDashboard(workflowConfirmationCard, name)}
+                onSave={handleWorkflowSave}
               />
             )}
 
@@ -871,6 +666,7 @@ export const HomePage = () => {
                 apiUrl={apiUrl}
                 onClose={() => setUiWorkflowCard(undefined)}
                 isInChat={true}
+                onSave={handleWorkflowSave}
               />
             )}
 

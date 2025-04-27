@@ -155,9 +155,6 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
       if (onSave) {
         onSave(workflowId);
       }
-
-      // Show confirmation
-      alert(`Workflow saved to dashboard as "${savedWorkflow.name}"`);
     } catch (error) {
       console.error('Error saving workflow to dashboard:', error);
       alert('Failed to save workflow to dashboard');
