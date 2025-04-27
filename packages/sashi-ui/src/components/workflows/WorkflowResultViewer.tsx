@@ -1,25 +1,25 @@
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Textarea } from "@/components/ui/textarea";
-import { WorkflowUIElement } from "@/models/payload";
-import { CopyIcon, ExpandIcon, MinusIcon } from "lucide-react";
-import React, { useState } from "react";
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Textarea } from '@/components/ui/textarea';
+import { WorkflowUIElement } from '@/models/payload';
+import { CopyIcon, ExpandIcon, MinusIcon } from 'lucide-react';
+import React, { useState } from 'react';
 
 // Default color palette
 const DEFAULT_COLORS = [
-  "#2563eb", // blue-600
-  "#16a34a", // green-600
-  "#ca8a04", // yellow-600
-  "#dc2626", // red-600
-  "#9333ea", // purple-600
-  "#2dd4bf", // teal-500
-  "#f97316", // orange-600
-  "#8b5cf6", // violet-500
-  "#ec4899", // pink-600
-  "#0ea5e9", // sky-600
+  '#2563eb', // blue-600
+  '#16a34a', // green-600
+  '#ca8a04', // yellow-600
+  '#dc2626', // red-600
+  '#9333ea', // purple-600
+  '#2dd4bf', // teal-500
+  '#f97316', // orange-600
+  '#8b5cf6', // violet-500
+  '#ec4899', // pink-600
+  '#0ea5e9', // sky-600
 ];
 
 interface WorkflowResultViewerProps {
@@ -30,34 +30,34 @@ export const WorkflowResultViewer = ({ results }: WorkflowResultViewerProps) => 
   const [expandedResults, setExpandedResults] = useState<Record<string, boolean>>({});
 
   const toggleExpand = (id: string) => {
-    setExpandedResults(prev => ({
+    setExpandedResults((prev) => ({
       ...prev,
-      [id]: !prev[id]
+      [id]: !prev[id],
     }));
   };
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
   };
-  
+
   // Function to prepare data for charts - simplified
   const prepareChartData = (data: any): any[] => {
     // If already an array, use it directly
     if (Array.isArray(data)) {
       return data;
     }
-    
+
     // If it has a data property that's an array, use that
     if (data && typeof data === 'object' && Array.isArray(data.data)) {
       return data.data;
     }
-    
+
     // If it has a datasets property that's an array, process each dataset
     if (data && typeof data === 'object' && Array.isArray(data.datasets)) {
       // Combine dataset items into a unified data structure
       const result: any[] = [];
       const labels = data.labels || [];
-      
+
       data.datasets.forEach((dataset: any, datasetIndex: number) => {
         if (Array.isArray(dataset.data)) {
           dataset.data.forEach((value: any, index: number) => {
@@ -68,40 +68,40 @@ export const WorkflowResultViewer = ({ results }: WorkflowResultViewerProps) => 
           });
         }
       });
-      
+
       return result;
     }
-    
+
     // If it's an object but not in a recognized format, convert to array of {name, value} pairs
     if (data && typeof data === 'object' && !Array.isArray(data)) {
       return Object.entries(data).map(([name, value]) => ({ name, value }));
     }
-    
+
     // Fallback: return empty array
     return [];
   };
-  
+
   // Simplified chart rendering - display data as a table or JSON
   const renderChart = (data: any, config: any = {}) => {
     const chartData = prepareChartData(data);
     if (!chartData.length) return <div className="text-muted-foreground">No data available for chart</div>;
-    
+
     const chartType = config.chartType || 'table';
-    
+
     return (
       <div className="w-full space-y-4">
         <div className="bg-muted p-4 rounded-md">
           <p className="text-center mb-4">
             Chart visualization ({chartType}) - To view an interactive chart, please install a charting library.
           </p>
-          
+
           {/* Display the data as a table */}
           {chartData.length > 0 && (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    {Object.keys(chartData[0]).map(key => (
+                    {Object.keys(chartData[0]).map((key) => (
                       <TableHead key={key}>{key}</TableHead>
                     ))}
                   </TableRow>
@@ -120,7 +120,7 @@ export const WorkflowResultViewer = ({ results }: WorkflowResultViewerProps) => 
               </Table>
             </div>
           )}
-          
+
           <div className="mt-4">
             <details>
               <summary className="cursor-pointer font-medium">Chart Configuration</summary>
@@ -133,7 +133,7 @@ export const WorkflowResultViewer = ({ results }: WorkflowResultViewerProps) => 
       </div>
     );
   };
-  
+
   // Function to check if a value is a JSON string
   const isJsonString = (value: any): boolean => {
     if (typeof value !== 'string') return false;
@@ -216,51 +216,36 @@ export const WorkflowResultViewer = ({ results }: WorkflowResultViewerProps) => 
               <CopyIcon className="h-3.5 w-3.5 mr-1" />
               Copy
             </Button>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => toggleExpand(resultId)}
-              className="h-7 px-2 text-xs"
-            >
+            <Button variant="outline" size="sm" onClick={() => toggleExpand(resultId)} className="h-7 px-2 text-xs">
               {isExpanded ? <MinusIcon className="h-3.5 w-3.5 mr-1" /> : <ExpandIcon className="h-3.5 w-3.5 mr-1" />}
-              {isExpanded ? "Collapse" : "Expand"}
+              {isExpanded ? 'Collapse' : 'Expand'}
             </Button>
           </div>
-          
+
           {isExpanded ? (
-            <Textarea 
-              value={ui.content.content}
-              readOnly
-              className="min-h-[300px] w-full font-mono text-sm"
-            />
+            <Textarea value={ui.content.content} readOnly className="min-h-[300px] w-full font-mono text-sm" />
           ) : (
             <ScrollArea className="h-[150px] w-full rounded-md border p-4">
-              <pre className="whitespace-pre-wrap text-sm font-mono">
-                {ui.content.content}
-              </pre>
+              <pre className="whitespace-pre-wrap text-sm font-mono">{ui.content.content}</pre>
             </ScrollArea>
           )}
         </div>
       );
     }
-    
+
     // Render according to content type
     switch (ui.content.type) {
       case 'graph':
         // If we have a graph type, render the simplified chart view
-        return (
-          <div className="pt-2">
-            {renderChart(parsedContent, ui.content.config)}
-          </div>
-        );
-        
+        return <div className="pt-2">{renderChart(parsedContent, ui.content.config)}</div>;
+
       case 'textarea':
         // Dedicated type for complex JSON structures or large text blocks
         return (
           <div className="p-2">
             <div className="flex justify-end gap-2 mb-2">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 size="sm"
                 onClick={() => copyToClipboard(ui.content.content)}
                 className="h-7 px-2 text-xs"
@@ -268,35 +253,24 @@ export const WorkflowResultViewer = ({ results }: WorkflowResultViewerProps) => 
                 <CopyIcon className="h-3.5 w-3.5 mr-1" />
                 Copy
               </Button>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => toggleExpand(resultId)}
-                className="h-7 px-2 text-xs"
-              >
+              <Button variant="outline" size="sm" onClick={() => toggleExpand(resultId)} className="h-7 px-2 text-xs">
                 {isExpanded ? <MinusIcon className="h-3.5 w-3.5 mr-1" /> : <ExpandIcon className="h-3.5 w-3.5 mr-1" />}
-                {isExpanded ? "Collapse" : "Expand"}
+                {isExpanded ? 'Collapse' : 'Expand'}
               </Button>
             </div>
-            
+
             {isExpanded ? (
-              <Textarea 
-                value={ui.content.content}
-                readOnly
-                className="min-h-[300px] w-full font-mono text-sm"
-              />
+              <Textarea value={ui.content.content} readOnly className="min-h-[300px] w-full font-mono text-sm" />
             ) : (
               <ScrollArea className="h-[200px] w-full rounded-md border p-4">
                 <pre className="whitespace-pre-wrap text-sm font-mono">
-                  {typeof parsedContent === 'object' 
-                    ? JSON.stringify(parsedContent, null, 2) 
-                    : ui.content.content}
+                  {typeof parsedContent === 'object' ? JSON.stringify(parsedContent, null, 2) : ui.content.content}
                 </pre>
               </ScrollArea>
             )}
           </div>
         );
-        
+
       case 'table':
         // Render a table if the content is an array of objects
         if (Array.isArray(parsedContent) && parsedContent.length > 0) {
@@ -304,16 +278,16 @@ export const WorkflowResultViewer = ({ results }: WorkflowResultViewerProps) => 
           const allKeys = new Set<string>();
           parsedContent.forEach((item: any) => {
             if (item && typeof item === 'object') {
-              Object.keys(item).forEach(key => allKeys.add(key));
+              Object.keys(item).forEach((key) => allKeys.add(key));
             }
           });
-          
+
           return (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    {Array.from(allKeys).map(key => (
+                    {Array.from(allKeys).map((key) => (
                       <TableHead key={key}>{key}</TableHead>
                     ))}
                   </TableRow>
@@ -321,12 +295,10 @@ export const WorkflowResultViewer = ({ results }: WorkflowResultViewerProps) => 
                 <TableBody>
                   {parsedContent.map((item: any, index: number) => (
                     <TableRow key={index}>
-                      {Array.from(allKeys).map(key => (
+                      {Array.from(allKeys).map((key) => (
                         <TableCell key={`${index}-${key}`}>
                           {typeof item[key] === 'object' || isJsonString(item[key]) ? (
-                            <div className="max-w-[300px]">
-                              {renderJsonValue(item[key])}
-                            </div>
+                            <div className="max-w-[300px]">{renderJsonValue(item[key])}</div>
                           ) : (
                             <span>{safeStringify(item[key])}</span>
                           )}
@@ -340,7 +312,7 @@ export const WorkflowResultViewer = ({ results }: WorkflowResultViewerProps) => 
           );
         }
         break;
-        
+
       case 'card':
         // Render card-specific content
         if (parsedContent && typeof parsedContent === 'object') {
@@ -362,7 +334,7 @@ export const WorkflowResultViewer = ({ results }: WorkflowResultViewerProps) => 
           );
         }
         break;
-        
+
       case 'badge':
         // Render badge content (simple key-value pairs)
         if (parsedContent && typeof parsedContent === 'object') {
@@ -371,8 +343,8 @@ export const WorkflowResultViewer = ({ results }: WorkflowResultViewerProps) => 
             return (
               <div className="p-2">
                 <div className="flex justify-end gap-2 mb-2">
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     size="sm"
                     onClick={() => copyToClipboard(JSON.stringify(parsedContent, null, 2))}
                     className="h-7 px-2 text-xs"
@@ -380,19 +352,23 @@ export const WorkflowResultViewer = ({ results }: WorkflowResultViewerProps) => 
                     <CopyIcon className="h-3.5 w-3.5 mr-1" />
                     Copy
                   </Button>
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     size="sm"
                     onClick={() => toggleExpand(resultId)}
                     className="h-7 px-2 text-xs"
                   >
-                    {isExpanded ? <MinusIcon className="h-3.5 w-3.5 mr-1" /> : <ExpandIcon className="h-3.5 w-3.5 mr-1" />}
-                    {isExpanded ? "Collapse" : "Expand"}
+                    {isExpanded ? (
+                      <MinusIcon className="h-3.5 w-3.5 mr-1" />
+                    ) : (
+                      <ExpandIcon className="h-3.5 w-3.5 mr-1" />
+                    )}
+                    {isExpanded ? 'Collapse' : 'Expand'}
                   </Button>
                 </div>
-                
+
                 {isExpanded ? (
-                  <Textarea 
+                  <Textarea
                     value={JSON.stringify(parsedContent, null, 2)}
                     readOnly
                     className="min-h-[200px] w-full font-mono text-sm"
@@ -421,16 +397,17 @@ export const WorkflowResultViewer = ({ results }: WorkflowResultViewerProps) => 
                     </div>
                   );
                 }
-                
+
                 // Simple values can be badges
-                const displayValue = safeStringify(value).length > 20
-                  ? safeStringify(value).substring(0, 17) + '...'
-                  : safeStringify(value);
-                
+                const displayValue =
+                  safeStringify(value).length > 20
+                    ? safeStringify(value).substring(0, 17) + '...'
+                    : safeStringify(value);
+
                 return (
-                  <Badge 
-                    key={key} 
-                    variant="outline" 
+                  <Badge
+                    key={key}
+                    variant="outline"
                     className="flex gap-1 hover:bg-muted cursor-default"
                     title={safeStringify(value)}
                   >
@@ -443,19 +420,19 @@ export const WorkflowResultViewer = ({ results }: WorkflowResultViewerProps) => 
           );
         }
         break;
-        
+
       default:
         // Default to showing the content as preformatted text
         if (parsedContent) {
           const contentStr = JSON.stringify(parsedContent, null, 2);
           const isLarge = contentStr.length > 500;
-          
+
           return (
             <div className="relative">
               {isLarge && (
                 <div className="flex justify-end gap-2 mb-2">
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     size="sm"
                     onClick={() => copyToClipboard(contentStr)}
                     className="h-7 px-2 text-xs"
@@ -463,19 +440,23 @@ export const WorkflowResultViewer = ({ results }: WorkflowResultViewerProps) => 
                     <CopyIcon className="h-3.5 w-3.5 mr-1" />
                     Copy
                   </Button>
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     size="sm"
                     onClick={() => toggleExpand(resultId)}
                     className="h-7 px-2 text-xs"
                   >
-                    {isExpanded ? <MinusIcon className="h-3.5 w-3.5 mr-1" /> : <ExpandIcon className="h-3.5 w-3.5 mr-1" />}
-                    {isExpanded ? "Collapse" : "Expand"}
+                    {isExpanded ? (
+                      <MinusIcon className="h-3.5 w-3.5 mr-1" />
+                    ) : (
+                      <ExpandIcon className="h-3.5 w-3.5 mr-1" />
+                    )}
+                    {isExpanded ? 'Collapse' : 'Expand'}
                   </Button>
                 </div>
               )}
-              
-              <ScrollArea className={isExpanded ? "max-h-[500px]" : "max-h-[200px]"}>
+
+              <ScrollArea className={isExpanded ? 'max-h-[500px]' : 'max-h-[200px]'}>
                 <pre className="whitespace-pre-wrap text-sm font-mono bg-muted p-3 rounded-md overflow-auto">
                   {contentStr}
                 </pre>
@@ -483,26 +464,18 @@ export const WorkflowResultViewer = ({ results }: WorkflowResultViewerProps) => 
             </div>
           );
         } else {
-          return (
-            <pre className="whitespace-pre-wrap text-sm">
-              {ui.content.content}
-            </pre>
-          );
+          return <pre className="whitespace-pre-wrap text-sm">{ui.content.content}</pre>;
         }
     }
-    
+
     // Fallback to the original content display
-    return (
-      <pre className="whitespace-pre-wrap text-sm">
-        {ui.content.content}
-      </pre>
-    );
+    return <pre className="whitespace-pre-wrap text-sm">{ui.content.content}</pre>;
   };
-  
+
   if (results.length === 0) {
     return <div className="text-center text-muted-foreground">No results available</div>;
   }
-  
+
   return (
     <div className="space-y-4">
       {results.map((ui) => (
@@ -513,9 +486,7 @@ export const WorkflowResultViewer = ({ results }: WorkflowResultViewerProps) => 
               {ui.tool} • {new Date(ui.content.timestamp).toLocaleString()}
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            {renderContent(ui)}
-          </CardContent>
+          <CardContent>{renderContent(ui)}</CardContent>
         </Card>
       ))}
     </div>

@@ -412,13 +412,13 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
         </TabsContent>
       </Tabs>
 
-      <CardFooter className="flex justify-between pt-0">
-        {onSave && (
-          <Button variant="outline" size="sm" onClick={saveWorkflow} className="ml-auto">
+      {isInChat && (
+        <CardFooter className="flex justify-end pt-0">
+          <Button variant="outline" size="sm" onClick={saveWorkflow}>
             Save to Dashboard
           </Button>
-        )}
-      </CardFooter>
+        </CardFooter>
+      )}
     </Card>
   );
 };
