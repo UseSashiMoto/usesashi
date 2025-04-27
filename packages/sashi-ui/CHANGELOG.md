@@ -1,5 +1,11 @@
 # @sashi/ui
 
+## 4.0.0
+
+### Major Changes
+
+- 9509e8e: adding the ability to create linked workflow. now you can display the output of workflows and connect functions for increased complexity
+
 ## 3.12.0
 
 ### Minor Changes
