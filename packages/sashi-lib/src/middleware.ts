@@ -681,8 +681,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     router.post('/chat', async (req, res) => {
         const { tools, previous, type } = req.body;
         if (type === '/chat/function') {
-
-
             try {
                 const result = await processFunctionRequest({ tools, previous })
                 res.json({
@@ -698,55 +696,55 @@ export const createMiddleware = (options: MiddlewareOptions) => {
             }
         }
         if (type === '/chat/message') {
-
-
             const { inquiry, previous } = req.body;
             try {
                 const result = await processChatRequest({ inquiry, previous })
 
-
-
                 try {
+                    // Check if the result content is JSON
+                    if (result?.message?.content) {
+                        try {
+                            const parsedResult = JSON.parse(result.message.content)
 
-                    console.log("result before parsing", result.message.content)
-                    const parsedResult = JSON.parse(result.message.content)
+                            if (parsedResult.type === 'workflow') {
+                                const workflowResult: WorkflowResponse = parsedResult
 
-                    console.log("parsedResult", parsedResult)
-                    if (parsedResult.type === 'workflow') {
-                        const workflowResult: WorkflowResponse = parsedResult
+                                // Clean up function. prefix from tool names before sending to client
+                                if (workflowResult.type === 'workflow' && workflowResult.actions) {
+                                    workflowResult.actions = workflowResult.actions.map(action => ({
+                                        ...action,
+                                        tool: action.tool.replace(/^functions\./, '')
+                                    }))
+                                }
 
-                        // Clean up function. prefix from tool names before sending to client
-                        if (workflowResult.type === 'workflow' && workflowResult.actions) {
-                            workflowResult.actions = workflowResult.actions.map(action => ({
-                                ...action,
-                                tool: action.tool.replace(/^functions\./, '')
-                            }))
+                                return res.json({ output: workflowResult })
+                            }
+
+                            if (parsedResult.type === 'general') {
+                                const result: GeneralResponse = parsedResult
+                                return res.status(200).json({
+                                    output: result,
+                                }).send()
+                            }
+                        } catch (parseError) {
+                            // Not JSON, just return the message directly
+                            return res.json({
+                                output: result?.message,
+                            });
                         }
-
-                        console.log("result after parsing", workflowResult)
-
-                        res.json({ output: workflowResult })
                     }
 
-                    if (parsedResult.type === 'general') {
-                        const result: GeneralResponse = parsedResult
-                        return res.status(200).json({
-                            output: result,
-                        }).send()
-                    }
-
-
+                    // If we couldn't parse as JSON or there's no content, return the message directly
+                    return res.json({
+                        output: result?.message,
+                    });
                 } catch (e) {
-                    res.json({
+                    return res.json({
                         output: "I'm sorry, I'm having trouble processing your request. Please try again later.",
                     });
                 }
-
-                res.json({
-                    output: result?.message,
-                });
             } catch (e: any) {
-                res.status(500).json({
+                return res.status(500).json({
                     message: 'Error processing request',
                     error: e.message,
                 });
