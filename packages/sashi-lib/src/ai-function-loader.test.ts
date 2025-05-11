@@ -220,11 +220,22 @@ describe("AI Function Registry", () => {
                             description: "Second number to add"
                         }
                     },
-
-                    required: ["a", "b"]
+                    required: [
+                        "a",
+                        "b",
+                    ],
+                },
+                returns: {
+                    description: "The return value of this function",
+                    properties: {
+                        description: "The sum of the two numbers",
+                        type: "number",
+                    },
+                    type: "object",
                 }
             }
         }
+
         const description = AddFunction.description()
 
         expect(expected).toEqual(description)
@@ -254,8 +265,7 @@ describe("AI Function Registry", () => {
 
     // Test description of complex function parameters and nested object
     it("should describe the nested object and enum fields correctly", () => {
-        const description = WeatherForecastFunction.description()
-        expect(description).toEqual({
+        const expected = {
             type: "function",
             function: {
                 name: "get_weather_forecast",
@@ -295,10 +305,26 @@ describe("AI Function Registry", () => {
                                 "Whether to include humidity in the forecast"
                         }
                     },
-                    required: ["location", "unit", "includeHumidity"]
+                    required: [
+                        "location",
+                        "unit",
+                        "includeHumidity",
+                    ],
+                },
+                returns: {
+                    description: "The return value of this function",
+                    properties: {
+                        description: "The weather forecast with temperature and optional humidity",
+                        type: "string",
+                    },
+                    type: "object",
                 }
+
             }
-        })
+        }
+
+        const description = WeatherForecastFunction.description()
+        expect(description).toEqual(expected)
     })
 
     // Test invalid input (wrong enum value)

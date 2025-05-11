@@ -119,7 +119,7 @@ app.use(
         openAIKey: process.env.OPENAI_API_KEY || '',
         repos: ["userone-sub-to-usertwo"],
 
-        hubUrl: 'http://localhost:3333',
+        hubUrl: process.env.HUB_URL || 'http://localhost:3050',
         apiSecretKey: process.env.HUB_API_SECRET_KEY,
         repoSecretKey: 'useronereposecret',
         getSession: async (req: any, res: any) => {

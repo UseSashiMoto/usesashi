@@ -229,7 +229,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                     },
                 }
             ).catch(error => {
-                console.error('Failed to send metadata to hub:', error);
+                //console.error('Failed to send metadata to hub:', error);
             });
         } catch (error) {
             console.error(error)
@@ -257,13 +257,19 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
     router.get('/check_hub_connection', async (_req, res) => {
         try {
+            console.log("checking hub connection", hubUrl, apiSecretKey ? {
+                [HEADER_API_TOKEN]: apiSecretKey,
+            } : undefined)
             const connectedData = await fetch(`${hubUrl}/ping`, {
                 headers: apiSecretKey ? {
                     [HEADER_API_TOKEN]: apiSecretKey,
                 } : undefined,
             });
+
+            console.log("hub connection data", connectedData)
             res.json({ connected: connectedData.status === 200 });
         } catch (error) {
+            console.error("error checking hub connection", error)
             res.json({ connected: false });
         }
     });
@@ -854,6 +860,8 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     router.post('/workflow/execute', async (req, res) => {
         const { workflow, debug = false } = req.body;
 
+        console.log("executing workflow", workflow)
+
         if (!workflow || !workflow.actions || !Array.isArray(workflow.actions)) {
             return res.status(400).json({ error: 'Invalid workflow format' });
         }
@@ -869,6 +877,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         try {
             for (let i = 0; i < workflow.actions.length; i++) {
                 const action = workflow.actions[i];
+                // Ensure actionId is always defined
                 const actionId = action.id || `action_${i}`;
                 const toolName = action.tool.replace(/^functions\./, '');
                 const { parameters } = action;
@@ -882,6 +891,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                 if (debug) {
                     console.log(`\n[Workflow Step ${i + 1}] Processing action "${actionId}" using tool "${toolName}"`);
                     console.log(`Original parameters:`, parameters);
+                    console.log(`Current actionResults:`, actionResults);
                 }
 
                 const processedParameters: Record<string, any> = { ...parameters };
@@ -893,97 +903,150 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                 for (const [key, value] of Object.entries(parameters)) {
                     if (typeof value === 'string' && value.includes('.')) {
                         try {
-                            const parts = value.split('.');
-                            if (parts.length >= 2) {
+                            // Check for array notation
+                            if (value.includes('[*]')) {
+                                console.log(`Processing array reference: ${value}`);
+                                const parts = value.split('.');
+                                if (parts.length < 2) {
+                                    throw new Error(`Invalid array reference format: ${value}`);
+                                }
                                 const refActionId = parts[0];
-                                if (refActionId) {
-                                    const refResult = actionResults[refActionId];
+                                if (!refActionId) {
+                                    throw new Error(`Missing action ID in array reference: ${value}`);
+                                }
+                                const baseActionId = refActionId.split('[')[0];
+                                const pathParts = parts.slice(1);
 
-                                    if (!refResult) {
-                                        throw new Error(`Referenced action "${refActionId}" not found or didn't produce a result`);
-                                    }
+                                console.log(`Looking for action result: ${baseActionId}`);
+                                console.log(`Available action results:`, Object.keys(actionResults));
 
-                                    // For deeply nested properties, traverse the object
-                                    let currentValue = refResult;
+                                if (!baseActionId || !actionResults[baseActionId]) {
+                                    throw new Error(`Action result not found: ${baseActionId}`);
+                                }
 
-                                    // Start from 1 to skip the action ID
-                                    for (let j = 1; j < parts.length; j++) {
-                                        const field = parts[j];
-                                        if (field && typeof currentValue === 'object' && currentValue !== null && field in currentValue) {
-                                            currentValue = currentValue[field];
-                                        } else {
-                                            throw new Error(`Field "${parts.slice(1).join('.')}" not found in the result of action "${refActionId}"`);
+                                const arrayResult = actionResults[baseActionId] as unknown[];
+                                console.log(`Found array result:`, arrayResult);
+
+                                if (!Array.isArray(arrayResult)) {
+                                    throw new Error(`Expected array from ${baseActionId} but got: ${typeof arrayResult}`);
+                                }
+
+                                // Map over the array and access the specified properties
+                                const mappedValues = arrayResult.map(item => {
+                                    let currentValue = item as Record<string, unknown>;
+                                    console.log(`Processing array item:`, item);
+                                    for (const part of pathParts) {
+                                        console.log(`Accessing property "${part}" from:`, currentValue);
+                                        if (currentValue === undefined || currentValue === null) {
+                                            throw new Error(`Cannot access property ${part} of undefined in ${value}`);
                                         }
+                                        currentValue = currentValue[part] as Record<string, unknown>;
+                                        console.log(`Value after accessing "${part}":`, currentValue);
                                     }
+                                    return currentValue;
+                                });
 
-                                    // Handle type conversions based on the expected parameter type
-                                    let expectedType = null;
-                                    try {
-                                        if (typeof registeredFunction.getParams === 'function') {
-                                            const functionParam = registeredFunction.getParams().find(param => {
-                                                if (param instanceof AIObject) {
-                                                    return param.getName() === key;
-                                                } else if (param instanceof AIArray) {
-                                                    return param.getName() === key;
-                                                } else if (param instanceof AIFieldEnum) {
-                                                    return param.getName() === key;
-                                                } else if ('name' in param) {
-                                                    return param.name === key;
-                                                }
-                                                return false;
-                                            });
+                                processedParameters[key] = mappedValues;
 
-                                            if (functionParam) {
-                                                // Only apply type conversion if we found a matching parameter
-                                                if (functionParam instanceof AIObject) {
-                                                    // Ensure object is actually an object
-                                                    if (typeof currentValue !== 'object' || currentValue === null) {
-                                                        throw new Error(`Expected object for parameter "${key}" but got ${typeof currentValue}`);
-                                                    }
-                                                } else if (functionParam instanceof AIArray) {
-                                                    // Ensure array is actually an array
-                                                    if (!Array.isArray(currentValue)) {
-                                                        throw new Error(`Expected array for parameter "${key}" but got ${typeof currentValue}`);
-                                                    }
-                                                } else if ('type' in functionParam) {
-                                                    // Basic type conversions for primitive types
-                                                    expectedType = functionParam.type;
-                                                }
+                                if (debug) {
+                                    console.log(`Resolved array parameter "${key}" from "${value}" to:`, mappedValues);
+                                    console.log(`Available properties in first array item:`,
+                                        arrayResult.length > 0 ? Object.keys(arrayResult[0] as object) : 'empty array');
+                                }
+                            } else {
+                                // Standard parameter reference
+                                const parts = value.split('.');
+                                if (parts.length >= 2) {
+                                    const refActionId = parts[0];
+                                    if (refActionId) {
+                                        const refResult = actionResults[refActionId];
+
+                                        if (!refResult) {
+                                            throw new Error(`Referenced action "${refActionId}" not found or didn't produce a result`);
+                                        }
+
+                                        // For deeply nested properties, traverse the object
+                                        let currentValue = refResult;
+
+                                        // Start from 1 to skip the action ID
+                                        for (let j = 1; j < parts.length; j++) {
+                                            const field = parts[j];
+                                            if (field && typeof currentValue === 'object' && currentValue !== null && field in currentValue) {
+                                                currentValue = currentValue[field];
+                                            } else {
+                                                throw new Error(`Field "${parts.slice(1).join('.')}" not found in the result of action "${refActionId}"`);
                                             }
                                         }
 
-                                        // Apply type conversions based on expected type if found
-                                        if (expectedType) {
-                                            if (expectedType === 'string' && typeof currentValue !== 'string') {
-                                                currentValue = String(currentValue);
-                                            } else if (expectedType === 'number' && typeof currentValue !== 'number') {
-                                                const num = Number(currentValue);
-                                                if (isNaN(num)) {
-                                                    throw new Error(`Cannot convert "${currentValue}" to number for parameter "${key}"`);
-                                                }
-                                                currentValue = num;
-                                            } else if (expectedType === 'boolean' && typeof currentValue !== 'boolean') {
-                                                if (currentValue === 'true') currentValue = true;
-                                                else if (currentValue === 'false') currentValue = false;
-                                                else if (currentValue === 1) currentValue = true;
-                                                else if (currentValue === 0) currentValue = false;
-                                                else {
-                                                    throw new Error(`Cannot convert "${currentValue}" to boolean for parameter "${key}"`);
+                                        // Handle type conversions based on the expected parameter type
+                                        let expectedType = null;
+                                        try {
+                                            if (typeof registeredFunction.getParams === 'function') {
+                                                const functionParam = registeredFunction.getParams().find(param => {
+                                                    if (param instanceof AIObject) {
+                                                        return param.getName() === key;
+                                                    } else if (param instanceof AIArray) {
+                                                        return param.getName() === key;
+                                                    } else if (param instanceof AIFieldEnum) {
+                                                        return param.getName() === key;
+                                                    } else if ('name' in param) {
+                                                        return param.name === key;
+                                                    }
+                                                    return false;
+                                                });
+
+                                                if (functionParam) {
+                                                    // Only apply type conversion if we found a matching parameter
+                                                    if (functionParam instanceof AIObject) {
+                                                        // Ensure object is actually an object
+                                                        if (typeof currentValue !== 'object' || currentValue === null) {
+                                                            throw new Error(`Expected object for parameter "${key}" but got ${typeof currentValue}`);
+                                                        }
+                                                    } else if (functionParam instanceof AIArray) {
+                                                        // Ensure array is actually an array
+                                                        if (!Array.isArray(currentValue)) {
+                                                            throw new Error(`Expected array for parameter "${key}" but got ${typeof currentValue}`);
+                                                        }
+                                                    } else if ('type' in functionParam) {
+                                                        // Basic type conversions for primitive types
+                                                        expectedType = functionParam.type;
+                                                    }
                                                 }
                                             }
-                                        }
 
-                                        processedParameters[key] = currentValue;
+                                            // Apply type conversions based on expected type if found
+                                            if (expectedType) {
+                                                if (expectedType === 'string' && typeof currentValue !== 'string') {
+                                                    currentValue = String(currentValue);
+                                                } else if (expectedType === 'number' && typeof currentValue !== 'number') {
+                                                    const num = Number(currentValue);
+                                                    if (isNaN(num)) {
+                                                        throw new Error(`Cannot convert "${currentValue}" to number for parameter "${key}"`);
+                                                    }
+                                                    currentValue = num;
+                                                } else if (expectedType === 'boolean' && typeof currentValue !== 'boolean') {
+                                                    if (currentValue === 'true') currentValue = true;
+                                                    else if (currentValue === 'false') currentValue = false;
+                                                    else if (currentValue === 1) currentValue = true;
+                                                    else if (currentValue === 0) currentValue = false;
+                                                    else {
+                                                        throw new Error(`Cannot convert "${currentValue}" to boolean for parameter "${key}"`);
+                                                    }
+                                                }
+                                            }
 
-                                        if (debug) {
-                                            console.log(`Resolved parameter "${key}" from "${value}" to:`, currentValue);
-                                        }
-                                    } catch (typeError: unknown) {
-                                        // If we can't validate the type, just use the value as is
-                                        processedParameters[key] = currentValue;
-                                        if (debug) {
-                                            console.warn(`Skipping type validation for parameter "${key}" (using as-is):`,
-                                                typeError instanceof Error ? typeError.message : String(typeError));
+                                            processedParameters[key] = currentValue;
+
+                                            if (debug) {
+                                                console.log(`Resolved parameter "${key}" from "${value}" to:`, currentValue);
+                                            }
+                                        } catch (typeError: unknown) {
+                                            // If we can't validate the type, just use the value as is
+                                            processedParameters[key] = currentValue;
+                                            if (debug) {
+                                                console.warn(`Skipping type validation for parameter "${key}" (using as-is):`,
+                                                    typeError instanceof Error ? typeError.message : String(typeError));
+                                            }
                                         }
                                     }
                                 }
@@ -1010,12 +1073,48 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                 }
 
                 try {
-                    console.log(`Executing function ${toolName} with parameters:`, processedParameters);
-                    const result = await callFunctionFromRegistryFromObject(toolName, processedParameters);
-                    actionResults[action.id] = result;
+                    // Handle mapping if specified
+                    if (action.map === true) {
+                        // Find the first array parameter to map over
+                        const arrayParams = Object.entries(processedParameters).find(
+                            ([_, value]) => Array.isArray(value)
+                        );
 
-                    if (debug) {
-                        console.log(`Result from "${actionId}":`, result);
+                        if (!arrayParams) {
+                            throw new Error(`Action ${actionId} has map:true but no array parameters were found`);
+                        }
+
+                        const [arrayParamName, arrayValues] = arrayParams;
+
+                        if (debug) {
+                            console.log(`Mapping over ${arrayValues.length} items for parameter "${arrayParamName}"`);
+                        }
+
+                        // Execute the function for each item in the array
+                        const results = await Promise.all(arrayValues.map(async (item: unknown) => {
+                            const itemParams = { ...processedParameters };
+                            itemParams[arrayParamName] = item;
+
+                            console.log("itemParams", itemParams, arrayParamName, item)
+                            return await callFunctionFromRegistryFromObject(toolName, itemParams);
+                        }));
+
+                        // Store results using the guaranteed actionId
+                        actionResults[actionId] = results;
+
+                        if (debug) {
+                            console.log(`Mapped results from "${actionId}":`, results);
+                        }
+                    } else {
+                        // Standard execution
+                        console.log(`Executing function ${toolName} with parameters:`, processedParameters);
+                        const result = await callFunctionFromRegistryFromObject(toolName, processedParameters);
+                        // Store results using the guaranteed actionId
+                        actionResults[actionId] = result;
+
+                        if (debug) {
+                            console.log(`Result from "${actionId}":`, result);
+                        }
                     }
                 } catch (functionError) {
                     // Enhance the error message with context about which step failed
@@ -1045,7 +1144,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
             } catch (error) {
                 console.error("Error enhancing UI with LLM:", error);
             }
-
 
             const finalWorkflowResult: WorkflowResult = {
                 actionId: finalAction.id,

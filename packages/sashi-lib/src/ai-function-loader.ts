@@ -444,6 +444,25 @@ export class AIFunction {
                             }
                         }),
                 },
+                returns: {
+                    type: 'object',
+                    description: 'The return value of this function',
+                    properties: this._returnType ? {
+                        ...(this._returnType instanceof AIArray ? {
+                            type: 'array',
+                            items: this._returnType.description()
+                        } : this._returnType instanceof AIObject ? {
+                            type: 'object',
+                            properties: this._returnType.description()
+                        } : this._returnType instanceof AIFieldEnum ? {
+                            type: 'string',
+                            enum: this._returnType.description().enum
+                        } : {
+                            type: this._returnType.type,
+                            description: this._returnType.description
+                        })
+                    } : undefined
+                }
             },
         };
     }
