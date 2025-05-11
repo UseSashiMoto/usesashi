@@ -7,6 +7,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { HomePage } from './pages/HomePage';
 import { SettingPage } from './pages/SettingPage';
 import useAppStore from './store/chat-store';
+import { HEADER_SESSION_TOKEN } from './utils/contants';
 
 type PagesProps = {
   // URL to the API
@@ -25,6 +26,29 @@ export const App = ({ apiUrl: oldApiUrl, sessionToken: initialSessionToken }: Pa
   const [ready, setReady] = useState(false);
 
   const debugMode = process.env.NODE_ENV !== 'production';
+  const setConnectedToHub = useAppStore((state: { setConnectedToHub: any }) => state.setConnectedToHub);
+
+  useEffect(() => {
+    const checkConnectedToHub = async () => {
+      console.log('checking hub connection', apiUrl, sessionToken);
+
+      try {
+        const response = await fetch(`${apiUrl}/check_hub_connection`, {
+          method: 'GET',
+          headers: {
+            [HEADER_SESSION_TOKEN]: sessionToken ?? '',
+          },
+        });
+        const data = await response.json();
+        console.log('hub connection data', data);
+        setConnectedToHub(data.connected);
+      } catch (error) {
+        console.error('Error checking hub connection', error);
+        setConnectedToHub(false);
+      }
+    };
+    checkConnectedToHub();
+  }, [apiUrl, sessionToken]);
 
   useEffect(() => {
     if (rehydrated) {

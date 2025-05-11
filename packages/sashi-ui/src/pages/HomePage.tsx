@@ -6,7 +6,6 @@ import { WorkflowResultViewer } from '@/components/workflows/WorkflowResultViewe
 import { WorkflowSaveForm } from '@/components/workflows/WorkflowSaveForm';
 import { WorkflowUICard } from '@/components/workflows/WorkflowUICard';
 import { WorkflowVisualizer } from '@/components/WorkflowVisualizer';
-import { HEADER_SESSION_TOKEN } from '@/utils/contants';
 import { Label } from '@radix-ui/react-dropdown-menu';
 import { PaperPlaneIcon } from '@radix-ui/react-icons';
 import axios from 'axios';
@@ -288,8 +287,6 @@ export const HomePage = () => {
 
   const addMessage = useAppStore((state: { addMessage: any }) => state.addMessage);
 
-  const setConnectedToHub = useAppStore((state: { setConnectedToHub: any }) => state.setConnectedToHub);
-
   const messageRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
 
@@ -318,24 +315,6 @@ export const HomePage = () => {
       setMessageItems(storedMessages);
     }
   }, [isMounted]);
-
-  useEffect(() => {
-    const checkConnectedToHub = async () => {
-      try {
-        const response = await fetch(`${apiUrl}/check_hub_connection`, {
-          method: 'GET',
-          headers: {
-            [HEADER_SESSION_TOKEN]: sessionToken ?? '',
-          },
-        });
-        const data = await response.json();
-        setConnectedToHub(data.connected);
-      } catch (error) {
-        setConnectedToHub(false);
-      }
-    };
-    checkConnectedToHub();
-  }, [apiUrl, sessionToken]);
 
   const prepareMessageForPayload = (messages: MessageItem[]) => {
     return messages.map((message) => ({

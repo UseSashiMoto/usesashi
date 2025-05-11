@@ -293,3 +293,198 @@ describe('validateRepoRequest Middleware', () => {
         expect(response.body).toEqual({ message: 'Middleware passed' });
     });
 });
+
+describe('Workflow Execution', () => {
+    let app: express.Application;
+    let request: any;
+
+    beforeEach(() => {
+        app = express();
+        app.use(express.json());
+
+        // Reset all mocks
+        jest.clearAllMocks();
+
+        const router = createMiddleware({
+            openAIKey: process.env.OPENAI_API_KEY as string,
+            useCloud: false,
+            sashiServerUrl: 'https://example.com',
+            apiSecretKey: 'test-secret-key',
+        });
+
+        app.use(router);
+        request = supertest(app);
+    });
+
+    describe('Array and Mapping Support', () => {
+        test('should handle array notation in parameter references', async () => {
+            const workflow = {
+                actions: [
+                    {
+                        id: 'get_users',
+                        tool: 'get_all_users',
+                        parameters: {}
+                    },
+                    {
+                        id: 'get_files',
+                        tool: 'get_user_files',
+                        parameters: {
+                            userId: 'get_users[*].email'
+                        }
+                    }
+                ]
+            };
+
+            // Mock the function registry responses
+            const mockGetAllUsers = jest.fn<any>().mockResolvedValue([
+                { email: 'user1@test.com', name: 'User 1' },
+                { email: 'user2@test.com', name: 'User 2' }
+            ] as const);
+
+            const mockGetUserFiles = jest.fn<any>().mockImplementation(async (params: { userId: string }) => {
+                return { files: [`files for ${params.userId}`] };
+            });
+
+            // Mock the function registry
+            const mockFunctionRegistry = new Map();
+            mockFunctionRegistry.set('get_all_users', {
+                getName: () => 'get_all_users',
+                getParams: () => [],
+                execute: mockGetAllUsers
+            });
+            mockFunctionRegistry.set('get_user_files', {
+                getName: () => 'get_user_files',
+                getParams: () => [{ name: 'userId', type: 'string' }],
+                execute: mockGetUserFiles
+            });
+
+            // Mock the getFunctionRegistry function
+            jest.spyOn(require('./ai-function-loader'), 'getFunctionRegistry')
+                .mockReturnValue(mockFunctionRegistry);
+
+            const response = await request.post('/workflow/execute')
+                .send({ workflow, debug: true });
+
+            expect(response.status).toBe(200);
+            expect(response.body.success).toBe(true);
+            expect(response.body.results).toHaveLength(1);
+
+            // Verify the results contain the mapped files
+            const result = response.body.results[0];
+            expect(result.result).toHaveProperty('files');
+            expect(Array.isArray(result.result.files)).toBe(true);
+        });
+
+        test('should handle mapping actions with map: true', async () => {
+            const workflow = {
+                actions: [
+                    {
+                        id: 'get_users',
+                        tool: 'get_all_users',
+                        parameters: {}
+                    },
+                    {
+                        id: 'process_users',
+                        tool: 'process_user',
+                        map: true,
+                        parameters: {
+                            user: 'get_users[*]'
+                        }
+                    }
+                ]
+            };
+            // Mock the function registry responses
+            const mockGetAllUsers = jest.fn<any>().mockResolvedValue([
+                { id: 1, name: 'User 1' },
+                { id: 2, name: 'User 2' }
+            ]);
+
+            const mockProcessUser = jest.fn().mockImplementation(async (params: unknown) => {
+                const typedParams = params as { user: { id: number, name: string } };
+                return { processed: true, userId: typedParams.user.id };
+            });
+
+            // Mock the function registry
+            const mockFunctionRegistry = new Map();
+            mockFunctionRegistry.set('get_all_users', {
+                getName: () => 'get_all_users',
+                getParams: () => [],
+                execute: mockGetAllUsers
+            });
+            mockFunctionRegistry.set('process_user', {
+                getName: () => 'process_user',
+                getParams: () => [{ name: 'user', type: 'object' }],
+                execute: mockProcessUser
+            });
+
+            // Mock the getFunctionRegistry function
+            jest.spyOn(require('./ai-function-loader'), 'getFunctionRegistry')
+                .mockReturnValue(mockFunctionRegistry);
+
+            const response = await request.post('/workflow/execute')
+                .send({ workflow, debug: true });
+
+            expect(response.status).toBe(200);
+            expect(response.body.success).toBe(true);
+            expect(response.body.results).toHaveLength(1);
+
+            // Verify the results contain the mapped processed users
+            const result = response.body.results[0];
+            expect(Array.isArray(result.result)).toBe(true);
+            expect(result.result).toHaveLength(2);
+            expect(result.result[0]).toHaveProperty('processed', true);
+            expect(result.result[1]).toHaveProperty('processed', true);
+        });
+
+        test('should handle errors in array mapping', async () => {
+            const workflow = {
+                actions: [
+                    {
+                        id: 'get_users',
+                        tool: 'get_all_users',
+                        parameters: {}
+                    },
+                    {
+                        id: 'process_users',
+                        tool: 'process_user',
+                        map: true,
+                        parameters: {
+                            user: 'get_users[*].nonexistent'
+                        }
+                    }
+                ]
+            };
+
+            // Mock the function registry responses
+            const mockGetAllUsers = jest.fn<any>().mockResolvedValue([
+                { id: 1, name: 'User 1' },
+                { id: 2, name: 'User 2' }
+            ] as const);
+
+            // Mock the function registry
+            const mockFunctionRegistry = new Map();
+            mockFunctionRegistry.set('get_all_users', {
+                getName: () => 'get_all_users',
+                getParams: () => [],
+                execute: mockGetAllUsers
+            });
+            mockFunctionRegistry.set('process_user', {
+                getName: () => 'process_user',
+                getParams: () => [{ name: 'user', type: 'object' }],
+                execute: jest.fn()
+            });
+
+            // Mock the getFunctionRegistry function
+            jest.spyOn(require('./ai-function-loader'), 'getFunctionRegistry')
+                .mockReturnValue(mockFunctionRegistry);
+
+            const response = await request.post('/workflow/execute')
+                .send({ workflow, debug: true });
+
+            expect(response.status).toBe(500);
+            expect(response.body.error).toBe('Failed to execute workflow');
+            expect(response.body.stepErrors).toBeDefined();
+            expect(response.body.stepErrors.length).toBeGreaterThan(0);
+        });
+    });
+});
