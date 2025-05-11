@@ -1,5 +1,11 @@
 # @sashi/ui
 
+## 5.0.0
+
+### Major Changes
+
+- cd5371e: shift to working with workflows including arrays and mapping
+
 ## 4.0.0
 
 ### Major Changes
