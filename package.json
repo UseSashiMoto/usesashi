@@ -32,5 +32,8 @@
         "access": "public"
     },
     "packageManager": "yarn@1.22.19",
-    "version": "1.0.0"
+    "version": "1.0.0",
+    "dependencies": {
+        "recharts": "^2.15.3"
+    }
 }

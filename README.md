@@ -196,6 +196,85 @@ Are you ready to make admin tasks a breeze? Join us on this magical journey! Che
 
 Sashi is released under the [MIT License](https://github.com/sashimo/sashi/blob/main/LICENSE).
 
+## 🔄 Workflow System
+
+This update introduces a powerful workflow system that enables users to create automated sequences of your registered functions.
+
+### 📊 How Workflows Work
+
+Once you register your functions with Sashi, they automatically become available for use in workflows. Users can then:
+
+1. **Create sequences of actions** using your registered functions
+2. **Pass data between steps** - Output from one function becomes input to another
+3. **Save and reuse workflows** for common tasks
+4. **Execute workflows** with a single click instead of multiple manual steps
+
+```mermaid
+graph TD
+    A[Register Functions] --> B[Functions Available in Workflow System]
+    B --> C[Users Create Workflows]
+    C --> D[Workflows Executed When Needed]
+    D --> E[Results Displayed to User]
+    
+    A1[Developer] --> A
+    C1[End User] --> C
+    
+    style A fill:#a4c2f4
+    style B fill:#b6d7a8
+    style C fill:#f9d77e
+    style D fill:#d5a6bd
+    style E fill:#ea9999
+    style A1,C1 fill:#d9d9d9
+```
+
+### 🔗 Function Integration in Workflows
+
+Your registered functions become building blocks that users can connect together:
+
+```mermaid
+graph LR
+    A[Function: Get Users] --> B[Function: Filter Active Users]
+    B --> C[Function: Send Notification]
+    
+    A1[Output: User List] --> B1[Input: Users]
+    B2[Output: Filtered Users] --> C1[Input: Recipients]
+    
+    style A,B,C fill:#a4c2f4
+    style A1,B1,B2,C1 fill:#d5a6bd
+```
+
+### 🌐 Data Flow Between Systems
+
+The workflow system handles all the data flow between your registered functions and external systems without you needing to implement any additional code:
+
+```mermaid
+sequenceDiagram
+    participant Dev as Developer
+    participant Sashi as Sashi System
+    participant User as User
+    participant Ext as External Services
+    
+    Dev->>Sashi: Register functions
+    User->>Sashi: Create workflows using functions
+    User->>Sashi: Execute workflow
+    Sashi->>Ext: Call external APIs if needed
+    Ext-->>Sashi: Return results
+    Sashi->>Sashi: Process data between steps
+    Sashi-->>User: Display final results
+```
+
+### 📝 What You Need To Do
+
+As a developer, you only need to:
+
+1. **Register your functions** using the AIFunction system (as shown in previous examples)
+2. **Ensure proper input/output typing** so the workflow system knows what data can be passed between steps
+3. **Document your functions well** so users understand what each function does
+
+The workflow storage, execution, and visualization are all handled automatically by the Sashi system.
+
+For more information on how users can use the workflows you enable, direct them to our [Workflow Documentation](https://docs.sashi.ai/workflows).
+
 ---
 
 <p align="center" style="color: rgb(12, 80, 255);">

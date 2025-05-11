@@ -107,7 +107,7 @@ const GetAllUserFunction = new AIFunction(
     .returns(new AIArray("users", "all users", UserObject))
     .implement(async () => {
         const users = await getAllUsers()
-        return users.map((user) => user.data)
+        return users.map((user) => ({ ...user.data, id: user.id }))
     })
 
 registerFunctionIntoAI("get_user_by_id", GetUserByIdFunction)

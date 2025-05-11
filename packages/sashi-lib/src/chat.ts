@@ -1,4 +1,4 @@
-import { callFunctionFromRegistryFromObject, getFunctionAttributes, getFunctionRegistry, VisualizationFunction } from "./ai-function-loader";
+import { callFunctionFromRegistryFromObject, generateToolSchemas, getFunctionRegistry, VisualizationFunction } from "./ai-function-loader";
 import { getAIBot } from "./aibot";
 import { trim_array } from "./utils";
 
@@ -14,28 +14,54 @@ const getSystemPrompt = () => {
     const today = new Date();
 
     const system_prompt =
-        `You are a helpful admin assistant for an application.\n\n` +
-        `You job is to take user inquires and use the tools that we give you to help the users.\n` +
-        `You will either use the current tool or list out the tools the user can use as a workflow a user can trigger\n` +
-        `You might have to pass the response of one tool to a child tool and when you return result show parent tools and how it was passed to a child tool\n` +
-        `When you fill up some of the required information yourself, be sure to confirm to user before proceeding.\n` +
-        `Aside from the given tools, and manipulating the data, answer all other inquiries by telling the user that it is out of scope of your ability.\n\n` +
-        'Do not make things up, do not guess, do not invent, do not use the tools to do things that are not asked for.\n\n' +
-        `Do not run any function multiple times unless explicitly asked to do so or if a looping tool is detected and if so use the looping tools to loop through the function.\n\n` +
-        `# User\n` +
-        `If my full name is needed, please ask me for my full name.\n\n` +
-        `# Language Support\n` +
-        `Please reply in the language used by the user.\n\n` +
-        `# Tools\n` +
-        `You have access to the following tools:\n` +
-        `${[...getFunctionRegistry().values()]
-            .filter(
-                (func) =>
-                    getFunctionAttributes().get(func.getName())?.active ?? true
-            )
-            .map((func) => `${func.getName()}+":"+${func.getDescription()}`)
-            .join('\n')}\n\n` +
-        `when ask tell them they have access to those tools only and tell them they have no access to other tools\n\n` +
+        `
+    You are an assistant capable of two distinct response types based on the user's request:\n
+    ## Response Type 1: General Conversation\n
+    If the user's message is conversational, informational, 
+    or does NOT explicitly request a workflow involving backend functions, respond clearly and concisely using this JSON format:\n
+
+    {
+        "type": "general",
+        "content": "<your natural conversational response here>"
+    }
+
+    ## Response Type 2: Workflow Definition
+    If the user's message explicitly requests or clearly describes a workflow involving backend functions or tasks, 
+    respond strictly in structured JSON format as follows:\n
+
+    {
+        "type": "workflow",
+        "description": "<short description of workflow>",
+        "actions": [
+            {
+                "id": "<unique_action_id>",
+                "tool": "<backend_function_name the list of tools is available in the tool_schema and each has a name, description and parameters. use name here>",
+                "description": "<description of the action>",
+                "parameters": {
+                    "<parameter_name>": "<parameter_value_or_reference>"
+                },
+                "map": false
+            }
+        ],
+        "options": {
+            "execute_immediately": false,
+            "generate_ui": false
+        }
+    }
+
+    Important rules for Workflow responses:
+    - Clearly separate each action step and provide a unique \`id\`.
+    - Parameters can reference outputs of previous actions using the syntax \`"<action_id>.<output_field>"\`.
+    - For array outputs, you can use array notation: \`"<action_id>[*].<output_field>"\` to reference each item in the array.
+    - When an action needs to process each item in an array result from a previous step, set \`"map": true\` for that action.
+    - Example mapping workflow:
+      * Step 1: Gets a list of users (\`get_all_users\` returns array of user objects)
+      * Step 2: Gets files for each user using \`"map": true\` and \`"userId": "get_all_users[*].email"\`
+    - Always set \`"execute_immediately": false\` and \`"generate_ui": false\`. Never set these to true. The user interface will decide this explicitly.\n
+
+    If the user's message doesn't clearly request a workflow, always default to a general conversational response format.
+
+    Always respond strictly with JSON as defined above.` +
         `Today is ${today}`;
 
     return system_prompt;
@@ -43,12 +69,21 @@ const getSystemPrompt = () => {
 
 
 export const processChatRequest = async ({ inquiry, previous }: { inquiry: string, previous: any[] }) => {
+
     const aiBot = getAIBot()
 
     const context = trim_array(previous, 20);
     const system_prompt = getSystemPrompt();
 
-    let messages: any[] = [{ role: 'system', content: system_prompt }];
+
+    const toolsSchema = generateToolSchemas();
+
+    let messages: any[] = [
+        { role: 'system', content: system_prompt },
+        { role: "system", content: `Available backend functions:\n ${JSON.stringify(toolsSchema, null, 2)}` }
+    ];
+
+    console.log("toolsSchema", `Available backend functions:\n ${JSON.stringify(toolsSchema, null, 2)}`)
     if (context.length > 0) {
         messages = messages.concat(context);
     }
@@ -63,7 +98,64 @@ export const processChatRequest = async ({ inquiry, previous }: { inquiry: strin
         )
     })
 
+
     return result
+}
+
+// Add to your workflow execution file
+function resolveParameterValue(paramValue: string, actionResults: Record<string, any>) {
+    if (typeof paramValue !== 'string' || !paramValue.includes('.')) {
+        return paramValue;
+    }
+
+    // Check for array notation
+    if (paramValue.includes('[*]')) {
+        const [actionId, ...pathParts] = paramValue.split('.');
+        if (!actionId) {
+            throw new Error(`Invalid parameter value: ${paramValue}`);
+        }
+        const baseActionId = actionId?.split('[')[0];
+        if (!baseActionId) {
+            throw new Error(`Invalid parameter value: ${paramValue}`);
+        }
+        if (!actionResults[baseActionId]) {
+            throw new Error(`Action result not found: ${baseActionId}`);
+        }
+
+        const arrayResult = actionResults[baseActionId];
+        if (!Array.isArray(arrayResult)) {
+            throw new Error(`Expected array from ${baseActionId} but got: ${typeof arrayResult}`);
+        }
+
+        // Return the array with each item's property accessed
+        return arrayResult.map(item => {
+            let value = item;
+            for (const part of pathParts) {
+                if (value === undefined || value === null) {
+                    throw new Error(`Cannot access property ${part} of undefined in ${paramValue}`);
+                }
+                value = value[part];
+            }
+            return value;
+        });
+    }
+
+    // Standard parameter reference
+    const [actionId, ...pathParts] = paramValue.split('.');
+
+    if (!actionResults[actionId!]) {
+        throw new Error(`Action result not found: ${actionId}`);
+    }
+
+    let value = actionResults[actionId!];
+    for (const part of pathParts) {
+        if (value === undefined || value === null) {
+            throw new Error(`Field "${part}" not found in the result of action "${actionId}"`);
+        }
+        value = value[part];
+    }
+
+    return value;
 }
 
 export const processFunctionRequest = async ({ tools, previous }: { tools: any[], previous: any[] }) => {
