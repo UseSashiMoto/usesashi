@@ -50,6 +50,9 @@ const getSystemPrompt = () => {
     }
 
     Important rules for Workflow responses:
+    - ONLY use functions that exist in the tool_schema. NEVER make up or use functions that don't exist.
+    - If a calculation or transformation is needed (like counting, summing, or filtering), let the UI handle it.
+    - For example, if you need to count items in an array, just return the array and let the UI count it.
     - Clearly separate each action step and provide a unique \`id\`.
     - Parameters can reference outputs of previous actions using the syntax \`"<action_id>.<output_field>"\`.
     - For array outputs, you can use array notation: \`"<action_id>[*].<output_field>"\` to reference each item in the array.
@@ -102,61 +105,6 @@ export const processChatRequest = async ({ inquiry, previous }: { inquiry: strin
     return result
 }
 
-// Add to your workflow execution file
-function resolveParameterValue(paramValue: string, actionResults: Record<string, any>) {
-    if (typeof paramValue !== 'string' || !paramValue.includes('.')) {
-        return paramValue;
-    }
-
-    // Check for array notation
-    if (paramValue.includes('[*]')) {
-        const [actionId, ...pathParts] = paramValue.split('.');
-        if (!actionId) {
-            throw new Error(`Invalid parameter value: ${paramValue}`);
-        }
-        const baseActionId = actionId?.split('[')[0];
-        if (!baseActionId) {
-            throw new Error(`Invalid parameter value: ${paramValue}`);
-        }
-        if (!actionResults[baseActionId]) {
-            throw new Error(`Action result not found: ${baseActionId}`);
-        }
-
-        const arrayResult = actionResults[baseActionId];
-        if (!Array.isArray(arrayResult)) {
-            throw new Error(`Expected array from ${baseActionId} but got: ${typeof arrayResult}`);
-        }
-
-        // Return the array with each item's property accessed
-        return arrayResult.map(item => {
-            let value = item;
-            for (const part of pathParts) {
-                if (value === undefined || value === null) {
-                    throw new Error(`Cannot access property ${part} of undefined in ${paramValue}`);
-                }
-                value = value[part];
-            }
-            return value;
-        });
-    }
-
-    // Standard parameter reference
-    const [actionId, ...pathParts] = paramValue.split('.');
-
-    if (!actionResults[actionId!]) {
-        throw new Error(`Action result not found: ${actionId}`);
-    }
-
-    let value = actionResults[actionId!];
-    for (const part of pathParts) {
-        if (value === undefined || value === null) {
-            throw new Error(`Field "${part}" not found in the result of action "${actionId}"`);
-        }
-        value = value[part];
-    }
-
-    return value;
-}
 
 export const processFunctionRequest = async ({ tools, previous }: { tools: any[], previous: any[] }) => {
     const aiBot = getAIBot()
