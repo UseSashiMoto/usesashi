@@ -1,4 +1,3 @@
-import axios from "axios"
 import bodyParser from "body-parser"
 import cors from "cors"
 import { NextFunction, Request, Response, Router } from "express"
@@ -8,21 +7,17 @@ import {
     AIFieldEnum,
     AIObject,
     callFunctionFromRegistryFromObject,
-    getFunctionAttributes,
     getFunctionRegistry,
-    getRepoRegistry,
     toggleFunctionActive
 } from "./ai-function-loader"
 import { createAIBot, getAIBot } from "./aibot"
 
 import { processChatRequest, processFunctionRequest } from "./chat"
 import { GeneralResponse, WorkflowResponse, WorkflowResult } from "./models/models"
-import { MetaData, RepoMetadata } from './models/repo-metadata'
 import { createSashiHtml, createSessionToken } from './utils'
 
 
 const HEADER_API_TOKEN = 'x-api-token';
-const HEADER_REPO_TOKEN = 'x-repo-token';
 
 const Sentry = require("@sentry/node");
 
@@ -50,11 +45,8 @@ interface MiddlewareOptions {
     repos?: string[]
     sashiServerUrl?: string //where the sashi server is hosted if you can't find it automatically
     apiSecretKey?: string // used to validate requests from and to the hub
-    repoSecretKey?: string // used to upload metadata for a specific repo and used to validate request to the middleware
     hubUrl?: string // hub where all the repos are hosted
-    version?: number //current version of your repo
     addStdLib?: boolean // add the standard library to the hub
-    useCloud?: boolean
     langFuseInfo?: {
         publicKey: string
         secretKey: string
@@ -67,90 +59,6 @@ export interface DatabaseClient {
     query: (operation: string, details: any) => Promise<any>;
 }
 
-
-export const validateRepoRequest = ({ sashiServerUrl, repoSecretKey }: {
-    sashiServerUrl?: string,
-    repoSecretKey?: string
-}) => {
-
-    return (req: Request, res: Response, next: NextFunction) => {
-        const origin = req.headers.origin;
-        let currentUrl = sashiServerUrl ?? req.get('host') ?? '';
-        try {
-            let originHostname = '';
-            if (origin) {
-                try {
-                    const originUrl = new URL(origin);
-                    originHostname = originUrl.hostname;
-                } catch (err) {
-                    Sentry.captureException(err);
-                    console.error('Invalid origin:', err);
-                    // Handle invalid origin
-                    return res.status(403).json({ error: 'Invalid origin' });
-                }
-            }
-
-            if (!currentUrl || typeof currentUrl !== 'string') {
-                currentUrl = 'localhost';
-            }
-
-            let currentUrlObj: URL;
-            try {
-                currentUrlObj = new URL(`http://${currentUrl}`);
-            } catch (err) {
-                Sentry.captureException(err);
-                console.error('Invalid currentUrl:', err);
-                currentUrlObj = new URL('http://localhost');
-            }
-
-            Sentry.addBreadcrumb({
-                category: "validation",
-                message: `origin: ${origin}, currentUrl: ${currentUrl}`,
-                level: "info",
-            });
-
-            const isLocalhost =
-                originHostname === 'localhost' &&
-                currentUrlObj.hostname === 'localhost';
-            const isSameDomain = !origin || originHostname === currentUrlObj.hostname;
-
-            Sentry.addBreadcrumb({
-                category: "validation",
-                message: `isLocalhost: ${isLocalhost}, isSameDomain: ${isSameDomain}`,
-                level: "info",
-            });
-
-            if (!isLocalhost && !isSameDomain) {
-                // If they are not the same domain or both localhost, validate the secret key
-                const secretKey = req.headers[HEADER_REPO_TOKEN];
-                Sentry.addBreadcrumb({
-                    category: "validation",
-                    message: `isLocalhost: ${isLocalhost}, isSameDomain: ${isSameDomain}, secretKey: ${secretKey}: repoSecretKey: ${repoSecretKey}`,
-                    level: "info",
-                });
-                if (!secretKey || secretKey !== repoSecretKey) {
-                    Sentry.addBreadcrumb({
-                        category: "validation",
-                        message: `Unauthorized request`,
-                        level: "error",
-                    });
-                    Sentry.captureException(new Error('Unauthorized request'));
-                    return res
-                        .status(403)
-                        .json({ error: 'Unauthorized request' });
-                }
-            }
-
-            // If authorized, proceed to the next middleware
-            next();
-        } catch (err) {
-            Sentry.captureException(err);
-            console.error('Error parsing URLs:', err);
-            return res.status(403).json({ error: 'Invalid origin or URL' });
-        }
-    }
-};
-
 export const createMiddleware = (options: MiddlewareOptions) => {
     const {
         openAIKey,
@@ -158,11 +66,8 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         sashiServerUrl,
         apiSecretKey,
         repos = [],
-        repoSecretKey,
         hubUrl = 'https://hub.usesashi.com',
-        version = 1,
         addStdLib = true,
-        useCloud = false,
         getSession
     } = options
 
@@ -194,60 +99,16 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     });
 
 
-    createAIBot({ apiKey: openAIKey, sashiSecretKey: apiSecretKey, hubUrl, useCloud })
+    createAIBot({ apiKey: openAIKey, sashiSecretKey: apiSecretKey, hubUrl })
 
-    const sendMetadataToHub = async () => {
-        if (!hubUrl) {
-            return;
-        }
-        try {
-            console.log("sending metadata to hub")
-            const metadata: Partial<RepoMetadata> = {
-                functions: Array.from(getFunctionRegistry().values()).map(
-                    (func) => {
-                        const functionAtribute = getFunctionAttributes().get(
-                            func.getName()
-                        );
-
-                        return {
-                            name: func.getName(),
-                            description: func.getDescription(),
-                            needConfirmation: func.getNeedsConfirm(),
-                            active: functionAtribute?.active ?? true,
-                        };
-                    }
-                )
-            }
-
-            console.log("hub url metadata", `${hubUrl}/metadata`)
-            await axios.post(
-                `${hubUrl}/metadata`,
-                { metadata, version },
-                {
-                    headers: {
-                        [HEADER_API_TOKEN]: apiSecretKey,
-                    },
-                }
-            ).catch(error => {
-                //console.error('Failed to send metadata to hub:', error);
-            });
-        } catch (error) {
-            console.error(error)
-            console.error(`No access to hub: ${hubUrl}/metadata`)
-        }
-    };
 
 
 
 
     // Fetch metadata during middleware initialization
-    sendMetadataToHub();
     router.use(cors());
     router.use(bodyParser.json());
     router.use(bodyParser.urlencoded({ extended: true }));
-
-
-
 
 
     router.get('/sanity-check', (_req, res) => {
@@ -274,31 +135,9 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         }
     });
 
-    router.get('/repos', validateRepoRequest({ sashiServerUrl, repoSecretKey }), async (req, res) => {
-        return res.json({ repos: Array.from(getRepoRegistry().values()) });
-    });
 
-    router.get('/metadata', validateRepoRequest({ sashiServerUrl, repoSecretKey }), asyncHandler(async (_req, res, next) => {
-        const metadata: MetaData = {
-            hubUrl: hubUrl,
-            functions: Array.from(getFunctionRegistry().values()).map(
-                (func) => {
-                    const functionAttribute = getFunctionAttributes().get(
-                        func.getName()
-                    );
 
-                    return {
-                        name: func.getName(),
-                        description: func.getDescription(),
-                        needConfirmation: func.getNeedsConfirm(),
-                        active: functionAttribute?.active ?? true,
-                        isVisualization: false,
-                    };
-                }
-            ),
-        };
-        return res.json(metadata);
-    }))
+
 
     // =============== WORKFLOW ENDPOINTS ===============
 
@@ -646,29 +485,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         }
     }
 
-    router.get('/call-function', validateRepoRequest({ sashiServerUrl, repoSecretKey }), async (req, res) => {
-        const { functionName, args } = req.body;
-
-        if (!functionName) {
-            return res.status(400).json({ error: 'Missing function name' });
-        }
-
-        const functionRegistry = getFunctionRegistry();
-        const registeredFunction = functionRegistry.get(functionName);
-
-        if (!registeredFunction) {
-            return res.status(404).json({ error: 'Function not found' });
-        }
-
-        const parsedArgs = JSON.parse(args);
-        const output = await callFunctionFromRegistryFromObject(
-            functionName,
-            parsedArgs
-        );
-
-        return res.json({ output });
-    });
-
     router.get('/functions/:function_id/toggle_active', async (req, res) => {
         const function_id = req.params.function_id;
         const _function = getFunctionRegistry().get(function_id);
@@ -820,7 +636,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
         console.log("ai ui response", response)
         try {
-            const content = response.message?.content;
+            const content = response?.message?.content;
             if (!content) {
                 throw new Error('No content in AI response');
             }
