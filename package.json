@@ -12,7 +12,12 @@
         "test": "turbo run test",
         "publish": "turbo publish",
         "format": "prettier --write \"**/*.{ts,tsx,md}\"",
-        "release": "yarn build && changeset publish"
+        "release": "yarn build && changeset publish",
+        "changeset": "changeset",
+        "version": "changeset version",
+        "bump:major": "changeset version --snapshot major",
+        "bump:minor": "changeset version --snapshot minor",
+        "bump:patch": "changeset version --snapshot patch"
     },
     "devDependencies": {
         "@repo/eslint-config": "*",
