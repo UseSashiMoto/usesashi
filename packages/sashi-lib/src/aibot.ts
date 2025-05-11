@@ -6,13 +6,11 @@ import {
     VisualizationFunction,
     VisualizationType
 } from "./ai-function-loader"
-import { HEADER_API_TOKEN } from "./utils/constants"
 
 export class AIBot {
     private _apiKey: string
     private _sashiSecretKey?: string
     private _hubUrl?: string
-    private _useCloud: boolean
     openai: OpenAI
 
     constructor({
@@ -20,18 +18,15 @@ export class AIBot {
         sashiSecretKey,
         hubUrl,
         langFuseInfo,
-        useCloud = false
     }: {
         apiKey: string
         sashiSecretKey?: string
         hubUrl?: string
         langFuseInfo?: { publicKey: string; secretKey: string; baseUrl: string }
-        useCloud?: boolean
     }) {
         this._apiKey = apiKey
         this._sashiSecretKey = sashiSecretKey
         this._hubUrl = hubUrl
-        this._useCloud = useCloud
 
         if (langFuseInfo) {
             this.openai = observeOpenAI(new OpenAI({ apiKey: this._apiKey }), {
@@ -112,7 +107,7 @@ Finally, if you decide that a component should be generated, you will output the
             tool_choice: { type: "function", function: { name: componentName } }
         })
 
-        const tool_calls = result.tool_calls?.map((tool: { function: { name: any; arguments: string } }) => {
+        const tool_calls = result?.message?.tool_calls?.map((tool: { function: { name: any; arguments: string } }) => {
             return {
                 name: tool.function.name,
                 type: component.getVisualizationType(),
@@ -166,7 +161,7 @@ Finally, if you decide that a component should be generated, you will output the
                 max_tokens
             })
 
-            const decisionResponse = result.content
+            const decisionResponse = result?.message?.content
             const shouldGenerate = decisionResponse?.match(
                 /<decision>(.*?)<\/decision>/
             )?.[1]
@@ -223,33 +218,12 @@ Finally, if you decide that a component should be generated, you will output the
         }
 
         try {
-            if (this._useCloud && this._sashiSecretKey && this._hubUrl) {
-                console.log("Sending request to cloud at:", this._hubUrl)
-                console.log("Request options:", JSON.stringify(options, null, 2))
 
-                const response = await fetch(`${this._hubUrl}/chatCompletion`, {
-                    method: 'POST',
-                    headers: {
-                        "Content-Type": "application/json",
-                        [HEADER_API_TOKEN]: this._sashiSecretKey
-                    },
-                    body: JSON.stringify(options)
-                })
+            console.log("Sending request directly to OpenAI API", this._sashiSecretKey, this._hubUrl)
+            const result = await this.openai.chat.completions.create(options)
+            console.log("Received response from OpenAI:", JSON.stringify(result, null, 2))
+            return result.choices[0]
 
-                if (!response.ok) {
-                    const errorText = await response.text()
-                    throw new Error(`Network response was not ok: ${response.statusText} - ${errorText}`)
-                }
-
-                const responseData = await response.json()
-                console.log("Received response from cloud:", JSON.stringify(responseData, null, 2))
-                return responseData.choices[0]
-            } else {
-                console.log("Sending request directly to OpenAI API", this._useCloud, this._sashiSecretKey, this._hubUrl)
-                const result = await this.openai.chat.completions.create(options)
-                console.log("Received response from OpenAI:", JSON.stringify(result, null, 2))
-                return result.choices[0]
-            }
         } catch (error: any) {
             console.error("Error in chatCompletion:", error)
             throw error
@@ -260,8 +234,8 @@ Finally, if you decide that a component should be generated, you will output the
 
 let aiBot: AIBot | null = null
 
-export const createAIBot = ({ apiKey, sashiSecretKey, hubUrl, useCloud }: { apiKey: string, sashiSecretKey?: string, hubUrl: string, useCloud: boolean }) => {
-    aiBot = new AIBot({ apiKey, sashiSecretKey, hubUrl, useCloud })
+export const createAIBot = ({ apiKey, sashiSecretKey, hubUrl }: { apiKey: string, sashiSecretKey?: string, hubUrl: string }) => {
+    aiBot = new AIBot({ apiKey, sashiSecretKey, hubUrl })
 }
 
 export const getAIBot = () => {

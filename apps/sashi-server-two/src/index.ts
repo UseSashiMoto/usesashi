@@ -74,9 +74,7 @@ app.use(
         openAIKey: process.env.OPENAI_API_KEY || '',
         hubUrl: process.env.HUB_URL || 'http://localhost:3050',
         repos: ["usertwo-sub-to-userone"],
-        useCloud: false,
         apiSecretKey: 'usertwo-api-token',
-        repoSecretKey: 'usertworeposecret',
     })
 )
 
