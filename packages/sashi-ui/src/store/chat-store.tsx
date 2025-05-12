@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
+import { ensureUrlProtocol } from '../utils/url';
 import { MessageItem, Metadata, RepoMetadata } from './models';
 export const APP_STORAGE_KEY = 'sashi-state-storage';
 
@@ -31,7 +32,7 @@ const useAppStore = create<MessageState>()(
       sessionToken: undefined,
       hubUrl: undefined,
       setConnectedToHub: (connected: boolean) => set({ connectedToHub: connected }),
-      setHubUrl: (hubUrl: string) => set({ hubUrl }),
+      setHubUrl: (hubUrl: string) => set({ hubUrl: ensureUrlProtocol(hubUrl) }),
       subscribedRepos: [],
       setSubscribedRepos: (repos: RepoMetadata[]) => set({ subscribedRepos: repos }),
       setRehydrated: () => set({ rehydrated: true }),
@@ -48,7 +49,7 @@ const useAppStore = create<MessageState>()(
       setSessionToken: (sessionToken: string) => set({ sessionToken }),
       setAPIUrl: (apiUrl: string) => {
         console.log('setAPIUrl', apiUrl);
-        set({ apiUrl });
+        set({ apiUrl: ensureUrlProtocol(apiUrl) });
       },
       setMetadata: (metadata: Metadata) => set({ metadata }),
 
