@@ -15,7 +15,7 @@ import { createAIBot, getAIBot } from "./aibot"
 
 import { processChatRequest, processFunctionRequest } from "./chat"
 import { GeneralResponse, WorkflowResponse, WorkflowResult } from "./models/models"
-import { createSashiHtml, createSessionToken } from './utils'
+import { createSashiHtml, createSessionToken, ensureUrlProtocol } from './utils'
 
 
 const HEADER_API_TOKEN = 'x-api-token';
@@ -59,7 +59,7 @@ export interface DatabaseClient {
     query: (operation: string, details: any) => Promise<any>;
 }
 
-const checkOpenAI = async (apiKey: string): Promise<boolean> => {
+const checkOpenAI = async (): Promise<boolean> => {
     try {
         const aibot = getAIBot();
         await aibot.chatCompletion({
@@ -95,29 +95,22 @@ const printStatus = (message: string, status: boolean | 'loading' = true) => {
     console.log(`${statusText} ${message}`);
 };
 
-const updateStatus = (message: string, status: boolean) => {
-    // Move cursor up one line
-    process.stdout.write('\x1b[1A');
-    // Clear the current line
-    process.stdout.write('\x1b[2K');
-    // Print the updated status
-    printStatus(message, status);
-};
 
 export const createMiddleware = (options: MiddlewareOptions) => {
     const {
         openAIKey,
         debug = false,
-        sashiServerUrl,
+        sashiServerUrl: rawSashiServerUrl,
         apiSecretKey,
         repos = [],
-        hubUrl = 'https://hub.usesashi.com',
+        hubUrl: rawHubUrl = 'https://hub.usesashi.com',
         addStdLib = true,
         getSession
     } = options
 
-
-
+    // Ensure URLs have proper protocols
+    const sashiServerUrl = rawSashiServerUrl ? ensureUrlProtocol(rawSashiServerUrl) : undefined;
+    const hubUrl = ensureUrlProtocol(rawHubUrl);
 
     if (addStdLib) {
         repos.push("sashi-stdlib")
@@ -160,7 +153,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         try {
             // Run both checks in parallel
             const [openAIConnected, hubConnected] = await Promise.all([
-                checkOpenAI(openAIKey),
+                checkOpenAI(),
                 checkHubConnection(hubUrl, apiSecretKey)
             ])
 
@@ -346,7 +339,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         return handleWorkflowRequest(req, res, '/workflows', 'DELETE');
     }));
 
-    router.get('/test-error', asyncHandler(async (req, res) => {
+    router.get('/test-error', asyncHandler(async () => {
         throw new Error('Test error for Sentry');
     }));
 

@@ -1,5 +1,6 @@
 import { SavedWorkflow } from '@/pages/DashboardPage';
 import useAppStore from '@/store/chat-store';
+import { ensureUrlProtocol } from './url';
 
 // Storage types supported by the WorkflowStorage
 export type StorageType = 'localStorage' | 'indexedDB' | 'api' | 'server';
@@ -42,8 +43,9 @@ export class WorkflowStorage {
         const appStore = typeof window !== 'undefined' ? useAppStore.getState() : null;
         const apiUrlFromStore = appStore?.apiUrl;
 
-        // Set server URL, preferring options over store values
-        this.serverUrl = options.serverUrl || apiUrlFromStore;
+        // Set server URL, preferring options over store values, and ensure it has a protocol
+        const rawServerUrl = options.serverUrl || apiUrlFromStore;
+        this.serverUrl = rawServerUrl ? ensureUrlProtocol(rawServerUrl) : undefined;
 
         // Default to server if it's available, otherwise use localStorage
         this.storageType = this.serverUrl ? (options.storageType || 'server') : (options.storageType || 'localStorage');
