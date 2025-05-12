@@ -1,5 +1,11 @@
 # sashi-lib
 
+## 5.3.0
+
+### Minor Changes
+
+- 3c244a5: ensure http for calls to middleware
+
 ## 5.2.0
 
 ### Minor Changes
