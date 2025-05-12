@@ -1,5 +1,11 @@
 # @sashi/ui
 
+## 5.2.0
+
+### Minor Changes
+
+- cc7357c: add hub url to middleware checks
+
 ## 5.1.0
 
 ### Minor Changes
