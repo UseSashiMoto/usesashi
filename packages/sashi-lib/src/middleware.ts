@@ -1,4 +1,5 @@
 import bodyParser from "body-parser"
+import chalk from 'chalk'
 import cors from "cors"
 import { NextFunction, Request, Response, Router } from "express"
 
@@ -28,8 +29,7 @@ Sentry.init({
 
 const asyncHandler = (fn: (req: Request, res: Response, next?: NextFunction) => Promise<any>) => (req: Request, res: Response, next: NextFunction) => {
     Promise.resolve(fn(req, res, next)).catch((err) => {
-        console.error('Error in middleware:', err);
-        Sentry.captureException(err); // Capture the error with Sentry
+        Sentry.captureException(err);
         next(err);
     });
 };
@@ -40,8 +40,8 @@ const asyncHandler = (fn: (req: Request, res: Response, next?: NextFunction) => 
 
 
 interface MiddlewareOptions {
-    debug?: boolean; // enable debug mode
     openAIKey: string
+    debug?: boolean
     repos?: string[]
     sashiServerUrl?: string //where the sashi server is hosted if you can't find it automatically
     apiSecretKey?: string // used to validate requests from and to the hub
@@ -59,10 +59,55 @@ export interface DatabaseClient {
     query: (operation: string, details: any) => Promise<any>;
 }
 
+const checkOpenAI = async (apiKey: string): Promise<boolean> => {
+    try {
+        const aibot = getAIBot();
+        await aibot.chatCompletion({
+            messages: [{ role: 'user', content: 'test' }],
+            temperature: 0
+        });
+        return true;
+    } catch (error) {
+        return false;
+    }
+};
+
+const checkHubConnection = async (hubUrl: string, apiSecretKey?: string): Promise<boolean> => {
+    try {
+        const response = await fetch(`${hubUrl}/ping`, {
+            headers: apiSecretKey ? {
+                [HEADER_API_TOKEN]: apiSecretKey,
+            } : undefined,
+        });
+        return response.status === 200;
+    } catch (error) {
+        return false;
+    }
+};
+
+const printStatus = (message: string, status: boolean | 'loading' = true) => {
+    let statusText;
+    if (status === 'loading') {
+        statusText = chalk.yellow('⟳');
+    } else {
+        statusText = status ? chalk.green('✓') : chalk.red('✗');
+    }
+    console.log(`${statusText} ${message}`);
+};
+
+const updateStatus = (message: string, status: boolean) => {
+    // Move cursor up one line
+    process.stdout.write('\x1b[1A');
+    // Clear the current line
+    process.stdout.write('\x1b[2K');
+    // Print the updated status
+    printStatus(message, status);
+};
+
 export const createMiddleware = (options: MiddlewareOptions) => {
     const {
         openAIKey,
-        langFuseInfo,
+        debug = false,
         sashiServerUrl,
         apiSecretKey,
         repos = [],
@@ -70,6 +115,9 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         addStdLib = true,
         getSession
     } = options
+
+
+
 
     if (addStdLib) {
         repos.push("sashi-stdlib")
@@ -102,6 +150,55 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     createAIBot({ apiKey: openAIKey, sashiSecretKey: apiSecretKey, hubUrl })
 
 
+    async function checkSetup(debug: boolean) {
+        console.log('\n🔍 Sashi Middleware Status Check\n')
+
+        // Show loading states
+        printStatus('Checking OpenAI connection...', 'loading')
+        printStatus('Checking Hub connection...', 'loading')
+
+        try {
+            // Run both checks in parallel
+            const [openAIConnected, hubConnected] = await Promise.all([
+                checkOpenAI(openAIKey),
+                checkHubConnection(hubUrl, apiSecretKey)
+            ])
+
+            // Clear the loading states
+            process.stdout.write('\x1b[2A') // Move up two lines
+            process.stdout.write('\x1b[2K') // Clear first line
+            process.stdout.write('\x1b[1A') // Move up one more line
+            process.stdout.write('\x1b[2K') // Clear second line
+
+            // Show individual success/failure messages
+            printStatus('OpenAI connection', openAIConnected)
+            printStatus('Hub connection', hubConnected)
+
+            // Show the remaining statuses
+            const functionRegistry = getFunctionRegistry();
+            const functionCount = functionRegistry.size;
+            printStatus(`Registered functions (${functionCount})`, functionCount > 0);
+
+            // Check middleware configuration
+            printStatus('Middleware configuration', true)
+            console.log(`  • Server URL: ${sashiServerUrl || 'Auto-detected'}`)
+            console.log(`  • Debug: ${debug}`)
+            console.log(`  • Standard Library: ${addStdLib ? 'Enabled' : 'Disabled'}`)
+            console.log(`  • Session Management: ${getSession ? 'Custom' : 'Default'}\n`)
+        } catch (error) {
+            console.error('Error during status checks:', error)
+            // Clear loading states and show error
+            process.stdout.write('\x1b[2A')
+            process.stdout.write('\x1b[2K')
+            process.stdout.write('\x1b[1A')
+            process.stdout.write('\x1b[2K')
+            printStatus('OpenAI connection', false)
+            printStatus('Hub connection', false)
+        }
+    }
+
+    checkSetup(debug)
+
 
 
 
@@ -118,19 +215,13 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
     router.get('/check_hub_connection', async (_req, res) => {
         try {
-            console.log("checking hub connection", hubUrl, apiSecretKey ? {
-                [HEADER_API_TOKEN]: apiSecretKey,
-            } : undefined)
             const connectedData = await fetch(`${hubUrl}/ping`, {
                 headers: apiSecretKey ? {
                     [HEADER_API_TOKEN]: apiSecretKey,
                 } : undefined,
             });
-
-            console.log("hub connection data", connectedData)
             res.json({ connected: connectedData.status === 200 });
         } catch (error) {
-            console.error("error checking hub connection", error)
             res.json({ connected: false });
         }
     });
@@ -457,12 +548,10 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                         jsonResponse = JSON.parse(jsonMatch[1]);
                     } catch (jsonErr) {
                         // If extraction fails, fall back to the initial guess
-                        console.error("Failed to parse LLM response JSON:", jsonErr);
                         return { type: initialType as any };
                     }
                 } else {
                     // No JSON found, fall back to initial guess
-                    console.error("No JSON found in LLM response");
                     return { type: initialType as any };
                 }
             }
@@ -475,12 +564,10 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                     config: jsonResponse.config || {}
                 };
             } else {
-                console.error("Invalid UI type from LLM:", jsonResponse?.type);
                 return { type: initialType as any };
             }
 
         } catch (error) {
-            console.error("Error using LLM for UI enhancement:", error);
             return { type: initialType as any };
         }
     }
@@ -634,7 +721,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
             temperature: .8
         });
 
-        console.log("ai ui response", response)
         try {
             const content = response?.message?.content;
             if (!content) {
@@ -649,14 +735,11 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                 jsonContent = match[1];
             }
 
-            console.log("jsonContent", jsonContent)
 
             const parsed = JSON.parse(jsonContent);
 
-            console.log("parsed", parsed)
             res.json({ entry: parsed });
         } catch (e) {
-            console.error("Failed to parse AI response cause", e);
             res.status(200).json({
                 error: "Failed to parse entry metadata",
                 message: "Unable to determine the form type for this workflow. Please try again or contact support.",
@@ -676,8 +759,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     router.post('/workflow/execute', async (req, res) => {
         const { workflow, debug = false } = req.body;
 
-        console.log("executing workflow", workflow)
-
         if (!workflow || !workflow.actions || !Array.isArray(workflow.actions)) {
             return res.status(400).json({ error: 'Invalid workflow format' });
         }
@@ -693,7 +774,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         try {
             for (let i = 0; i < workflow.actions.length; i++) {
                 const action = workflow.actions[i];
-                // Ensure actionId is always defined
                 const actionId = action.id || `action_${i}`;
                 const toolName = action.tool.replace(/^functions\./, '');
                 const { parameters } = action;
@@ -711,8 +791,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                 }
 
                 const processedParameters: Record<string, any> = { ...parameters };
-
-                // Clear any previous errors for this action
                 const actionErrors: Array<{ actionId: string, error: string }> = [];
 
                 // Process parameter references
@@ -721,7 +799,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                         try {
                             // Check for array notation
                             if (value.includes('[*]')) {
-                                console.log(`Processing array reference: ${value}`);
                                 const parts = value.split('.');
                                 if (parts.length < 2) {
                                     throw new Error(`Invalid array reference format: ${value}`);
@@ -732,16 +809,16 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                                 }
                                 const baseActionId = refActionId.split('[')[0];
                                 const pathParts = parts.slice(1);
-
-                                console.log(`Looking for action result: ${baseActionId}`);
-                                console.log(`Available action results:`, Object.keys(actionResults));
+                                if (debug) {
+                                    console.log(`Looking for action result: ${baseActionId}`);
+                                    console.log(`Available action results:`, Object.keys(actionResults));
+                                }
 
                                 if (!baseActionId || !actionResults[baseActionId]) {
                                     throw new Error(`Action result not found: ${baseActionId}`);
                                 }
 
                                 const arrayResult = actionResults[baseActionId] as unknown[];
-                                console.log(`Found array result:`, arrayResult);
 
                                 if (!Array.isArray(arrayResult)) {
                                     throw new Error(`Expected array from ${baseActionId} but got: ${typeof arrayResult}`);
@@ -750,14 +827,14 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                                 // Map over the array and access the specified properties
                                 const mappedValues = arrayResult.map(item => {
                                     let currentValue = item as Record<string, unknown>;
-                                    console.log(`Processing array item:`, item);
                                     for (const part of pathParts) {
-                                        console.log(`Accessing property "${part}" from:`, currentValue);
+                                        if (debug) {
+                                            console.log(`Accessing property "${part}" from:`, currentValue);
+                                        }
                                         if (currentValue === undefined || currentValue === null) {
                                             throw new Error(`Cannot access property ${part} of undefined in ${value}`);
                                         }
                                         currentValue = currentValue[part] as Record<string, unknown>;
-                                        console.log(`Value after accessing "${part}":`, currentValue);
                                     }
                                     return currentValue;
                                 });
@@ -889,9 +966,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                 }
 
                 try {
-                    // Handle mapping if specified
                     if (action.map === true) {
-                        // Find the first array parameter to map over
                         const arrayParams = Object.entries(processedParameters).find(
                             ([_, value]) => Array.isArray(value)
                         );
@@ -906,26 +981,22 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                             console.log(`Mapping over ${arrayValues.length} items for parameter "${arrayParamName}"`);
                         }
 
-                        // Execute the function for each item in the array
                         const results = await Promise.all(arrayValues.map(async (item: unknown) => {
                             const itemParams = { ...processedParameters };
                             itemParams[arrayParamName] = item;
-
-                            console.log("itemParams", itemParams, arrayParamName, item)
                             return await callFunctionFromRegistryFromObject(toolName, itemParams);
                         }));
 
-                        // Store results using the guaranteed actionId
                         actionResults[actionId] = results;
 
                         if (debug) {
                             console.log(`Mapped results from "${actionId}":`, results);
                         }
                     } else {
-                        // Standard execution
-                        console.log(`Executing function ${toolName} with parameters:`, processedParameters);
+                        if (debug) {
+                            console.log(`Executing function ${toolName} with parameters:`, processedParameters);
+                        }
                         const result = await callFunctionFromRegistryFromObject(toolName, processedParameters);
-                        // Store results using the guaranteed actionId
                         actionResults[actionId] = result;
 
                         if (debug) {
@@ -933,7 +1004,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                         }
                     }
                 } catch (functionError) {
-                    // Enhance the error message with context about which step failed
                     const errorMessage = functionError instanceof Error ? functionError.message : String(functionError);
                     throw new Error(`Error executing function "${toolName}" for action "${actionId}": ${errorMessage}`);
                 }
@@ -943,7 +1013,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
             const finalResult = actionResults[finalAction.id];
             const initialUIType = guessUIType(finalResult);
 
-            // Always try to use LLM for UI determination (useLLMForUI defaults to true)
             let uiType = initialUIType;
             let uiConfig = {};
 
@@ -958,7 +1027,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                     console.log('UI config:', JSON.stringify(uiConfig, null, 2));
                 }
             } catch (error) {
-                console.error("Error enhancing UI with LLM:", error);
+                // Silently fall back to initial UI type
             }
 
             const finalWorkflowResult: WorkflowResult = {
@@ -984,9 +1053,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
             });
 
         } catch (error: unknown) {
-            console.error('Error executing workflow:', error);
-
-            // Include all collected errors in the response for better debugging
             res.status(500).json({
                 error: 'Failed to execute workflow',
                 details: error instanceof Error ? error.message : 'Unknown error',

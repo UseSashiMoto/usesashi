@@ -52,6 +52,7 @@
         "@sentry/profiling-node": "8.34.0",
         "axios": "^1.7.7",
         "body-parser": "^1.20.2",
+        "chalk": "^4.1.2",
         "cors": "^2.8.5",
         "crypto": "^1.0.1",
         "dotenv": "^16.4.5",
