@@ -219,9 +219,7 @@ Finally, if you decide that a component should be generated, you will output the
 
         try {
 
-            console.log("Sending request directly to OpenAI API", this._sashiSecretKey, this._hubUrl)
             const result = await this.openai.chat.completions.create(options)
-            console.log("Received response from OpenAI:", JSON.stringify(result, null, 2))
             return result.choices[0]
 
         } catch (error: any) {
