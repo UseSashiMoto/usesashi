@@ -1,5 +1,11 @@
 # sashi-lib
 
+## 5.1.0
+
+### Minor Changes
+
+- 5a625ac: adding status checks
+
 ## 5.0.0
 
 ### Major Changes
