@@ -172,7 +172,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
             // Show individual success/failure messages
             printStatus('OpenAI connection', openAIConnected)
-            printStatus('Hub connection', hubConnected)
+            printStatus(`Hub connection (${hubUrl})`, hubConnected)
 
             // Show the remaining statuses
             const functionRegistry = getFunctionRegistry();
