@@ -1,5 +1,11 @@
 # @sashi/client
 
+## 5.4.0
+
+### Minor Changes
+
+- 84407aa: re-adding metadata endpoint for middleware
+
 ## 5.3.0
 
 ### Minor Changes
