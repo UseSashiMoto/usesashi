@@ -16,23 +16,23 @@ import { ScrollArea } from './ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 
 export function FunctionsDropdown({
-  functions,
+  functions: accessible_functions,
   onFunctionSwitch,
 }: {
   functions: FunctionSwitch[];
   onFunctionSwitch: (id: string) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [bots, setBots] = useState<FunctionSwitch[]>([]);
+  const [functions, setFunctions] = useState<FunctionSwitch[]>([]);
 
   const toggleBot = (id: string) => {
-    setBots((prevBots) => prevBots.map((bot) => (bot.id === id ? { ...bot, isActive: !bot.isActive } : bot)));
+    setFunctions((prevBots) => prevBots.map((bot) => (bot.id === id ? { ...bot, isActive: !bot.isActive } : bot)));
     onFunctionSwitch(id);
   };
 
   useEffect(() => {
-    setBots(functions);
-  }, [functions]);
+    setFunctions(accessible_functions);
+  }, [accessible_functions]);
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen} className="w-full">
@@ -45,9 +45,9 @@ export function FunctionsDropdown({
       <CollapsibleContent>
         <ScrollArea className="h-[300px] w-full rounded-md border p-4">
           <>
-            {bots.length === 0 && <p className="text-sm text-slate-500">No functions running</p>}
+            {accessible_functions.length === 0 && <p className="text-sm text-slate-500">No functions running</p>}
             <ul className="space-y-2">
-              {bots.map((bot) => (
+              {accessible_functions.map((bot) => (
                 <li key={bot.id} className="flex flex-col space-y-2">
                   <div className="flex items-center justify-between">
                     <TooltipProvider>

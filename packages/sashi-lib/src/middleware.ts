@@ -8,6 +8,7 @@ import {
     AIFieldEnum,
     AIObject,
     callFunctionFromRegistryFromObject,
+    getFunctionAttributes,
     getFunctionRegistry,
     toggleFunctionActive
 } from "./ai-function-loader"
@@ -15,6 +16,7 @@ import { createAIBot, getAIBot } from "./aibot"
 
 import { processChatRequest, processFunctionRequest } from "./chat"
 import { GeneralResponse, WorkflowResponse, WorkflowResult } from "./models/models"
+import { MetaData } from "./models/repo-metadata"
 import { createSashiHtml, createSessionToken, ensureUrlProtocol } from './utils'
 
 
@@ -35,6 +37,82 @@ const asyncHandler = (fn: (req: Request, res: Response, next?: NextFunction) => 
 };
 
 
+export const validateRepoRequest = ({ sashiServerUrl, sashiHubUrl }: {
+    sashiServerUrl?: string
+    sashiHubUrl?: string
+}) => {
+
+    return (req: Request, res: Response, next: NextFunction) => {
+        const origin = req.headers.origin;
+        let currentUrl = sashiServerUrl ?? req.get('host') ?? '';
+        try {
+            let originHostname = '';
+            if (origin) {
+                try {
+                    const originUrl = new URL(origin);
+                    originHostname = originUrl.hostname;
+                } catch (err) {
+                    Sentry.captureException(err);
+                    console.error('Invalid origin:', err);
+                    // Handle invalid origin
+                    return res.status(403).json({ error: 'Invalid origin' });
+                }
+            }
+
+            if (!currentUrl || typeof currentUrl !== 'string') {
+                currentUrl = 'localhost';
+            }
+
+            let currentUrlObj: URL;
+            try {
+                currentUrlObj = new URL(`http://${currentUrl}`);
+            } catch (err) {
+                Sentry.captureException(err);
+                console.error('Invalid currentUrl:', err);
+                currentUrlObj = new URL('http://localhost');
+            }
+
+            Sentry.addBreadcrumb({
+                category: "validation",
+                message: `origin: ${origin}, currentUrl: ${currentUrl}`,
+                level: "info",
+            });
+
+            const isLocalhost =
+                originHostname === 'localhost' &&
+                currentUrlObj.hostname === 'localhost';
+            const isSameDomain = !origin || originHostname === currentUrlObj.hostname;
+            const isFromHub = sashiHubUrl && req.headers[HEADER_API_TOKEN] === sashiHubUrl;
+
+            Sentry.addBreadcrumb({
+                category: "validation",
+                message: `isLocalhost: ${isLocalhost}, isSameDomain: ${isSameDomain}`,
+                level: "info",
+            });
+
+            if (!isLocalhost && !isSameDomain && !isFromHub) {
+
+                Sentry.addBreadcrumb({
+                    category: "validation",
+                    message: `Unauthorized request`,
+                    level: "error",
+                });
+                Sentry.captureException(new Error('Unauthorized request'));
+                return res
+                    .status(403)
+                    .json({ error: 'Unauthorized request' });
+
+            }
+
+            // If authorized, proceed to the next middleware
+            next();
+        } catch (err) {
+            Sentry.captureException(err);
+            console.error('Error parsing URLs:', err);
+            return res.status(403).json({ error: 'Invalid origin or URL' });
+        }
+    }
+};
 
 
 
@@ -205,6 +283,30 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         res.json({ message: 'Sashi Middleware is running' });
         return;
     });
+
+
+
+    router.get('/metadata', validateRepoRequest({ sashiServerUrl, sashiHubUrl: hubUrl }), asyncHandler(async (_req, res, next) => {
+        const metadata: MetaData = {
+            hubUrl: hubUrl,
+            functions: Array.from(getFunctionRegistry().values()).map(
+                (func) => {
+                    const functionAttribute = getFunctionAttributes().get(
+                        func.getName()
+                    );
+
+                    return {
+                        name: func.getName(),
+                        description: func.getDescription(),
+                        needConfirmation: func.getNeedsConfirm(),
+                        active: functionAttribute?.active ?? true,
+                        isVisualization: false,
+                    };
+                }
+            ),
+        };
+        return res.json(metadata);
+    }))
 
     router.get('/check_hub_connection', async (_req, res) => {
         try {
