@@ -1,5 +1,11 @@
 # sashi-lib
 
+## 5.5.0
+
+### Minor Changes
+
+- 436cdd4: added ability to use enums in workflows
+
 ## 5.4.0
 
 ### Minor Changes
