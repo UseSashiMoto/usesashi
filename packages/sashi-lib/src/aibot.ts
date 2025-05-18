@@ -208,10 +208,6 @@ Finally, if you decide that a component should be generated, you will output the
             temperature
         }
 
-        const tools = this.convertToOpenAIFunction()
-        if (tools?.length > 0) {
-            options.tools = tools
-        }
 
         if (tool_choice) {
             options.tool_choice = tool_choice

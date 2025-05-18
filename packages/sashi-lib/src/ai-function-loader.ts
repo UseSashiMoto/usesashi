@@ -44,9 +44,9 @@ export class AIFieldEnum {
         required: boolean = true
     ) {
         this._name = name;
-        this._type = 'enum'; // Set the type to "enum"
+        this._type = 'enum';
         this._description = description;
-        this._values = values; // The possible enum values
+        this._values = values;
         this._required = required;
     }
 
@@ -54,8 +54,9 @@ export class AIFieldEnum {
     description() {
         return {
             type: 'string',
-            enum: this._values,
             description: this._description,
+            enum: this._values,
+            required: this._required
         };
     }
 
@@ -369,7 +370,14 @@ export class AIFunction {
             return z.any();
         } else if (param instanceof AIFieldEnum) {
             // Handle enum fields
-            return z.enum(param.getValues() as [string, ...string[]]); // Return Zod enum schema for AIFieldEnum
+            const values = param.getValues();
+            if (values.length === 0) {
+                throw new Error('Enum must have at least one value');
+            }
+            // Ensure we have at least one value plus rest spread
+            // Explicitly type check the array to ensure it meets Zod's requirements
+            const enumValues = values as [string, ...string[]];
+            return z.enum(enumValues);
         } else {
             switch (param.type) {
                 case 'string':
@@ -380,6 +388,13 @@ export class AIFunction {
                     return z.boolean();
                 case 'array':
                     return z.array(z.any()); // Adjust based on the specific type of array elements
+                case 'enum':
+                    const enumValues = (param as AIEnum).values;
+                    if (!enumValues?.length) {
+                        throw new Error('Enum must have at least one value');
+                    }
+                    // Explicitly type check the array to ensure it meets Zod's requirements
+                    return z.enum(enumValues as [string, ...string[]]);
                 default:
                     return z.null();
             }

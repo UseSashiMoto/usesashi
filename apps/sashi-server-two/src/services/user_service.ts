@@ -1,5 +1,6 @@
 import {
     AIArray,
+    AIFieldEnum,
     AIFunction,
     AIObject,
     registerFunctionIntoAI
@@ -110,5 +111,34 @@ const GetAllUserFunction = new AIFunction(
         return users.map((user) => ({ ...user.data, id: user.id }))
     })
 
+
+const ChangeUserRoleFunction = new AIFunction(
+    'change_user_type',
+    'change a user type'
+)
+    .args(
+        {
+            name: 'userId',
+            description: 'a users id',
+            type: 'string',
+            required: true,
+        },
+        new AIFieldEnum(
+            'type',
+            'the type to change the user to',
+            ['CASE_MANAGER', 'COMMUNITY_ENGAGEMENT'],
+            true
+        )
+    )
+    .returns({
+        name: 'userid',
+        description: 'the user id',
+        type: 'string',
+    })
+    .implement(async (userId: string, role: string) => {
+        console.log('role', userId, role);
+        return userId;
+    });
 registerFunctionIntoAI("get_user_by_id", GetUserByIdFunction)
 registerFunctionIntoAI("get_all_users", GetAllUserFunction)
+registerFunctionIntoAI("change_user_type", ChangeUserRoleFunction)
