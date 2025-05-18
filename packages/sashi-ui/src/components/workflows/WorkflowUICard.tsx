@@ -8,6 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip } from '@/components/ui/tooltip';
+import useAppStore from '@/store/chat-store';
 import { WorkflowStorage } from '@/utils/workflowStorage';
 import { TooltipContent, TooltipProvider, TooltipTrigger } from '@radix-ui/react-tooltip';
 import axios from 'axios';
@@ -49,6 +50,7 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
     return workflow.workflow.executionResults && workflow.workflow.executionResults.length > 0 ? 'results' : 'workflow';
   });
   const [isCopied, setIsCopied] = useState(false);
+  const connectedToHub = useAppStore((state) => state.connectedToHub);
   const formRef = useRef<HTMLFormElement>(null);
 
   // Form field validation
@@ -134,6 +136,10 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
 
   // Save workflow
   const saveWorkflow = () => {
+    if (!connectedToHub) {
+      return;
+    }
+
     try {
       const workflowStorage = new WorkflowStorage();
 
@@ -436,9 +442,22 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
 
       {isInChat && (
         <CardFooter className="flex justify-end pt-0">
-          <Button variant="outline" size="sm" onClick={saveWorkflow}>
-            Save to Dashboard
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div>
+                  <Button variant="outline" size="sm" onClick={saveWorkflow} disabled={!connectedToHub}>
+                    Save to Dashboard
+                  </Button>
+                </div>
+              </TooltipTrigger>
+              {!connectedToHub && (
+                <TooltipContent>
+                  <p>Cannot save workflow: Hub connection required</p>
+                </TooltipContent>
+              )}
+            </Tooltip>
+          </TooltipProvider>
         </CardFooter>
       )}
     </Card>

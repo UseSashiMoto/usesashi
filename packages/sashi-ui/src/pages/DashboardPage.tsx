@@ -1,13 +1,12 @@
 import { Button } from '@/components/Button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { WorkflowDashboard } from '@/components/workflows/WorkflowDashboard';
 import { WorkflowResponse, WorkflowUIElement } from '@/models/payload';
 import { WorkflowStorage } from '@/utils/workflowStorage';
 import axios from 'axios';
-import { Plus, Search } from 'lucide-react';
+import { AlertCircle, Plus, Search } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import useAppStore from 'src/store/chat-store';
 import { Layout } from '../components/Layout';
@@ -29,9 +28,8 @@ export const DashboardPage = () => {
   const [savedWorkflows, setSavedWorkflows] = useState<SavedWorkflow[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('all');
-  const [dashboards, setDashboards] = useState(['Default', 'Analytics', 'Operations']);
-  const [activeDashboard, setActiveDashboard] = useState('Default');
   const apiUrl = useAppStore((state) => state.apiUrl);
+  const connectedToHub = useAppStore((state) => state.connectedToHub);
 
   // Load saved workflows from storage
   useEffect(() => {
@@ -151,21 +149,10 @@ export const DashboardPage = () => {
         <div className="w-full max-w-6xl px-4">
           <div className="flex flex-col md:flex-row justify-between items-center mb-8">
             <h1 className="text-2xl font-bold mb-4 md:mb-0">Workflow Dashboard</h1>
-            <div className="flex items-center gap-4">
-              <Select value={activeDashboard} onValueChange={setActiveDashboard}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Select Dashboard" />
-                </SelectTrigger>
-                <SelectContent>
-                  {dashboards.map((dashboard) => (
-                    <SelectItem key={dashboard} value={dashboard}>
-                      {dashboard}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button>Create Dashboard</Button>
-            </div>
+            <Button disabled={!connectedToHub} onClick={createNewWorkflow}>
+              <Plus className="h-4 w-4 mr-2" />
+              Create Workflow
+            </Button>
           </div>
 
           <div className="grid grid-cols-1 gap-6">
@@ -175,7 +162,9 @@ export const DashboardPage = () => {
                   <div>
                     <CardTitle>Saved Workflows</CardTitle>
                     <CardDescription>
-                      {filteredWorkflows.length} workflow{filteredWorkflows.length !== 1 ? 's' : ''} available
+                      {connectedToHub
+                        ? `${filteredWorkflows.length} workflow${filteredWorkflows.length !== 1 ? 's' : ''} available`
+                        : 'Hub connection required'}
                     </CardDescription>
                   </div>
                   <div className="relative w-full md:w-64">
@@ -185,45 +174,61 @@ export const DashboardPage = () => {
                       className="pl-8"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
+                      disabled={!connectedToHub}
                     />
                   </div>
                 </div>
               </CardHeader>
               <CardContent>
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                  <TabsList className="grid w-full grid-cols-3">
-                    <TabsTrigger value="all">All Workflows</TabsTrigger>
-                    <TabsTrigger value="favorites">Favorites</TabsTrigger>
-                    <TabsTrigger value="recent">Recent</TabsTrigger>
-                  </TabsList>
+                {!connectedToHub ? (
+                  <div className="flex flex-col items-center justify-center py-10 text-center">
+                    <AlertCircle className="h-12 w-12 text-yellow-500 mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">Hub Connection Required</h3>
+                    <p className="text-muted-foreground max-w-md mb-4">
+                      Workflows are stored and managed through the Hub. Please ensure you're connected to access your
+                      workflows.
+                    </p>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <span className="inline-block w-2 h-2 rounded-full bg-red-500"></span>
+                      Currently Disconnected
+                    </div>
+                  </div>
+                ) : (
+                  <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                    <TabsList className="grid w-full grid-cols-3">
+                      <TabsTrigger value="all">All Workflows</TabsTrigger>
+                      <TabsTrigger value="favorites">Favorites</TabsTrigger>
+                      <TabsTrigger value="recent">Recent</TabsTrigger>
+                    </TabsList>
 
-                  <TabsContent value={activeTab} className="mt-4">
-                    {filteredWorkflows.length === 0 ? (
-                      <div className="text-center py-10">
-                        <p className="text-muted-foreground mb-4">No workflows found.</p>
-                        <Button variant="outline" onClick={createNewWorkflow}>
-                          <Plus className="h-4 w-4 mr-2" />
-                          Create New Workflow
-                        </Button>
-                      </div>
-                    ) : apiUrl ? (
-                      <WorkflowDashboard
-                        workflows={filteredWorkflows}
-                        apiUrl={apiUrl}
-                        onRerunWorkflow={rerunWorkflow}
-                        onDeleteWorkflow={deleteWorkflow}
-                        onToggleFavorite={toggleFavorite}
-                        onAddWorkflow={createNewWorkflow}
-                      />
-                    ) : (
-                      <div className="text-center py-10">
-                        <p className="text-muted-foreground mb-4">
-                          API URL is not available. Please check your server connection.
-                        </p>
-                      </div>
-                    )}
-                  </TabsContent>
-                </Tabs>
+                    <TabsContent value={activeTab} className="mt-4">
+                      {filteredWorkflows.length === 0 ? (
+                        <div className="text-center py-10">
+                          <p className="text-muted-foreground mb-4">No workflows found.</p>
+                          <Button variant="outline" onClick={createNewWorkflow}>
+                            <Plus className="h-4 w-4 mr-2" />
+                            Create New Workflow
+                          </Button>
+                        </div>
+                      ) : apiUrl ? (
+                        <WorkflowDashboard
+                          workflows={filteredWorkflows}
+                          apiUrl={apiUrl}
+                          onRerunWorkflow={rerunWorkflow}
+                          onDeleteWorkflow={deleteWorkflow}
+                          onToggleFavorite={toggleFavorite}
+                          onAddWorkflow={createNewWorkflow}
+                        />
+                      ) : (
+                        <div className="text-center py-10">
+                          <p className="text-muted-foreground mb-4">
+                            API URL is not available. Please check your server connection.
+                          </p>
+                        </div>
+                      )}
+                    </TabsContent>
+                  </Tabs>
+                )}
               </CardContent>
             </Card>
           </div>
