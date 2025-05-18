@@ -784,8 +784,9 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                     {
                       "key": "parameter name",
                       "label": "optional label",
-                      "type": "string" | "number" | "boolean" | "date",
-                      "required": true
+                      "type": "string" | "number" | "boolean" | "date" | "enum",
+                      "required": true,
+                      "enumValues": ["value1", "value2"] // only for enum type
                     }
                   ],
                   
@@ -799,6 +800,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                 }
 
                 Your response should only include fields relevant to the selected entryType. For example, "fields" should only be included for "form" type.
+                For enum fields, always include the enumValues array with the possible values but only use values given to you in the workflow, do not make up values.
 
                 Here is the workflow:
                 \`\`\`

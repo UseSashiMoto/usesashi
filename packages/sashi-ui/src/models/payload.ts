@@ -68,8 +68,9 @@ export interface FormPayload {
   fields: {
     key: string;
     label?: string;
-    type?: 'string' | 'number' | 'boolean' | 'date';
+    type?: 'string' | 'number' | 'boolean' | 'date' | 'enum';
     required?: boolean;
+    enumValues?: string[]; // Available options for enum type
   }[];
 }
 
