@@ -40,17 +40,25 @@ const getSystemPrompt = () => {
                 "parameters": {
                     "<parameter_name>": "<parameter_value_or_reference>"
                 },
+                "parameterMetadata": {
+                    "<parameter_name>": {
+                        "type": "string",
+                        "description": "description from the tool schema",
+                        "enum": ["value1", "value2"],  // Include if parameter has enum values
+                        "required": true
+                    }
+                },
                 "map": false
             }
-        ],
-        "options": {
-            "execute_immediately": false,
-            "generate_ui": false
-        }
+        ]
     }
 
     Important rules for Workflow responses:
     - ONLY use functions that exist in the tool_schema. NEVER make up or use functions that don't exist.
+    - For parameters that have an "enum" field in their schema, you MUST:
+      1. Include the enum values in parameterMetadata for that parameter
+      2. ONLY use values from the enum list in the parameters
+      3. Copy the exact enum values, description, and required status from the tool schema
     - If a calculation or transformation is needed (like counting, summing, or filtering), let the UI handle it.
     - For example, if you need to count items in an array, just return the array and let the UI count it.
     - Clearly separate each action step and provide a unique \`id\`.
@@ -60,7 +68,6 @@ const getSystemPrompt = () => {
     - Example mapping workflow:
       * Step 1: Gets a list of users (\`get_all_users\` returns array of user objects)
       * Step 2: Gets files for each user using \`"map": true\` and \`"userId": "get_all_users[*].email"\`
-    - Always set \`"execute_immediately": false\` and \`"generate_ui": false\`. Never set these to true. The user interface will decide this explicitly.\n
 
     If the user's message doesn't clearly request a workflow, always default to a general conversational response format.
 

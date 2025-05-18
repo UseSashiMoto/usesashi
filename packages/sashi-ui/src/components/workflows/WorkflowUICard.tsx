@@ -3,6 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
@@ -12,7 +13,7 @@ import { WorkflowStorage } from '@/utils/workflowStorage';
 import { TooltipContent, TooltipProvider, TooltipTrigger } from '@radix-ui/react-tooltip';
 import axios from 'axios';
 import { Check, Code, Copy, GripVertical, Pin, PinOff, X } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { FormPayload, LabelPayload, UIWorkflowDefinition, WorkflowResult } from '../../models/payload';
 import { WorkflowResultViewer } from './WorkflowResultViewer';
 
@@ -50,6 +51,7 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
   });
   const [isCopied, setIsCopied] = useState(false);
   const connectedToHub = useAppStore((state) => state.connectedToHub);
+  const formRef = useRef<HTMLFormElement>(null);
 
   // Form field validation
   const isFormValid = () => {
@@ -200,6 +202,29 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
             <Label htmlFor={`switch-${field.key}`}>{formData[field.key] ? 'Enabled' : 'Disabled'}</Label>
           </div>
         );
+      case 'enum':
+        return (
+          <div className="relative overflow-visible">
+            <Select value={formData[field.key] || ''} onValueChange={(value) => handleInputChange(field.key, value)}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder={field.label || field.key} />
+              </SelectTrigger>
+              <SelectContent
+                position="popper"
+                side="bottom"
+                align="start"
+                sideOffset={4}
+                className="z-[9999] max-h-[200px] overflow-y-auto"
+              >
+                {field.enumValues?.map((value: string) => (
+                  <SelectItem key={value} value={value}>
+                    {value}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        );
       case 'text':
         return (
           <Textarea
@@ -302,10 +327,10 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
                   e.preventDefault();
                   handleExecute();
                 }}
-                className="space-y-4"
+                className="space-y-4 overflow-visible"
               >
                 {(workflow.entry.payload as FormPayload)?.fields?.map((field) => (
-                  <div key={field.key} className="space-y-2">
+                  <div key={field.key} className="space-y-2 overflow-visible">
                     <Label htmlFor={field.key}>
                       {field.label || field.key}
                       {field.required && <span className="text-red-500 ml-1">*</span>}

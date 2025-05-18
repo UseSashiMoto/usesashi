@@ -6,7 +6,7 @@ import { WorkflowStorage } from '@/utils/workflowStorage';
 import { DashboardIcon, GearIcon, GitHubLogoIcon } from '@radix-ui/react-icons';
 import * as Toast from '@radix-ui/react-toast';
 import axios from 'axios';
-import { ChevronDown, ChevronUp, HomeIcon } from 'lucide-react';
+import { ChevronDown, ChevronUp, HomeIcon, MessageSquare } from 'lucide-react';
 import React, { useEffect, useMemo, useState, type FC, type PropsWithChildren } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from './Button';
@@ -207,6 +207,33 @@ export const Layout: FC<{} & PropsWithChildren> = ({ children }) => {
                   <span className={`text-sm ${connectedToHub ? 'text-green-500' : 'text-red-500'}`}>
                     {connectedToHub ? 'Connected' : 'Disconnected'}
                   </span>
+                </div>
+                <div className="h-px w-full bg-slate-100 dark:bg-slate-700" />
+                <div className="w-full space-y-1"></div>
+                <div className="w-full space-y-1">
+                  <Link
+                    to="/"
+                    className="flex items-center space-x-3 rounded-lg px-3 py-2 text-slate-900 transition-all hover:bg-slate-100 dark:text-slate-50 dark:hover:bg-slate-800"
+                  >
+                    <MessageSquare className="h-5 w-5" />
+                    <span className="text-sm font-medium">Chat</span>
+                  </Link>
+
+                  <Link
+                    to="/dashboard"
+                    className="flex items-center space-x-3 rounded-lg px-3 py-2 text-slate-900 transition-all hover:bg-slate-100 dark:text-slate-50 dark:hover:bg-slate-800"
+                  >
+                    <DashboardIcon className="h-5 w-5" />
+                    <span className="text-sm font-medium">Dashboard</span>
+                  </Link>
+
+                  <Link
+                    to="/setting"
+                    className="flex items-center space-x-3 rounded-lg px-3 py-2 text-slate-900 transition-all hover:bg-slate-100 dark:text-slate-50 dark:hover:bg-slate-800"
+                  >
+                    <GearIcon className="h-5 w-5" />
+                    <span className="text-sm font-medium">Settings</span>
+                  </Link>
                 </div>
                 <FunctionsDropdown onFunctionSwitch={onFunctionSwitch} functions={functions} />
                 <div className="h-px w-full bg-slate-100 dark:bg-slate-700" />

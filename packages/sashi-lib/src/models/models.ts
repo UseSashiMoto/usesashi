@@ -10,11 +10,15 @@ export interface WorkflowResponse {
         description: string
         tool: string
         parameters: Record<string, any>
+        parameterMetadata?: {
+            [key: string]: {
+                type: string
+                description?: string
+                enum?: string[]
+                required?: boolean
+            }
+        }
     }[]
-    options: {
-        execute_immediately: boolean
-        generate_ui: boolean
-    }
 }
 
 export interface WorkflowResult {
@@ -25,16 +29,22 @@ export interface WorkflowResult {
 
 export type WorkflowEntryType = 'form' | 'button';
 
+// Type-specific payloads
+export interface FormPayload {
+    fields: {
+        key: string;
+        label?: string;
+        type?: 'string' | 'number' | 'boolean' | 'date' | 'enum';
+        required?: boolean;
+        enumValues?: string[]; // Available options for enum type
+    }[];
+}
+
 export interface WorkflowEntryMetadata {
     entryType: WorkflowEntryType; // how the user will trigger the workflow
     description?: string; // summary of interaction (optional)
     updateInterval?: string; // for auto_update only (e.g., '10s', '30s')
-    fields?: {
-        key: string;
-        label?: string;
-        type?: 'string' | 'number' | 'boolean' | 'date';
-        required?: boolean;
-    }[]; // Only for 'form'
+    payload?: FormPayload;
 }
 
 export interface UIWorkflowDefinition {

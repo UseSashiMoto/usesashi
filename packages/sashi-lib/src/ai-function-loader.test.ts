@@ -289,7 +289,8 @@ describe("AI Function Registry", () => {
                                 region: {
                                     type: "string",
                                     enum: ["North", "South", "East", "West"],
-                                    description: "The region of the country"
+                                    description: "The region of the country",
+                                    required: true
                                 }
                             },
                             required: ["city", "country", "region"]
@@ -297,7 +298,8 @@ describe("AI Function Registry", () => {
                         unit: {
                             type: "string",
                             enum: ["celsius", "fahrenheit"],
-                            description: "The temperature unit"
+                            description: "The temperature unit",
+                            required: true
                         },
                         includeHumidity: {
                             type: "boolean",
