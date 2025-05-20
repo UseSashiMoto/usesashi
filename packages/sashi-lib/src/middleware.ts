@@ -694,6 +694,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                 switch (errorType) {
                     case 'empty':
                         return res.status(400).json({
+                            message: 'Error processing request',
                             error: 'No response generated',
                             details: 'The AI assistant was unable to generate a response (Empty Response Test)',
                             debug_info: {
@@ -704,6 +705,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
                     case 'invalid':
                         return res.status(400).json({
+                            message: 'Error processing request',
                             error: 'Invalid response format',
                             details: 'The AI generated an invalid response format (Invalid Format Test)',
                             debug_info: {
@@ -715,17 +717,25 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
                     case 'workflow':
                         return res.status(400).json({
-                            error: 'Invalid workflow format',
-                            details: 'The generated workflow is missing required fields or has invalid structure (Workflow Error Test)',
+                            message: 'Error processing request',
+                            error: 'Workflow Validation Failed',
+                            details: 'The workflow is invalid or missing required components',
                             debug_info: {
-                                inquiry,
                                 error_type: 'workflow_error_test',
-                                workflow: { type: 'workflow', actions: null }
+                                validation_errors: [
+                                    'Missing required actions array',
+                                    'Invalid workflow structure'
+                                ],
+                                workflow_state: {
+                                    type: 'workflow',
+                                    actions: null
+                                }
                             }
                         });
 
                     case 'server':
                         return res.status(500).json({
+                            message: 'Error processing request',
                             error: 'Internal server error',
                             details: 'An unexpected error occurred while processing the request (Server Error Test)',
                             debug_info: {
@@ -737,6 +747,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
                     default:
                         return res.status(400).json({
+                            message: 'Error processing request',
                             error: 'Unknown error type',
                             details: 'Please specify an error type: /error [empty|invalid|workflow|server]',
                             debug_info: {
@@ -753,8 +764,8 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                 // Check for empty or invalid result
                 if (!result?.message) {
                     return res.status(400).json({
+                        message: 'Error processing request',
                         error: 'No response generated',
-                        details: 'The AI assistant was unable to generate a response',
                         debug_info: {
                             inquiry,
                             result
@@ -775,8 +786,8 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                                 // Validate workflow structure
                                 if (!workflowResult.actions || !Array.isArray(workflowResult.actions)) {
                                     return res.status(400).json({
+                                        message: 'Error processing request',
                                         error: 'Invalid workflow format',
-                                        details: 'The generated workflow is missing actions or has invalid structure',
                                         debug_info: {
                                             workflow: workflowResult
                                         }
@@ -798,8 +809,8 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                                 const result: GeneralResponse = parsedResult
                                 if (!result.content) {
                                     return res.status(400).json({
+                                        message: 'Error processing request',
                                         error: 'Empty response content',
-                                        details: 'The AI generated a response but it contains no content',
                                         debug_info: { result }
                                     });
                                 }
@@ -810,8 +821,8 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
                             // If we get here, the response type is unknown
                             return res.status(400).json({
+                                message: 'Error processing request',
                                 error: 'Invalid response type',
-                                details: `Unexpected response type: ${parsedResult.type}`,
                                 debug_info: { parsedResult }
                             });
 
@@ -823,8 +834,8 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                                 });
                             } else {
                                 return res.status(400).json({
+                                    message: 'Error processing request',
                                     error: 'Empty response',
-                                    details: 'The AI generated a response but it contains no content',
                                     debug_info: {
                                         result: result.message,
                                         parseError: parseError.message
@@ -836,15 +847,15 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
                     // If we get here, there's no content in the message
                     return res.status(400).json({
+                        message: 'Error processing request',
                         error: 'Empty response',
-                        details: 'The AI assistant generated an empty response',
                         debug_info: { result }
                     });
 
                 } catch (e: any) {
                     return res.status(500).json({
-                        error: 'Response processing error',
-                        details: e.message,
+                        message: 'Error processing request',
+                        error: e.message,
                         debug_info: {
                             result,
                             stack: e.stack
@@ -853,8 +864,8 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                 }
             } catch (e: any) {
                 return res.status(500).json({
-                    error: 'Chat processing error',
-                    details: e.message,
+                    message: 'Error processing request',
+                    error: e.message,
                     debug_info: {
                         inquiry,
                         stack: e.stack

@@ -126,10 +126,13 @@ describe('Chat Endpoint', () => {
             });
 
             expect(response.status).toBe(500);
-            expect(response.body).toEqual({
-                message: 'Error processing request',
-                error: 'Chat error',
-            });
+
+
+            // Optionally verify the response structure
+            expect(Object.keys(response.body)).toContain('message');
+            expect(Object.keys(response.body)).toContain('error');
+            expect(response.body.message).toBe('Error processing request');
+            expect(response.body.error).toBe('Chat error');
         });
 
         test('should use local OpenAI instance when useCloud is false', async () => {
