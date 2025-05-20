@@ -1,5 +1,11 @@
 # @sashi/client
 
+## 5.6.0
+
+### Minor Changes
+
+- c4a2796: better error displays
+
 ## 5.5.0
 
 ### Minor Changes
