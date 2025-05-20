@@ -462,18 +462,25 @@ export const HomePage = () => {
         resetScroll();
       }
     } catch (error: any) {
-      console.error('Error processing chat', error);
+      console.error('Error processing chat:', error.response?.data);
 
       // Extract error details from the response
       const errorResponse = error.response?.data;
-      const errorMessage = errorResponse?.error || 'An error occurred';
-      const errorDetails = errorResponse?.details || 'No additional details available';
-      const debugInfo = errorResponse?.debug_info;
 
-      // Create an error message to display to the user
-      const errorContent = `❌ ${errorMessage}\n\n${errorDetails}${
-        debug && debugInfo ? `\n\nDebug Information:\n${JSON.stringify(debugInfo, null, 2)}` : ''
-      }`;
+      // Format the error message in a more readable way
+      let errorContent = '❌ Error occurred while processing your request\n\n';
+
+      if (errorResponse?.error) {
+        errorContent += `Error: ${errorResponse.error}\n`;
+      }
+
+      if (errorResponse?.details) {
+        errorContent += `\nDetails: ${errorResponse.details}\n`;
+      }
+
+      if (errorResponse?.debug_info) {
+        errorContent += `\nDebug Information:\n${JSON.stringify(errorResponse.debug_info, null, 2)}`;
+      }
 
       const errorMessageItem: MessageItem = {
         id: getUniqueId(),
