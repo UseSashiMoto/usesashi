@@ -7,6 +7,8 @@ export type MessageItem = {
   created_at: string;
   role: 'assistant' | 'user';
   content: string | VisualizationContent;
+  isError?: boolean;
+
 };
 
 export type FunctionMetadata = {

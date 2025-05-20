@@ -14,7 +14,7 @@ import {
 } from "./ai-function-loader"
 import { createAIBot, getAIBot } from "./aibot"
 
-import { processChatRequest, processFunctionRequest } from "./chat"
+import { processChatRequest } from "./chat"
 import { GeneralResponse, WorkflowResponse, WorkflowResult } from "./models/models"
 import { MetaData } from "./models/repo-metadata"
 import { createSashiHtml, createSessionToken, ensureUrlProtocol } from './utils'
@@ -684,34 +684,115 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
     router.post('/chat', async (req, res) => {
         const { tools, previous, type } = req.body;
-        if (type === '/chat/function') {
-            try {
-                const result = await processFunctionRequest({ tools, previous })
-                res.json({
-                    output: result?.output,
-                    tool_calls: result.tool_calls,
-                    visualization: result.visualization
-                })
-            } catch (error: any) {
-                res.status(500).json({
-                    message: 'Error processing request',
-                    error: error.message,
-                });
-            }
-        }
         if (type === '/chat/message') {
             const { inquiry, previous } = req.body;
+
+            // Add error testing conditions
+            if (inquiry.startsWith('/error')) {
+                const errorType = inquiry.split(' ')[1]?.toLowerCase();
+
+                switch (errorType) {
+                    case 'empty':
+                        return res.status(400).json({
+                            message: 'Error processing request',
+                            error: 'No response generated',
+                            details: 'The AI assistant was unable to generate a response (Empty Response Test)',
+                            debug_info: {
+                                inquiry,
+                                error_type: 'empty_response_test'
+                            }
+                        });
+
+                    case 'invalid':
+                        return res.status(400).json({
+                            message: 'Error processing request',
+                            error: 'Invalid response format',
+                            details: 'The AI generated an invalid response format (Invalid Format Test)',
+                            debug_info: {
+                                inquiry,
+                                error_type: 'invalid_format_test',
+                                invalid_response: { type: 'unknown_type' }
+                            }
+                        });
+
+                    case 'workflow':
+                        return res.status(400).json({
+                            message: 'Error processing request',
+                            error: 'Workflow Validation Failed',
+                            details: 'The workflow is invalid or missing required components',
+                            debug_info: {
+                                error_type: 'workflow_error_test',
+                                validation_errors: [
+                                    'Missing required actions array',
+                                    'Invalid workflow structure'
+                                ],
+                                workflow_state: {
+                                    type: 'workflow',
+                                    actions: null
+                                }
+                            }
+                        });
+
+                    case 'server':
+                        return res.status(500).json({
+                            message: 'Error processing request',
+                            error: 'Internal server error',
+                            details: 'An unexpected error occurred while processing the request (Server Error Test)',
+                            debug_info: {
+                                inquiry,
+                                error_type: 'server_error_test',
+                                stack: 'Test error stack trace'
+                            }
+                        });
+
+                    default:
+                        return res.status(400).json({
+                            message: 'Error processing request',
+                            error: 'Unknown error type',
+                            details: 'Please specify an error type: /error [empty|invalid|workflow|server]',
+                            debug_info: {
+                                available_types: ['empty', 'invalid', 'workflow', 'server'],
+                                received: errorType
+                            }
+                        });
+                }
+            }
+
             try {
                 const result = await processChatRequest({ inquiry, previous })
 
+                // Check for empty or invalid result
+                if (!result?.message) {
+                    return res.status(400).json({
+                        message: 'Error processing request',
+                        error: 'No response generated',
+                        debug_info: {
+                            inquiry,
+                            result
+                        }
+                    });
+                }
+
                 try {
                     // Check if the result content is JSON
-                    if (result?.message?.content) {
+                    if (result.message.content) {
                         try {
                             const parsedResult = JSON.parse(result.message.content)
 
+                            // Validate workflow response
                             if (parsedResult.type === 'workflow') {
                                 const workflowResult: WorkflowResponse = parsedResult
+
+                                // Validate workflow structure
+                                if (!workflowResult.actions || !Array.isArray(workflowResult.actions)) {
+                                    return res.status(400).json({
+                                        message: 'Error processing request',
+                                        error: 'Invalid workflow format',
+                                        debug_info: {
+                                            workflow: workflowResult
+                                        }
+                                    });
+                                }
 
                                 // Clean up function. prefix from tool names before sending to client
                                 if (workflowResult.type === 'workflow' && workflowResult.actions) {
@@ -726,31 +807,69 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
                             if (parsedResult.type === 'general') {
                                 const result: GeneralResponse = parsedResult
+                                if (!result.content) {
+                                    return res.status(400).json({
+                                        message: 'Error processing request',
+                                        error: 'Empty response content',
+                                        debug_info: { result }
+                                    });
+                                }
                                 return res.status(200).json({
                                     output: result,
-                                }).send()
+                                })
                             }
-                        } catch (parseError) {
-                            // Not JSON, just return the message directly
-                            return res.json({
-                                output: result?.message,
+
+                            // If we get here, the response type is unknown
+                            return res.status(400).json({
+                                message: 'Error processing request',
+                                error: 'Invalid response type',
+                                debug_info: { parsedResult }
                             });
+
+                        } catch (parseError: any) {
+                            // Not JSON, just return the message directly if it has content
+                            if (result.message.content) {
+                                return res.json({
+                                    output: result.message,
+                                });
+                            } else {
+                                return res.status(400).json({
+                                    message: 'Error processing request',
+                                    error: 'Empty response',
+                                    debug_info: {
+                                        result: result.message,
+                                        parseError: parseError.message
+                                    }
+                                });
+                            }
                         }
                     }
 
-                    // If we couldn't parse as JSON or there's no content, return the message directly
-                    return res.json({
-                        output: result?.message,
+                    // If we get here, there's no content in the message
+                    return res.status(400).json({
+                        message: 'Error processing request',
+                        error: 'Empty response',
+                        debug_info: { result }
                     });
-                } catch (e) {
-                    return res.json({
-                        output: "I'm sorry, I'm having trouble processing your request. Please try again later.",
+
+                } catch (e: any) {
+                    return res.status(500).json({
+                        message: 'Error processing request',
+                        error: e.message,
+                        debug_info: {
+                            result,
+                            stack: e.stack
+                        }
                     });
                 }
             } catch (e: any) {
                 return res.status(500).json({
                     message: 'Error processing request',
                     error: e.message,
+                    debug_info: {
+                        inquiry,
+                        stack: e.stack
+                    }
                 });
             }
         }

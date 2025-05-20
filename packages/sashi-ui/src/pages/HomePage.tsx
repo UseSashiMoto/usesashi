@@ -285,7 +285,7 @@ export const HomePage = () => {
 
   const clearMessages = useAppStore((state) => state.clearMessages);
 
-  const addMessage = useAppStore((state: { addMessage: any }) => state.addMessage);
+  const addMessage = useAppStore((state) => state.addMessage);
 
   const messageRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -305,6 +305,7 @@ export const HomePage = () => {
   const connectedToHub: boolean = useAppStore((state: { connectedToHub: any }) => state.connectedToHub);
   const apiUrl = useAppStore((state) => state.apiUrl);
   const sessionToken = useAppStore((state) => state.sessionToken);
+  const [debug] = useState(process.env.NODE_ENV === 'development');
 
   useEffect(() => {
     setMounted(true);
@@ -461,7 +462,37 @@ export const HomePage = () => {
         resetScroll();
       }
     } catch (error: any) {
-      console.error('Error processing chat', error);
+      console.error('Error processing chat:', error.response?.data);
+
+      // Extract error details from the response
+      const errorResponse = error.response?.data;
+
+      // Format the error message in a more readable way
+      let errorContent = '❌ Error occurred while processing your request\n\n';
+
+      if (errorResponse?.error) {
+        errorContent += `Error: ${errorResponse.error}\n`;
+      }
+
+      if (errorResponse?.details) {
+        errorContent += `\nDetails: ${errorResponse.details}\n`;
+      }
+
+      if (errorResponse?.debug_info) {
+        errorContent += `\nDebug Information:\n${JSON.stringify(errorResponse.debug_info, null, 2)}`;
+      }
+
+      const errorMessageItem: MessageItem = {
+        id: getUniqueId(),
+        created_at: new Date().toISOString(),
+        role: 'assistant',
+        content: errorContent,
+        isError: true,
+      };
+
+      setMessageItems((prev) => [...prev, errorMessageItem]);
+      addMessage(errorMessageItem);
+      resetScroll();
     } finally {
       setLoading(false);
     }
