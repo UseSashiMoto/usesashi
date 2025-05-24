@@ -482,8 +482,27 @@ export class AIFunction {
         };
     }
 
+    // Add this helper function before the execute method
+    private coerceToType(value: any, expectedType: z.ZodTypeAny): any {
+        // Special handling for string type
+        if (expectedType instanceof z.ZodString && value !== undefined && value !== null) {
+            // Convert numbers, booleans, and other primitives to strings
+            return String(value);
+        }
+        return value;
+    }
+
     async execute(...args: any[]) {
         try {
+            // Coerce args to expected types before validation
+            const coercedArgs = args.map((arg, index) => {
+                const expectedType = this._params[index];
+                if (!expectedType) {
+                    return arg; // Return original value if no type information is available
+                }
+                return this.coerceToType(arg, this.validateAIField(expectedType));
+            });
+
             const parsedArgs = z
                 .tuple(
                     this._params.map(this.validateAIField) as [
@@ -491,7 +510,7 @@ export class AIFunction {
                         ...z.ZodTypeAny[],
                     ]
                 )
-                .parse(args);
+                .parse(coercedArgs);
             if (this.getRepo()) {
                 const result = await axios.post(`${hubUrl}/forward-call`, {
                     name: this.getName(),
