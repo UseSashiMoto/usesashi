@@ -1,5 +1,11 @@
 # sashi-lib
 
+## 5.7.0
+
+### Minor Changes
+
+- f509456: fix tests
+
 ## 5.6.0
 
 ### Minor Changes
