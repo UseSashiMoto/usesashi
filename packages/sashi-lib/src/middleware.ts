@@ -196,27 +196,15 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
     const router = Router();
 
-    // CORS middleware inside the router
-    router.use((req, res, next) => {
-        // Set CORS headers
-        res.header('Access-Control-Allow-Origin', '*'); // Or specific origins
-        res.header(
-            'Access-Control-Allow-Methods',
-            'GET, POST, PUT, DELETE, OPTIONS'
-        );
-        res.header(
-            'Access-Control-Allow-Headers',
-            'x-sashi-session-token, Content-Type'
-        );
+    // Allow all origins and headers for dev/testing
+    router.use(cors({
+        origin: '*',
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'x-api-token', 'x-sashi-session-token'],
+    }));
 
-        // If it's a preflight request (OPTIONS), respond immediately
-        if (req.method === 'OPTIONS') {
-            return res.status(200).end();
-        }
-
-        next(); // Continue to the next middleware or route handler
-    });
-
+    // Handle preflight requests
+    router.options('*', cors());
 
     createAIBot({ apiKey: openAIKey, sashiSecretKey: apiSecretKey, hubUrl })
 
@@ -252,7 +240,17 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
             // Check middleware configuration
             printStatus('Middleware configuration', true)
-            console.log(`  • Server URL: ${sashiServerUrl || 'Auto-detected'}`)
+
+            let detectedUrl = sashiServerUrl;
+
+
+
+            if (!detectedUrl) {
+                detectedUrl = `http://localhost:${process.env.PORT || 3000}/sashi`;
+            }
+
+
+            console.log(`  • Server URL: ${detectedUrl}`);
             console.log(`  • Debug: ${debug}`)
             console.log(`  • Standard Library: ${addStdLib ? 'Enabled' : 'Disabled'}`)
             console.log(`  • Session Management: ${getSession ? 'Custom' : 'Default'}\n`)
@@ -281,6 +279,17 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
     router.get('/sanity-check', (_req, res) => {
         res.json({ message: 'Sashi Middleware is running' });
+        return;
+    });
+
+    router.get('/ping', (_req, res) => {
+        const apiToken = _req.headers[HEADER_API_TOKEN] as string;
+        console.log("apiToken", apiToken, apiSecretKey, _req.headers)
+        if (apiToken !== apiSecretKey) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+        console.log("apiToken 2", apiToken, apiSecretKey)
+        res.status(200).json({ token: apiToken, message: 'Sashi Middleware is running' });
         return;
     });
 

@@ -6,8 +6,9 @@ import "./services/user_service"
 
 require("dotenv").config()
 
+const port = process.env.PORT || 3003
+
 const app = express()
-const port = 3003
 
 // Optional: Use JSON middleware if your middleware or routes need it
 app.use(express.json())
@@ -74,7 +75,7 @@ app.use(
         openAIKey: process.env.OPENAI_API_KEY || '',
         hubUrl: process.env.HUB_URL || 'http://localhost:3050',
         repos: ["usertwo-sub-to-userone"],
-        apiSecretKey: 'usertwo-api-token',
+        apiSecretKey: process.env.API_SECRET_KEY || '',
     })
 )
 
@@ -83,7 +84,7 @@ app.get("/", (req, res) => {
     res.send("Hello from Sashi Express TypeScript Server!")
 })
 
-app.listen(port, () => {
+app.listen(process.env.PORT || 3003, () => {
     console.log(`Server running at http://localhost:${port}`)
     listRoutes(app)
 })
