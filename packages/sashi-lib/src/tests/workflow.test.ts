@@ -211,6 +211,7 @@ describe('Workflow Execution Tests', () => {
 
         const response = await request
             .post('/workflow/execute')
+            .set('x-sashi-session-token', 'test-session-token')
             .send({ workflow });
 
         // Verify the response
@@ -275,6 +276,7 @@ describe('Workflow Execution Tests', () => {
 
         const response = await request
             .post('/workflow/execute')
+            .set('x-sashi-session-token', 'test-session-token')
             .send({ workflow });
 
         // Verify the response
@@ -355,6 +357,7 @@ describe('Workflow Execution Tests', () => {
 
         const response = await request
             .post('/workflow/execute')
+            .set('x-sashi-session-token', 'test-session-token')
             .send({ workflow });
 
         // Verify function was called with correctly extracted nested parameter
@@ -400,6 +403,7 @@ describe('Workflow Execution Tests', () => {
 
         const response = await request
             .post('/workflow/execute')
+            .set('x-sashi-session-token', 'test-session-token')
             .send({ workflow });
 
         expect(response.status).toBe(500);
@@ -448,6 +452,7 @@ describe('Workflow Execution Tests', () => {
 
         const response = await request
             .post('/workflow/execute')
+            .set('x-sashi-session-token', 'test-session-token')
             .send({ workflow });
 
         expect(response.status).toBe(500);
@@ -501,6 +506,7 @@ describe('Workflow Execution Tests', () => {
         // Execute with debug flag enabled
         const response = await request
             .post('/workflow/execute')
+            .set('x-sashi-session-token', 'test-session-token')
             .send({ workflow, debug: true });
 
         // The response should still be successful
@@ -540,6 +546,7 @@ describe('Workflow Execution Tests', () => {
 
         const response = await request
             .post('/workflow/execute')
+            .set('x-sashi-session-token', 'test-session-token')
             .send({ workflow });
 
         expect(response.status).toBe(500);

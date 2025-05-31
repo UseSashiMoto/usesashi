@@ -9,6 +9,8 @@
         "build": "tsc",
         "serve": " node dist/index.js",
         "dev_server": "NODE_ENV=development nodemon src/index.ts",
+        "dev_server:ngrok": "dotenv -e .env node scripts/start-ngrok.js",
+        "dev_server:all": "concurrently \"yarn dev_server\" \"yarn dev_server:ngrok\"",
         "generate:token": "ts-node src/generate-token.ts"
     },
     "devDependencies": {
@@ -17,7 +19,9 @@
         "@types/node": "^20.12.12",
         "nodemon": "^3.1.0",
         "ts-node": "^10.9.2",
-        "typescript": "^5.4.5"
+        "typescript": "^5.4.5",
+        "ngrok": "^4.3.3",
+        "concurrently": "^8.2.2"
     },
     "dependencies": {
         "crypto": "^1.0.1",

@@ -304,7 +304,6 @@ export const HomePage = () => {
   const [uiWorkflowCard, setUiWorkflowCard] = useState<UIWorkflowDefinition>();
   const connectedToHub: boolean = useAppStore((state: { connectedToHub: any }) => state.connectedToHub);
   const apiUrl = useAppStore((state) => state.apiUrl);
-  const sessionToken = useAppStore((state) => state.sessionToken);
   const [debug] = useState(process.env.NODE_ENV === 'development');
 
   useEffect(() => {

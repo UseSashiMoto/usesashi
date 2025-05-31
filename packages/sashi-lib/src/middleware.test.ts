@@ -95,11 +95,14 @@ describe('Chat Endpoint', () => {
 
     describe('/chat/message', () => {
         test('should process a chat message successfully when useCloud is false', async () => {
-            const response = await request.post('/chat').send({
-                type: '/chat/message',
-                inquiry: 'Hello',
-                previous: [],
-            });
+            const response = await request
+                .post('/chat')
+                .set('x-sashi-session-token', 'test-session-token')
+                .send({
+                    type: '/chat/message',
+                    inquiry: 'Hello',
+                    previous: [],
+                });
 
             expect(response.status).toBe(200);
             expect(response.body).toEqual({
@@ -119,11 +122,14 @@ describe('Chat Endpoint', () => {
             mockedAxios.post.mockRejectedValueOnce(new Error('Chat error'));
             mockedOpenAI.prototype.chat.completions.create.mockRejectedValueOnce(new Error('Chat error'));
 
-            const response = await request.post('/chat').send({
-                type: '/chat/message',
-                inquiry: 'Hello',
-                previous: [],
-            });
+            const response = await request
+                .post('/chat')
+                .set('x-sashi-session-token', 'test-session-token')
+                .send({
+                    type: '/chat/message',
+                    inquiry: 'Hello',
+                    previous: [],
+                });
 
             expect(response.status).toBe(500);
 
@@ -136,11 +142,14 @@ describe('Chat Endpoint', () => {
         });
 
         test('should use local OpenAI instance when useCloud is false', async () => {
-            const response = await request.post('/chat').send({
-                type: '/chat/message',
-                inquiry: 'Hello',
-                previous: [],
-            });
+            const response = await request
+                .post('/chat')
+                .set('x-sashi-session-token', 'test-session-token')
+                .send({
+                    type: '/chat/message',
+                    inquiry: 'Hello',
+                    previous: [],
+                });
 
             expect(response.status).toBe(200);
             expect(response.body).toEqual({
