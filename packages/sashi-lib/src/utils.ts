@@ -69,6 +69,63 @@ export const createSessionToken = async (
   return sessionToken;
 };
 
+// New secure session token utilities
+export const createSecureSessionToken = (
+  sessionData: Record<string, any>,
+  secret: string,
+  expiresIn: number = 24 * 60 * 60 * 1000 // 24 hours in milliseconds
+): string => {
+  const payload = {
+    ...sessionData,
+    iat: Date.now(),
+    exp: Date.now() + expiresIn
+  };
+
+  const payloadBase64 = Buffer.from(JSON.stringify(payload)).toString('base64');
+  const signature = crypto
+    .createHmac('sha256', secret)
+    .update(payloadBase64)
+    .digest('hex');
+
+  return `${payloadBase64}.${signature}`;
+};
+
+export const validateSecureSessionToken = (
+  token: string,
+  secret: string
+): { valid: boolean; payload?: Record<string, any>; error?: string } => {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 2) {
+      return { valid: false, error: 'Invalid token format' };
+    }
+
+    const [payloadBase64, signature] = parts;
+
+    // Verify signature
+    const expectedSignature = crypto
+      .createHmac('sha256', secret)
+      .update(payloadBase64 as string)
+      .digest('hex');
+
+    if (!crypto.timingSafeEqual(Buffer.from(signature, 'hex'), Buffer.from(expectedSignature, 'hex'))) {
+      return { valid: false, error: 'Invalid signature' };
+    }
+
+    // Parse payload
+    const payload = JSON.parse(Buffer.from(payloadBase64, 'base64').toString());
+
+    // Check expiration
+    if (payload.exp && Date.now() > payload.exp) {
+      return { valid: false, error: 'Token expired' };
+    }
+
+    return { valid: true, payload };
+  } catch (error) {
+    return { valid: false, error: 'Token validation failed' };
+  }
+};
+
 /**
  * Ensures a URL has either http:// or https:// protocol
  * @param url The URL to validate and potentially modify

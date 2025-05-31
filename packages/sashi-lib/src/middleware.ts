@@ -21,6 +21,7 @@ import { createSashiHtml, createSessionToken, ensureUrlProtocol } from './utils'
 
 
 const HEADER_API_TOKEN = 'x-api-token';
+const HEADER_SESSION_TOKEN = 'x-sashi-session-token';
 
 const Sentry = require("@sentry/node");
 
@@ -131,6 +132,8 @@ interface MiddlewareOptions {
         baseUrl: string
     }
     getSession?: (req: Request, res: Response) => Promise<string> // function to get the session id for a request
+    validateSession?: (sessionToken: string, req: Request, res: Response) => Promise<boolean> // function to validate session tokens
+    sessionSecret?: string // secret for signing/validating session tokens
 }
 
 export interface DatabaseClient {
@@ -183,7 +186,9 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         repos = [],
         hubUrl: rawHubUrl = 'https://hub.usesashi.com',
         addStdLib = true,
-        getSession
+        getSession,
+        validateSession,
+        sessionSecret
     } = options
 
     // Ensure URLs have proper protocols
@@ -276,6 +281,12 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     router.use(bodyParser.json());
     router.use(bodyParser.urlencoded({ extended: true }));
 
+    // Create session validation middleware instance
+    const sessionValidation = validateSessionRequest({
+        getSession,
+        validateSession,
+        sessionSecret
+    });
 
     router.get('/sanity-check', (_req, res) => {
         res.json({ message: 'Sashi Middleware is running' });
@@ -421,32 +432,32 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     };
 
     // Get all workflows
-    router.get('/workflows', asyncHandler(async (req, res) => {
+    router.get('/workflows', sessionValidation, asyncHandler(async (req, res) => {
         return handleWorkflowRequest(req, res, '/workflows', 'GET');
     }));
 
     // Get a specific workflow by ID
-    router.get('/workflows/:id', asyncHandler(async (req, res) => {
+    router.get('/workflows/:id', sessionValidation, asyncHandler(async (req, res) => {
         return handleWorkflowRequest(req, res, `/workflows/${req.params.id}`, 'GET');
     }));
 
     // Create a new workflow
-    router.post('/workflows', asyncHandler(async (req, res) => {
+    router.post('/workflows', sessionValidation, asyncHandler(async (req, res) => {
         return handleWorkflowRequest(req, res, '/workflows', 'POST');
     }));
 
     // Update an existing workflow
-    router.put('/workflows/:id', asyncHandler(async (req, res) => {
+    router.put('/workflows/:id', sessionValidation, asyncHandler(async (req, res) => {
         return handleWorkflowRequest(req, res, `/workflows/${req.params.id}`, 'PUT');
     }));
 
     // Delete a specific workflow
-    router.delete('/workflows/:id', asyncHandler(async (req, res) => {
+    router.delete('/workflows/:id', sessionValidation, asyncHandler(async (req, res) => {
         return handleWorkflowRequest(req, res, `/workflows/${req.params.id}`, 'DELETE');
     }));
 
     // Delete all workflows
-    router.delete('/workflows', asyncHandler(async (req, res) => {
+    router.delete('/workflows', sessionValidation, asyncHandler(async (req, res) => {
         return handleWorkflowRequest(req, res, '/workflows', 'DELETE');
     }));
 
@@ -676,8 +687,11 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         }
     }
 
-    router.get('/functions/:function_id/toggle_active', async (req, res) => {
+    router.get('/functions/:function_id/toggle_active', sessionValidation, async (req, res) => {
         const function_id = req.params.function_id;
+        if (!function_id) {
+            return res.status(400).json({ message: 'Function ID is required' });
+        }
         const _function = getFunctionRegistry().get(function_id);
         if (!_function) {
             return res.status(404).json({ message: 'Function not found' });
@@ -691,7 +705,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
 
 
-    router.post('/chat', async (req, res) => {
+    router.post('/chat', sessionValidation, async (req, res) => {
         const { tools, previous, type } = req.body;
         if (type === '/chat/message') {
             const { inquiry, previous } = req.body;
@@ -885,7 +899,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     });
 
 
-    router.post('/workflow/ui-entry-type', asyncHandler(async (req, res) => {
+    router.post('/workflow/ui-entry-type', sessionValidation, asyncHandler(async (req, res) => {
         const { workflow } = req.body;
 
         if (!workflow || !workflow.actions || !Array.isArray(workflow.actions)) {
@@ -981,7 +995,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     }));
 
 
-    router.post('/workflow/execute', async (req, res) => {
+    router.post('/workflow/execute', sessionValidation, async (req, res) => {
         const { workflow, debug = false } = req.body;
 
         if (!workflow || !workflow.actions || !Array.isArray(workflow.actions)) {
@@ -1306,5 +1320,85 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         return;
     });
 
+    // Session validation middleware for UI requests
+    router.use('/bot', sessionValidation);
+
     return router;
+};
+
+// Session validation middleware for UI requests
+export const validateSessionRequest = ({
+    getSession,
+    validateSession,
+    sessionSecret
+}: {
+    getSession?: (req: Request, res: Response) => Promise<string>
+    validateSession?: (sessionToken: string, req: Request, res: Response) => Promise<boolean>
+    sessionSecret?: string
+}) => {
+    return async (req: Request, res: Response, next: NextFunction) => {
+        const sessionToken = req.headers[HEADER_SESSION_TOKEN] as string;
+
+        // Skip validation for public endpoints
+        const publicEndpoints = ['/sanity-check', '/ping', '/metadata', '/check_hub_connection'];
+        if (publicEndpoints.some(endpoint => req.path.includes(endpoint))) {
+            return next();
+        }
+
+        if (!sessionToken) {
+            return res.status(401).json({
+                error: 'Session token required',
+                message: 'Please provide a valid session token'
+            });
+        }
+
+        try {
+            let isValid = false;
+
+            // Use custom validation if provided
+            if (validateSession) {
+                isValid = await validateSession(sessionToken, req, res);
+            } else if (sessionSecret) {
+                // Default JWT-style validation (you can implement JWT signing/verification here)
+                // For now, using a simple approach - in production, use proper JWT
+                const crypto = require('crypto');
+                const expectedSignature = crypto
+                    .createHmac('sha256', sessionSecret)
+                    .update(sessionToken.split('.')[0] || sessionToken)
+                    .digest('hex');
+
+                const providedSignature = sessionToken.split('.')[1];
+                if (providedSignature && providedSignature.length > 0) {
+                    isValid = crypto.timingSafeEqual(
+                        Buffer.from(expectedSignature, 'hex'),
+                        Buffer.from(providedSignature, 'hex')
+                    );
+                } else {
+                    isValid = false;
+                }
+            } else if (getSession) {
+                // Fallback: check if the session matches what getSession would return
+                const expectedSession = await getSession(req, res);
+                isValid = sessionToken === expectedSession;
+            } else {
+                // Default: accept any non-empty session token (not recommended for production)
+                isValid = true;
+            }
+
+            if (!isValid) {
+                return res.status(401).json({
+                    error: 'Invalid session token',
+                    message: 'Session token is invalid or expired'
+                });
+            }
+
+            next();
+        } catch (error) {
+            console.error('Session validation error:', error);
+            return res.status(500).json({
+                error: 'Session validation failed',
+                message: 'Unable to validate session'
+            });
+        }
+    };
 };
