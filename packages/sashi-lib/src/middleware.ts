@@ -1301,8 +1301,9 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     });
 
     router.get('/', async (req, res) => {
-        const newPath = `${sashiServerUrl ?? req.originalUrl.replace(/\/$/, '')
-            }/bot`;
+        // Build full URL if sashiServerUrl is not provided
+        const baseUrl = sashiServerUrl ?? `${req.protocol}://${req.get('host')}${req.baseUrl}`;
+        const newPath = `${baseUrl}/bot`;
 
         res.redirect(newPath);
         return;
@@ -1312,11 +1313,14 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
     router.use('/bot', async (req, res, next) => {
         const sessionToken = await createSessionToken(req, res, getSession);
-        res.type('text/html').send(
-            createSashiHtml(sashiServerUrl ?? req.baseUrl, sessionToken)
-        );
-        next();
+        // Build API base URL (strip /bot from baseUrl since we need the API root for frontend calls)
+        const baseUrlWithoutBot = req.baseUrl.replace(/\/bot$/, '');
+        const apiBaseUrl = sashiServerUrl ?? `${req.protocol}://${req.get('host')}${baseUrlWithoutBot}`;
 
+        console.log("apiBaseUrl", sashiServerUrl, `${req.protocol}://${req.get('host')}${baseUrlWithoutBot}`)
+        res.type('text/html').send(
+            createSashiHtml(apiBaseUrl, sessionToken)
+        );
         return;
     });
 
