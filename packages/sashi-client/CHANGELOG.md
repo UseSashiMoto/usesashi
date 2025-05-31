@@ -1,5 +1,11 @@
 # @sashi/client
 
+## 6.0.0
+
+### Major Changes
+
+- 88cb4e4: add security session and correcting self-hosting
+
 ## 5.7.0
 
 ### Minor Changes
