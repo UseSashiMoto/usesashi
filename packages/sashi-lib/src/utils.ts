@@ -102,13 +102,20 @@ export const validateSecureSessionToken = (
 
     const [payloadBase64, signature] = parts;
 
+    if (!payloadBase64 || !signature) {
+      return { valid: false, error: 'Invalid token format' };
+    }
+
     // Verify signature
     const expectedSignature = crypto
       .createHmac('sha256', secret)
-      .update(payloadBase64 as string)
+      .update(payloadBase64)
       .digest('hex');
 
-    if (!crypto.timingSafeEqual(Buffer.from(signature, 'hex'), Buffer.from(expectedSignature, 'hex'))) {
+    const signatureBuffer = new Uint8Array(Buffer.from(signature, 'hex'));
+    const expectedBuffer = new Uint8Array(Buffer.from(expectedSignature, 'hex'));
+
+    if (!crypto.timingSafeEqual(signatureBuffer, expectedBuffer)) {
       return { valid: false, error: 'Invalid signature' };
     }
 
