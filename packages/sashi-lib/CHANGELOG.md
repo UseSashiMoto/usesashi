@@ -1,5 +1,11 @@
 # sashi-lib
 
+## 6.1.0
+
+### Minor Changes
+
+- 246735b: fix malformed url
+
 ## 6.0.0
 
 ### Major Changes
