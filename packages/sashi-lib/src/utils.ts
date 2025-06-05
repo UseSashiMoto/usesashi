@@ -141,12 +141,27 @@ export const validateSecureSessionToken = (
 export const ensureUrlProtocol = (url: string): string => {
   if (!url) return url;
 
-  // If URL already has a protocol, return as is
-  if (url.startsWith('http://') || url.startsWith('https://')) {
+  // Remove any leading/trailing whitespace
+  url = url.trim();
+
+  // Check for malformed double protocols first
+  const hasDoubleProtocol = url.match(/^https?:\/\/https?:\/\//);
+
+  if (hasDoubleProtocol) {
+    // Remove all protocol prefixes and start fresh
+    url = url.replace(/^(https?:\/\/)+/g, '');
+  } else if (url.startsWith('http://') || url.startsWith('https://')) {
+    // Single valid protocol, return as is
     return url;
   }
 
+  // Remove leading slashes
+  url = url.replace(/^\/+/, '');
+
+  // If the cleaned URL is empty after removing protocols, return empty
+  if (!url) return '';
+
   // Default to https:// if no protocol is specified
-  return `https://${url.replace(/^\/+/, '')}`;
+  return `https://${url}`;
 };
 
