@@ -389,6 +389,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                 // Make the request to the hub
                 const hubResponse = await fetch(`${hubUrl}${hubPath}`, fetchOptions);
 
+                console.log("hubResponse: ", hubResponse)
                 // If request was successful, return the response
                 if (hubResponse.ok) {
                     // For GET requests, return the JSON data
@@ -398,7 +399,9 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                     }
 
                     // For other methods, return success status
-                    return res.status(hubResponse.status).json({ success: true });
+                    const data = await hubResponse.json();
+                    console.log("hubResponse data: ", data)
+                    return res.status(hubResponse.status).json(data);
                 }
 
                 // If hub request failed and we're not using local fallback, return the error
@@ -1349,7 +1352,7 @@ export const validateSessionRequest = ({
             return next();
         }
 
-        if (!sessionToken) {
+        if (!sessionToken && !!getSession) {
             return res.status(401).json({
                 error: 'Session token required',
                 message: 'Please provide a valid session token'

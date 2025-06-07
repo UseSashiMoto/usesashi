@@ -1,4 +1,4 @@
-import { SavedWorkflow } from '@/pages/DashboardPage';
+import { SavedWorkflow } from '@/models/payload';
 import useAppStore from '@/store/chat-store';
 import { ensureUrlProtocol } from './url';
 
@@ -580,6 +580,8 @@ export class WorkflowStorage {
                 body: JSON.stringify(workflow),
             });
 
+            console.log('response', await response.text())
+
             if (!response.ok) {
                 throw new Error(`Server error: ${response.statusText}`);
             }
@@ -754,7 +756,7 @@ export class WorkflowStorage {
             workflows.forEach((workflow, index) => {
                 console.log(`Workflow ${index + 1}: ${workflow.name} (ID: ${workflow.id})`);
                 console.log(`  Description: ${workflow.description}`);
-                console.log(`  Actions: ${workflow.workflow.actions?.length || 0}`);
+                console.log(`  Actions: ${workflow.workflow.workflow.actions?.length || 0}`);
                 console.log(`  Results: ${workflow.results?.length || 0}`);
                 console.log(`  Favorited: ${workflow.favorited}`);
                 console.log('---');

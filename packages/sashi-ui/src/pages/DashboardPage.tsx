@@ -3,47 +3,104 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { WorkflowDashboard } from '@/components/workflows/WorkflowDashboard';
-import { WorkflowResponse, WorkflowUIElement } from '@/models/payload';
+import { SavedWorkflow } from '@/models/payload';
 import { WorkflowStorage } from '@/utils/workflowStorage';
 import axios from 'axios';
 import { AlertCircle, Plus, Search } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import useAppStore from 'src/store/chat-store';
 import { Layout } from '../components/Layout';
-
-export interface SavedWorkflow {
-  id: string;
-  name: string;
-  description: string;
-  timestamp: string;
-  workflow: WorkflowResponse;
-  results?: WorkflowUIElement[];
-  tags?: string[];
-  favorited?: boolean;
-  executing?: boolean;
-  lastExecutionError?: string | null;
-}
+import { HEADER_API_TOKEN } from '../utils/contants';
 
 export const DashboardPage = () => {
   const [savedWorkflows, setSavedWorkflows] = useState<SavedWorkflow[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('all');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const apiUrl = useAppStore((state) => state.apiUrl);
+  const apiToken = useAppStore((state) => state.apiToken);
   const connectedToHub = useAppStore((state) => state.connectedToHub);
 
-  // Load saved workflows from storage
+  // Load saved workflows from API or local storage
   useEffect(() => {
-    const workflowStorage = new WorkflowStorage();
-    const workflows = workflowStorage.getAllWorkflows();
-    setSavedWorkflows(workflows);
-  }, []);
+    const loadWorkflows = async () => {
+      setLoading(true);
+      setError(null);
+
+      console.log('loading workflows');
+
+      try {
+        if (apiUrl) {
+          // Try to load from API first
+          console.log('Loading workflows from API...');
+          const response = await axios.get(`${apiUrl}/workflows`, {
+            headers: {
+              [HEADER_API_TOKEN]: apiToken,
+            },
+          });
+
+          console.log('workflow loading response', response.data);
+
+          if (response.data && Array.isArray(response.data)) {
+            // Transform API response to match SavedWorkflow interface
+            const workflows: SavedWorkflow[] = response.data.map((item: any) => ({
+              id: item.id,
+              name: item.name || 'Unnamed Workflow',
+              userId: item.userId || '',
+              description: item.description || '',
+              timestamp: item.createdAt || item.timestamp || new Date().toISOString(),
+              workflow: item.workflow,
+              results: item.results || [],
+              favorited: item.favorited || false,
+              executing: false,
+              lastExecutionError: null,
+            }));
+
+            setSavedWorkflows(workflows);
+            console.log(`Loaded ${workflows.length} workflows from API`);
+          } else {
+            console.log('No workflows returned from API, using local storage as fallback');
+            loadFromLocalStorage();
+          }
+        } else {
+          console.log('No API URL or session token, loading from local storage');
+          loadFromLocalStorage();
+        }
+      } catch (apiError: any) {
+        console.error('Error loading workflows from API:', apiError);
+        setError(`Failed to load workflows: ${apiError.response?.data?.error || apiError.message}`);
+
+        // Fallback to local storage
+        console.log('Falling back to local storage');
+        loadFromLocalStorage();
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const loadFromLocalStorage = () => {
+      try {
+        const workflowStorage = new WorkflowStorage();
+        const workflows = workflowStorage.getAllWorkflows();
+        console.log('workflow loading response local', workflows);
+
+        setSavedWorkflows(workflows);
+        console.log(`Loaded ${workflows.length} workflows from local storage`);
+      } catch (storageError) {
+        console.error('Error loading from local storage:', storageError);
+        setSavedWorkflows([]);
+      }
+    };
+
+    loadWorkflows();
+  }, [apiUrl, apiToken]); // Reload when API URL or session token changes
 
   // Filter workflows based on search term and active tab
   const filteredWorkflows = savedWorkflows.filter((workflow) => {
     const matchesSearch =
       workflow.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      workflow.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (workflow.tags && workflow.tags.some((tag) => tag.toLowerCase().includes(searchTerm.toLowerCase())));
+      workflow.description?.toLowerCase().includes(searchTerm.toLowerCase());
 
     if (activeTab === 'all') return matchesSearch;
     if (activeTab === 'favorites') return matchesSearch && workflow.favorited;
@@ -64,28 +121,46 @@ export const DashboardPage = () => {
         return;
       }
 
-      // Show executing state in the UI
-      const updatingWorkflow = {
-        ...workflow,
-        executing: true,
-      };
-      setSavedWorkflows((prev) => prev.map((wf) => (wf.id === workflow.id ? updatingWorkflow : wf)));
+      // Note: We can't show executing state in SavedWorkflow since it doesn't have an executing property
+      // The UI should handle loading states independently
 
-      const response = await axios.post(`${apiUrl}/workflow/execute`, {
-        workflow: workflow.workflow,
-        debug: true,
-      });
+      const response = await axios.post(
+        `${apiUrl}/workflow/execute`,
+        {
+          workflow: workflow.workflow,
+          debug: true,
+        },
+        {
+          headers: {
+            [HEADER_API_TOKEN]: apiToken || '',
+          },
+        }
+      );
 
       if (response.data.success && response.data.results) {
         // Update the saved workflow with new results
-        const workflowStorage = new WorkflowStorage();
-        const updatedWorkflow = {
+        const updatedWorkflow: SavedWorkflow = {
           ...workflow,
-          results: response.data.results.map((result: any) => result.uiElement),
-          timestamp: new Date().toISOString(),
-          executing: false,
-          lastExecutionError: null,
+          results: response.data.results, // Keep the full WorkflowResult objects, not just uiElement
+          timestamp: Date.now(), // Use number timestamp instead of string
         };
+
+        // Try to save to API first
+        try {
+          if (apiUrl) {
+            await axios.put(`${apiUrl}/workflows/${workflow.id}`, updatedWorkflow, {
+              headers: {
+                [HEADER_API_TOKEN]: apiToken,
+              },
+            });
+            console.log('Workflow results saved to API');
+          }
+        } catch (saveError) {
+          console.error('Error saving results to API, will save locally:', saveError);
+        }
+
+        // Always save to local storage as well (for fallback)
+        const workflowStorage = new WorkflowStorage();
         workflowStorage.updateWorkflow(updatedWorkflow);
 
         // Update state
@@ -94,48 +169,70 @@ export const DashboardPage = () => {
         console.log(`Workflow "${workflow.name}" executed successfully:`, response.data.results);
       } else {
         // Handle case where response is successful but no results
-        const updatedWorkflow = {
-          ...workflow,
-          executing: false,
-          lastExecutionError: 'Workflow executed but returned no results',
-        };
-        setSavedWorkflows((prev) => prev.map((wf) => (wf.id === workflow.id ? updatedWorkflow : wf)));
         console.warn('Workflow executed but returned no results:', response.data);
+        // Since SavedWorkflow doesn't have error states, we'll just log this
+        // The UI should handle displaying this information through other means
       }
     } catch (error: any) {
-      // Update workflow with error state
+      // Since SavedWorkflow doesn't have error state properties, just log the error
       const errorMessage = error.response?.data?.details || error.message || 'Unknown error';
-      const updatedWorkflow = {
-        ...workflow,
-        executing: false,
-        lastExecutionError: errorMessage,
-      };
-
-      setSavedWorkflows((prev) => prev.map((wf) => (wf.id === workflow.id ? updatedWorkflow : wf)));
-
       console.error('Error re-running workflow:', errorMessage, error);
+
+      // You might want to show this error through a different mechanism like a toast or alert
+      // since SavedWorkflow doesn't support error states
     }
   };
 
   // Delete a workflow
-  const deleteWorkflow = (workflowId: string) => {
+  const deleteWorkflow = async (workflowId: string) => {
+    try {
+      if (apiUrl && apiToken) {
+        // Try to delete from API first
+        await axios.delete(`${apiUrl}/workflows/${workflowId}`, {
+          headers: {
+            [HEADER_API_TOKEN]: apiToken,
+          },
+        });
+        console.log('Workflow deleted from API');
+      }
+    } catch (error) {
+      console.error('Error deleting from API, will delete locally:', error);
+    }
+
+    // Always delete from local storage as well (for fallback)
     const workflowStorage = new WorkflowStorage();
     workflowStorage.deleteWorkflow(workflowId);
     setSavedWorkflows((prev) => prev.filter((wf) => wf.id !== workflowId));
   };
 
   // Toggle favorite status
-  const toggleFavorite = (workflowId: string) => {
-    const workflowStorage = new WorkflowStorage();
+  const toggleFavorite = async (workflowId: string) => {
     const workflow = savedWorkflows.find((wf) => wf.id === workflowId);
-    if (workflow) {
-      const updatedWorkflow = {
-        ...workflow,
-        favorited: !workflow.favorited,
-      };
-      workflowStorage.updateWorkflow(updatedWorkflow);
-      setSavedWorkflows((prev) => prev.map((wf) => (wf.id === workflowId ? updatedWorkflow : wf)));
+    if (!workflow) return;
+
+    const updatedWorkflow = {
+      ...workflow,
+      favorited: !workflow.favorited,
+    };
+
+    try {
+      if (apiUrl) {
+        // Try to update on API first
+        await axios.put(`${apiUrl}/workflows/${workflowId}`, updatedWorkflow, {
+          headers: {
+            [HEADER_API_TOKEN]: apiToken,
+          },
+        });
+        console.log('Workflow favorite status updated on API');
+      }
+    } catch (error) {
+      console.error('Error updating favorite status on API, will update locally:', error);
     }
+
+    // Always update local storage as well (for fallback)
+    const workflowStorage = new WorkflowStorage();
+    workflowStorage.updateWorkflow(updatedWorkflow);
+    setSavedWorkflows((prev) => prev.map((wf) => (wf.id === workflowId ? updatedWorkflow : wf)));
   };
 
   // Create a new workflow (placeholder for now)
@@ -149,10 +246,6 @@ export const DashboardPage = () => {
         <div className="w-full max-w-6xl px-4">
           <div className="flex flex-col md:flex-row justify-between items-center mb-8">
             <h1 className="text-2xl font-bold mb-4 md:mb-0">Workflow Dashboard</h1>
-            <Button disabled={!connectedToHub} onClick={createNewWorkflow}>
-              <Plus className="h-4 w-4 mr-2" />
-              Create Workflow
-            </Button>
           </div>
 
           <div className="grid grid-cols-1 gap-6">
@@ -193,6 +286,20 @@ export const DashboardPage = () => {
                       Currently Disconnected
                     </div>
                   </div>
+                ) : loading ? (
+                  <div className="flex flex-col items-center justify-center py-10 text-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-4"></div>
+                    <p className="text-muted-foreground">Loading workflows...</p>
+                  </div>
+                ) : error ? (
+                  <div className="flex flex-col items-center justify-center py-10 text-center">
+                    <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">Error Loading Workflows</h3>
+                    <p className="text-muted-foreground max-w-md mb-4">{error}</p>
+                    <Button variant="outline" onClick={() => window.location.reload()}>
+                      Retry
+                    </Button>
+                  </div>
                 ) : (
                   <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                     <TabsList className="grid w-full grid-cols-3">
@@ -217,7 +324,6 @@ export const DashboardPage = () => {
                           onRerunWorkflow={rerunWorkflow}
                           onDeleteWorkflow={deleteWorkflow}
                           onToggleFavorite={toggleFavorite}
-                          onAddWorkflow={createNewWorkflow}
                         />
                       ) : (
                         <div className="text-center py-10">

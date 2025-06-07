@@ -14,7 +14,7 @@ import { TooltipContent, TooltipProvider, TooltipTrigger } from '@radix-ui/react
 import axios from 'axios';
 import { Check, Code, Copy, GripVertical, Pin, PinOff, X } from 'lucide-react';
 import React, { useRef, useState } from 'react';
-import { FormPayload, LabelPayload, UIWorkflowDefinition, WorkflowResult } from '../../models/payload';
+import { FormPayload, LabelPayload, SavedWorkflow, UIWorkflowDefinition, WorkflowResult } from '../../models/payload';
 import { WorkflowResultViewer } from './WorkflowResultViewer';
 
 interface WorkflowUICardProps {
@@ -38,6 +38,7 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
   isDraggable = false,
   isInChat = true,
 }) => {
+  console.log('workflow inspect: ', workflow);
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [results, setResults] = useState<WorkflowResult[]>(() => {
     // Initialize with existing results if available
@@ -142,17 +143,18 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
 
     try {
       const workflowStorage = new WorkflowStorage();
+      const sessionToken = useAppStore.getState().sessionToken;
 
       // Create a SavedWorkflow object with a unique ID based on timestamp
       const workflowId = `workflow-${Date.now()}`;
-      const savedWorkflow = {
+      const savedWorkflow: SavedWorkflow = {
         id: workflowId,
         name: workflow.entry.description || 'Unnamed Workflow',
         description: `Saved from ${workflow.entry.entryType} workflow`,
-        timestamp: new Date().toISOString(),
-        workflow: workflow.workflow,
-        results: results.length > 0 ? results.map((result) => result.uiElement) : undefined,
-        tags: ['saved'],
+        timestamp: Date.now(), // Use number timestamp instead of string
+        userId: sessionToken || 'anonymous', // Use session token as user identifier
+        workflow: workflow, // This is already a UIWorkflowDefinition
+        results: results.length > 0 ? results : undefined, // Keep full WorkflowResult objects
         favorited: false,
       };
 
@@ -258,7 +260,7 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
           </CardTitle>
           {workflow.workflow.actions && (
             <CardDescription>
-              {workflow.workflow.actions.length} action{workflow.workflow.actions.length !== 1 ? 's' : ''}
+              {workflow.workflow.actions.length} action{workflow?.workflow?.actions?.length !== 1 ? 's' : ''}
             </CardDescription>
           )}
         </div>
@@ -378,7 +380,7 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
               <h3 className="text-sm font-medium mb-2">This workflow will execute these steps:</h3>
 
               <div className="border rounded-md divide-y">
-                {workflow.workflow.actions.map((action, index) => (
+                {workflow.workflow?.actions?.map((action, index) => (
                   <div key={index} className="p-3 bg-slate-50 dark:bg-slate-900">
                     <div className="flex items-start">
                       <div className="h-6 w-6 flex items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300 mr-2 flex-shrink-0 mt-0.5">
@@ -414,7 +416,7 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
                 ))}
               </div>
 
-              {workflow.workflow.actions.length === 0 && (
+              {workflow?.workflow?.actions?.length === 0 && (
                 <div className="text-center py-6 text-slate-500 dark:text-slate-400">
                   This workflow doesn't have any steps defined.
                 </div>

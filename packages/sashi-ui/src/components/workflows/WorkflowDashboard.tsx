@@ -1,9 +1,8 @@
 import { Button } from '@/components/Button';
 import { Card, CardContent } from '@/components/ui/card';
-import { UIWorkflowDefinition, WorkflowEntryMetadata } from '@/models/payload';
-import { SavedWorkflow } from '@/pages/DashboardPage';
+import { SavedWorkflow, UIWorkflowDefinition, WorkflowEntryMetadata } from '@/models/payload';
 import { motion, Reorder } from 'framer-motion';
-import { Grid2X2, List, Plus } from 'lucide-react';
+import { Grid2X2, List } from 'lucide-react';
 import React, { useState } from 'react';
 import { WorkflowUICard } from './WorkflowUICard';
 
@@ -13,7 +12,6 @@ interface WorkflowDashboardProps {
   onRerunWorkflow: (workflow: SavedWorkflow) => Promise<void>;
   onDeleteWorkflow: (workflowId: string) => void;
   onToggleFavorite: (workflowId: string) => void;
-  onAddWorkflow?: () => void;
 }
 
 export const WorkflowDashboard: React.FC<WorkflowDashboardProps> = ({
@@ -22,7 +20,6 @@ export const WorkflowDashboard: React.FC<WorkflowDashboardProps> = ({
   onRerunWorkflow,
   onDeleteWorkflow,
   onToggleFavorite,
-  onAddWorkflow,
 }) => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [items, setItems] = useState(workflows);
@@ -38,73 +35,28 @@ export const WorkflowDashboard: React.FC<WorkflowDashboardProps> = ({
 
   // Helper function to create UI workflow definition from saved workflow
   const createUIWorkflowDefinition = (workflow: SavedWorkflow): UIWorkflowDefinition => {
-    // If the workflow doesn't have an entry field, create one based on name and description
-    const entryType = workflow.workflow.options?.generate_ui ? 'form' : 'button';
-
-    // If there's an execution error, show a label entry type with the error message
-    if (workflow.lastExecutionError) {
-      const entry: WorkflowEntryMetadata = {
-        entryType: 'label',
-        description: `Error executing workflow: ${workflow.name}`,
-        payload: {
-          isError: true,
-          message: workflow.lastExecutionError,
-        },
-      };
-
-      return {
-        workflow: workflow.workflow,
-        entry,
-      };
-    }
-
-    // If the workflow is currently executing, use a label to show the loading state
-    if (workflow.executing) {
-      const entry: WorkflowEntryMetadata = {
-        entryType: 'label',
-        description: `Executing: ${workflow.name}`,
-        payload: {
-          isError: false,
-          message: 'This workflow is currently running. Please wait...',
-        },
-      };
-
-      return {
-        workflow: workflow.workflow,
-        entry,
-      };
-    }
-
-    // Default case - normal workflow entry
-    const entry: WorkflowEntryMetadata = {
-      entryType,
+    // Since workflow.workflow is already a UIWorkflowDefinition, we can return it directly
+    // But we might want to update the entry description with the saved workflow name
+    const updatedEntry: WorkflowEntryMetadata = {
+      ...workflow.workflow.entry,
       description: workflow.name,
-      payload: entryType === 'form' ? { fields: [] } : {},
     };
 
-    // Create a copy of the workflow response and add the execution results if available
-    const workflowCopy = {
+    // Create the UI workflow definition with updated entry
+    const uiWorkflowDefinition: UIWorkflowDefinition = {
       ...workflow.workflow,
+      entry: updatedEntry,
     };
 
-    // Set the execution results if they exist in the saved workflow
+    // If there are saved results, add them to the workflow response
     if (workflow.results && workflow.results.length > 0) {
-      // Map results to the format expected by WorkflowResult
-      const executionResults = workflow.results.map((uiElement) => {
-        return {
-          actionId: uiElement.actionId,
-          result: {}, // We don't have the raw result data, but the UI element has what we need
-          uiElement,
-        };
-      });
-
-      workflowCopy.executionResults = executionResults;
+      uiWorkflowDefinition.workflow = {
+        ...workflow.workflow.workflow,
+        executionResults: workflow.results,
+      };
     }
 
-    return {
-      workflow: workflowCopy,
-      entry,
-    };
+    return uiWorkflowDefinition;
   };
 
   return (
@@ -120,23 +72,11 @@ export const WorkflowDashboard: React.FC<WorkflowDashboardProps> = ({
             List
           </Button>
         </div>
-        {onAddWorkflow && (
-          <Button size="sm" onClick={onAddWorkflow}>
-            <Plus className="h-4 w-4 mr-1" />
-            Add Workflow
-          </Button>
-        )}
       </div>
 
       {items.length === 0 ? (
         <div className="text-center py-8 border rounded-md bg-muted/20">
           <p className="text-muted-foreground mb-3">No workflows found</p>
-          {onAddWorkflow && (
-            <Button onClick={onAddWorkflow} variant="outline" size="sm">
-              <Plus className="h-4 w-4 mr-1" />
-              Add your first workflow
-            </Button>
-          )}
         </div>
       ) : (
         <Reorder.Group

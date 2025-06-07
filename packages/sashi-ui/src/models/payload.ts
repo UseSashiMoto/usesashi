@@ -109,3 +109,14 @@ export interface UIWorkflowDefinition {
     config?: Record<string, any>; // Optional: charts, colors, etc.
   };
 }
+
+export type SavedWorkflow = {
+  id: string;
+  name: string;
+  description?: string;
+  workflow: UIWorkflowDefinition;
+  timestamp: number;
+  userId: string;
+  favorited?: boolean;
+  results?: WorkflowResult[];
+};

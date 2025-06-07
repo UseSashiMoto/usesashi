@@ -10,10 +10,12 @@ interface MessageState {
   connectedToHub: boolean;
   apiUrl?: string;
   sessionToken?: string;
+  apiToken?: string;
   hubUrl?: string;
   rehydrated: boolean;
   setAPIUrl: (apiUrl: string) => void;
   setSessionToken: (sessionToken: string) => void;
+  setAPIToken: (apiToken: string) => void;
   setHubUrl: (hubUrl: string) => void;
   addMessage: (newmessage: MessageItem) => void;
   setMetadata: (metadata: Metadata) => void;
@@ -30,6 +32,7 @@ const useAppStore = create<MessageState>()(
       connectedToHub: false,
       apiUrl: undefined,
       sessionToken: undefined,
+      apiToken: undefined,
       hubUrl: undefined,
       setConnectedToHub: (connected: boolean) => set({ connectedToHub: connected }),
       setHubUrl: (hubUrl: string) => set({ hubUrl: ensureUrlProtocol(hubUrl) }),
@@ -52,6 +55,7 @@ const useAppStore = create<MessageState>()(
         set({ apiUrl: ensureUrlProtocol(apiUrl) });
       },
       setMetadata: (metadata: Metadata) => set({ metadata }),
+      setAPIToken: (apiToken: string) => set({ apiToken }),
 
       addMessage: (newmessage: MessageItem) => {
         let messages = get().messages.slice(0);
