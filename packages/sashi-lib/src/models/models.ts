@@ -9,6 +9,7 @@ export interface WorkflowResponse {
         id: string
         description: string
         tool: string
+        map?: boolean
         parameters: Record<string, any>
         parameterMetadata?: {
             [key: string]: {

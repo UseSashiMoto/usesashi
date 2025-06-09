@@ -9,18 +9,10 @@ import { WorkflowUICard } from './WorkflowUICard';
 interface WorkflowDashboardProps {
   workflows: SavedWorkflow[];
   apiUrl: string;
-  onRerunWorkflow: (workflow: SavedWorkflow) => Promise<void>;
-  onDeleteWorkflow: (workflowId: string) => void;
-  onToggleFavorite: (workflowId: string) => void;
+  onWorkflowsChange: () => void; // Simplified to just refresh callback
 }
 
-export const WorkflowDashboard: React.FC<WorkflowDashboardProps> = ({
-  workflows,
-  apiUrl,
-  onRerunWorkflow,
-  onDeleteWorkflow,
-  onToggleFavorite,
-}) => {
+export const WorkflowDashboard: React.FC<WorkflowDashboardProps> = ({ workflows, apiUrl, onWorkflowsChange }) => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [items, setItems] = useState(workflows);
 
@@ -28,10 +20,6 @@ export const WorkflowDashboard: React.FC<WorkflowDashboardProps> = ({
   React.useEffect(() => {
     setItems(workflows);
   }, [workflows]);
-
-  const handleRerun = async (workflow: SavedWorkflow) => {
-    await onRerunWorkflow(workflow);
-  };
 
   // Helper function to create UI workflow definition from saved workflow
   const createUIWorkflowDefinition = (workflow: SavedWorkflow): UIWorkflowDefinition => {
@@ -100,9 +88,8 @@ export const WorkflowDashboard: React.FC<WorkflowDashboardProps> = ({
                     apiUrl={apiUrl}
                     isDraggable={true}
                     isInChat={false}
-                    onClose={() => onDeleteWorkflow(workflow.id)}
-                    onPin={() => onToggleFavorite(workflow.id)}
-                    onExecute={() => handleRerun(workflow)}
+                    savedWorkflow={workflow}
+                    onWorkflowChange={onWorkflowsChange}
                   />
                 ) : (
                   <Card className="w-full">
@@ -112,9 +99,8 @@ export const WorkflowDashboard: React.FC<WorkflowDashboardProps> = ({
                         apiUrl={apiUrl}
                         isDraggable={true}
                         isInChat={false}
-                        onClose={() => onDeleteWorkflow(workflow.id)}
-                        onPin={() => onToggleFavorite(workflow.id)}
-                        onExecute={() => handleRerun(workflow)}
+                        savedWorkflow={workflow}
+                        onWorkflowChange={onWorkflowsChange}
                       />
                     </CardContent>
                   </Card>

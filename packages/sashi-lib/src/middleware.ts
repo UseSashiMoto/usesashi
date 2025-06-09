@@ -15,8 +15,9 @@ import {
 import { createAIBot, getAIBot } from "./aibot"
 
 import { processChatRequest } from "./chat"
-import { GeneralResponse, WorkflowResponse, WorkflowResult } from "./models/models"
+import { GeneralResponse, WorkflowResponse } from "./models/models"
 import { MetaData } from "./models/repo-metadata"
+import { createWorkflowExecutionError, createWorkflowExecutionSuccess, WorkflowResult as NewWorkflowResult } from './types/workflow'
 import { createSashiHtml, createSessionToken, ensureUrlProtocol } from './utils'
 
 
@@ -348,7 +349,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     // =============== WORKFLOW ENDPOINTS ===============
 
     // Helper to forward workflow requests to hub if available, or handle locally
-    const handleWorkflowRequest = async (req: Request, res: Response, hubPath: string, method: string, useLocalFallback = true) => {
+    const handleWorkflowRequest = async (req: Request, res: Response, hubPath: string, method: string) => {
         // Get session token from request
         const sessionToken = req.headers['x-session-token'] as string;
         let sessionId = sessionToken;
@@ -389,7 +390,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                 // Make the request to the hub
                 const hubResponse = await fetch(`${hubUrl}${hubPath}`, fetchOptions);
 
-                console.log("hubResponse: ", hubResponse)
                 // If request was successful, return the response
                 if (hubResponse.ok) {
                     // For GET requests, return the JSON data
@@ -404,34 +404,25 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                     return res.status(hubResponse.status).json(data);
                 }
 
-                // If hub request failed and we're not using local fallback, return the error
-                if (!useLocalFallback) {
-                    const errorText = await hubResponse.text();
-                    return res.status(hubResponse.status).json({
-                        error: `Hub server error: ${hubResponse.statusText}`,
-                        details: errorText
-                    });
-                }
 
                 // If we get here, hub request failed but we'll try local fallback
-                console.warn(`Hub request failed for ${hubPath}, falling back to local handling`);
+                console.warn(`Hub request failed for ${hubPath}`);
+                res.status(500).json({ error: 'Failed to connect to hub server' });
+                return
             } catch (error) {
                 console.error(`Error forwarding workflow request to hub (${hubPath}):`, error);
 
-                // If we're not using local fallback, return the error
-                if (!useLocalFallback) {
-                    return res.status(500).json({ error: 'Failed to connect to hub server' });
-                }
 
                 // Otherwise, we'll continue to local handling
                 console.warn(`Hub request failed for ${hubPath}, falling back to local handling`);
+                res.status(500).json({ error: 'Failed to connect to hub server' });
+                return
             }
         }
 
         // If we get here, either hub is not available, or hub request failed and we're using local fallback
-        // Implement your local workflow storage logic here
-        // For now, we'll return a not implemented error
-        return res.status(501).json({ error: 'Local workflow storage not implemented' });
+        res.status(500).json({ error: 'Failed to connect to hub server' });
+        return
     };
 
     // Get all workflows
@@ -446,6 +437,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
     // Create a new workflow
     router.post('/workflows', sessionValidation, asyncHandler(async (req, res) => {
+        console.log("saving workflow...", req.body)
         return handleWorkflowRequest(req, res, '/workflows', 'POST');
     }));
 
@@ -999,7 +991,10 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
 
     router.post('/workflow/execute', sessionValidation, async (req, res) => {
-        const { workflow, debug = false } = req.body;
+        const { workflow: _workflow, debug = false } = req.body;
+        const workflow: WorkflowResponse = _workflow as WorkflowResponse;
+
+        console.log("workflow execute: ", workflow);
 
         if (!workflow || !workflow.actions || !Array.isArray(workflow.actions)) {
             return res.status(400).json({ error: 'Invalid workflow format' });
@@ -1016,9 +1011,9 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         try {
             for (let i = 0; i < workflow.actions.length; i++) {
                 const action = workflow.actions[i];
-                const actionId = action.id || `action_${i}`;
-                const toolName = action.tool.replace(/^functions\./, '');
-                const { parameters } = action;
+                const actionId = action?.id || `action_${i}`;
+                const toolName = action?.tool.replace(/^functions\./, '') || '';
+                const { parameters } = action || {};
                 const registeredFunction = functionRegistry.get(toolName);
 
                 if (!registeredFunction) {
@@ -1036,7 +1031,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                 const actionErrors: Array<{ actionId: string, error: string }> = [];
 
                 // Process parameter references
-                for (const [key, value] of Object.entries(parameters)) {
+                for (const [key, value] of Object.entries(parameters || {})) {
                     if (typeof value === 'string' && value.includes('.')) {
                         try {
                             // Check for array notation
@@ -1208,7 +1203,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                 }
 
                 try {
-                    if (action.map === true) {
+                    if ((action?.map ?? false) === true) {
                         const arrayParams = Object.entries(processedParameters).find(
                             ([_, value]) => Array.isArray(value)
                         );
@@ -1252,7 +1247,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
             }
 
             const finalAction = workflow.actions[workflow.actions.length - 1];
-            const finalResult = actionResults[finalAction.id];
+            const finalResult: Record<string, any> = actionResults[finalAction?.id || ''] as Record<string, any>;
             const initialUIType = guessUIType(finalResult);
 
             let uiType = initialUIType;
@@ -1272,16 +1267,16 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                 // Silently fall back to initial UI type
             }
 
-            const finalWorkflowResult: WorkflowResult = {
-                actionId: finalAction.id,
+            const finalWorkflowResult: NewWorkflowResult = {
+                actionId: finalAction?.id || '',
                 result: typeof finalResult === 'object' ? finalResult : { value: finalResult },
                 uiElement: {
                     type: 'result',
-                    actionId: finalAction.id,
-                    tool: finalAction.tool,
+                    actionId: finalAction?.id || '',
+                    tool: finalAction?.tool || '',
                     content: {
                         type: uiType,
-                        title: finalAction.tool,
+                        title: finalAction?.tool || '',
                         content: typeof finalResult === 'object' ? JSON.stringify(finalResult, null, 2) : String(finalResult),
                         timestamp: new Date().toISOString(),
                         config: uiConfig
@@ -1289,17 +1284,15 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                 }
             };
 
-            res.json({
-                success: true,
-                results: [finalWorkflowResult]
-            });
+            res.json(createWorkflowExecutionSuccess([finalWorkflowResult]));
 
         } catch (error: unknown) {
-            res.status(500).json({
-                error: 'Failed to execute workflow',
-                details: error instanceof Error ? error.message : 'Unknown error',
-                stepErrors: errors.length > 0 ? errors : undefined
-            });
+            const errorMessage = 'Failed to execute workflow';
+            const details = error instanceof Error ? error.message : 'Unknown error';
+
+            res.status(500).json(
+                createWorkflowExecutionError(errorMessage, details, errors.length > 0 ? errors : undefined)
+            );
         }
     });
 
@@ -1353,6 +1346,7 @@ export const validateSessionRequest = ({
         }
 
         if (!sessionToken && !!getSession) {
+            console.log("validateSessionRequest: Session token required", sessionToken, getSession)
             return res.status(401).json({
                 error: 'Session token required',
                 message: 'Please provide a valid session token'
@@ -1366,6 +1360,7 @@ export const validateSessionRequest = ({
             if (validateSession) {
                 isValid = await validateSession(sessionToken, req, res);
             } else if (sessionSecret) {
+                console.log("validateSessionRequest: Session secret required", sessionToken, sessionSecret)
                 // Default JWT-style validation (you can implement JWT signing/verification here)
                 // For now, using a simple approach - in production, use proper JWT
                 const crypto = require('crypto');
@@ -1399,6 +1394,7 @@ export const validateSessionRequest = ({
                 });
             }
 
+            console.log("validateSessionRequest: Session token is valid", sessionToken)
             next();
         } catch (error) {
             console.error('Session validation error:', error);
