@@ -1355,7 +1355,6 @@ export const validateSessionRequest = ({
             if (validateSession) {
                 isValid = await validateSession(sessionToken, req, res);
             } else if (sessionSecret) {
-                console.log("validateSessionRequest: Session secret required", sessionToken, sessionSecret)
                 // Default JWT-style validation (you can implement JWT signing/verification here)
                 // For now, using a simple approach - in production, use proper JWT
                 const crypto = require('crypto');
@@ -1389,10 +1388,8 @@ export const validateSessionRequest = ({
                 });
             }
 
-            console.log("validateSessionRequest: Session token is valid", sessionToken)
             next();
         } catch (error) {
-            console.error('Session validation error:', error);
             return res.status(500).json({
                 error: 'Session validation failed',
                 message: 'Unable to validate session'
