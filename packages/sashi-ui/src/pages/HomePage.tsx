@@ -90,12 +90,7 @@ const WorkflowForm: React.FC<WorkflowFormProps> = ({ workflow, apiUrl }) => {
       ))}
       <Button onClick={handleExecute}>Run Workflow</Button>
       {results.length > 0 && <WorkflowResultViewer results={results.map((result) => result.uiElement)} />}
-      <WorkflowSaveForm
-        workflow={workflow}
-        onSave={(encoded) => {
-          console.log('Saved:', encoded); // store or log it
-        }}
-      />
+      <WorkflowSaveForm workflow={workflow} onSave={(encoded) => {}} />
     </div>
   );
 };
@@ -408,7 +403,6 @@ export const HomePage = () => {
   };
 
   async function processChat({ text, continuation }: { text?: string; continuation?: PayloadObject }) {
-    console.log('processing chat', text, continuation);
     const previous = messageItems.map((item) => {
       return {
         role: item.role,
@@ -434,7 +428,6 @@ export const HomePage = () => {
     try {
       const result = await sendMessage({ payload });
 
-      console.log('result from server', result);
       if (result.type === 'general') {
         const generalResult: GeneralResponse = result;
         // Only add text content if there were no visualizations
@@ -452,15 +445,12 @@ export const HomePage = () => {
 
       if (result.type === 'workflow') {
         const workflowResult: WorkflowResponse = result;
-        console.log('workflowResult', workflowResult);
         // show confirmation card
         setWorkflowConfirmationCard(workflowResult);
 
         resetScroll();
       }
     } catch (error: any) {
-      console.error('Error processing chat:', error.response?.data);
-
       // Extract error details from the response
       const errorResponse = error.response?.data;
 
@@ -502,8 +492,6 @@ export const HomePage = () => {
 
     try {
       const response = await sendExecuteWorkflow(apiUrl!, workflowConfirmationCard);
-
-      console.log('workflow execution response', response.data);
 
       // Store the results in the workflowConfirmationCard to be displayed
       if (response.data.success && response.data.results) {

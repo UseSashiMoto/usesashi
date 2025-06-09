@@ -77,32 +77,3 @@ export function createWorkflowExecutionError(
     };
 }
 
-/**
- * Usage Examples:
- * 
- * // In your service or component:
- * import { WorkflowExecutionResponse, isWorkflowExecutionSuccess, isWorkflowExecutionError } from '@sashimo/lib';
- * 
- * async function executeWorkflow(apiUrl: string, workflow: any): Promise<WorkflowExecutionResponse> {
- *     const response = await axios.post(`${apiUrl}/workflow/execute`, { workflow });
- *     return response.data;
- * }
- * 
- * // Using the response:
- * const result = await executeWorkflow(apiUrl, workflow);
- * 
- * if (isWorkflowExecutionSuccess(result)) {
- *     console.log('Success:', result.results);
- *     // TypeScript knows result.results exists here
- * } else if (isWorkflowExecutionError(result)) {
- *     console.error('Error:', result.error, result.details);
- *     // TypeScript knows result.error and result.details exist here
- * }
- * 
- * // Or using the success property directly:
- * if (result.success) {
- *     // Handle success case
- * } else {
- *     // Handle error case
- * }
- */ 

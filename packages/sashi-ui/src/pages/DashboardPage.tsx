@@ -28,19 +28,15 @@ export const DashboardPage = () => {
       setLoading(true);
       setError(null);
 
-      console.log('loading workflows');
-
       try {
         if (apiUrl) {
           // Try to load from API first
-          console.log('Loading workflows from API...');
           const response = await axios.get(`${apiUrl}/workflows`, {
             headers: {
               [HEADER_API_TOKEN]: apiToken,
             },
           });
 
-          console.log('workflow loading response', response.data);
 
           if (response.data && Array.isArray(response.data)) {
             // Transform API response to match SavedWorkflow interface
@@ -83,10 +79,8 @@ export const DashboardPage = () => {
       try {
         const workflowStorage = new WorkflowStorage();
         const localWorkflows = await workflowStorage.getAllWorkflowsAsync();
-        console.log('workflow loading response local', localWorkflows);
 
         setSavedWorkflows(localWorkflows);
-        console.log(`Loaded ${localWorkflows.length} workflows from local storage`);
       } catch (storageError) {
         console.error('Error loading from local storage:', storageError);
         setSavedWorkflows([]);

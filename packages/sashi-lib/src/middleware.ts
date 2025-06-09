@@ -296,11 +296,9 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
     router.get('/ping', (_req, res) => {
         const apiToken = _req.headers[HEADER_API_TOKEN] as string;
-        console.log("apiToken", apiToken, apiSecretKey, _req.headers)
         if (apiToken !== apiSecretKey) {
             return res.status(401).json({ error: 'Unauthorized' });
         }
-        console.log("apiToken 2", apiToken, apiSecretKey)
         res.status(200).json({ token: apiToken, message: 'Sashi Middleware is running' });
         return;
     });
@@ -400,7 +398,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
                     // For other methods, return success status
                     const data = await hubResponse.json();
-                    console.log("hubResponse data: ", data)
                     return res.status(hubResponse.status).json(data);
                 }
 
@@ -437,7 +434,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
     // Create a new workflow
     router.post('/workflows', sessionValidation, asyncHandler(async (req, res) => {
-        console.log("saving workflow...", req.body)
         return handleWorkflowRequest(req, res, '/workflows', 'POST');
     }));
 
@@ -994,7 +990,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         const { workflow: _workflow, debug = false } = req.body;
         const workflow: WorkflowResponse = _workflow as WorkflowResponse;
 
-        console.log("workflow execute: ", workflow);
 
         if (!workflow || !workflow.actions || !Array.isArray(workflow.actions)) {
             return res.status(400).json({ error: 'Invalid workflow format' });
