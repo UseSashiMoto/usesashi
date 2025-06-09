@@ -157,7 +157,6 @@ export const Layout: FC<{} & PropsWithChildren> = ({ children }) => {
   };
 
   const storage = new WorkflowStorage({
-    storageType: 'server',
     serverUrl: apiUrl,
   });
 

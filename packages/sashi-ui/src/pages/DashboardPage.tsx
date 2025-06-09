@@ -3,47 +3,103 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { WorkflowDashboard } from '@/components/workflows/WorkflowDashboard';
-import { WorkflowResponse, WorkflowUIElement } from '@/models/payload';
+import { SavedWorkflow } from '@/models/payload';
 import { WorkflowStorage } from '@/utils/workflowStorage';
 import axios from 'axios';
-import { AlertCircle, Plus, Search } from 'lucide-react';
+import { AlertCircle, Search } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import useAppStore from 'src/store/chat-store';
 import { Layout } from '../components/Layout';
-
-export interface SavedWorkflow {
-  id: string;
-  name: string;
-  description: string;
-  timestamp: string;
-  workflow: WorkflowResponse;
-  results?: WorkflowUIElement[];
-  tags?: string[];
-  favorited?: boolean;
-  executing?: boolean;
-  lastExecutionError?: string | null;
-}
+import { HEADER_API_TOKEN } from '../utils/contants';
 
 export const DashboardPage = () => {
   const [savedWorkflows, setSavedWorkflows] = useState<SavedWorkflow[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('all');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const apiUrl = useAppStore((state) => state.apiUrl);
+  const apiToken = useAppStore((state) => state.apiToken);
   const connectedToHub = useAppStore((state) => state.connectedToHub);
 
-  // Load saved workflows from storage
+  // Reload workflows from API and local storage
+  const reloadWorkflows = async () => {
+    const loadWorkflows = async () => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        if (apiUrl) {
+          // Try to load from API first
+          const response = await axios.get(`${apiUrl}/workflows`, {
+            headers: {
+              [HEADER_API_TOKEN]: apiToken,
+            },
+          });
+
+
+          if (response.data && Array.isArray(response.data)) {
+            // Transform API response to match SavedWorkflow interface
+            const workflows: SavedWorkflow[] = response.data.map((item: any) => ({
+              id: item.id,
+              name: item.name || 'Unnamed Workflow',
+              userId: item.userId || '',
+              description: item.description || '',
+              timestamp: item.createdAt || item.timestamp || new Date().toISOString(),
+              workflow: item.workflow,
+              results: item.results || [],
+              favorited: item.favorited || false,
+              executing: false,
+              lastExecutionError: null,
+            }));
+
+            setSavedWorkflows(workflows);
+            console.log(`Loaded ${workflows.length} workflows from API`);
+          } else {
+            console.log('No workflows returned from API, using local storage as fallback');
+            await loadFromLocalStorage();
+          }
+        } else {
+          console.log('No API URL or session token, loading from local storage');
+          await loadFromLocalStorage();
+        }
+      } catch (apiError: any) {
+        console.error('Error loading workflows from API:', apiError);
+        setError(`Failed to load workflows: ${apiError.response?.data?.error || apiError.message}`);
+
+        // Fallback to local storage
+        console.log('Falling back to local storage');
+        await loadFromLocalStorage();
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const loadFromLocalStorage = async () => {
+      try {
+        const workflowStorage = new WorkflowStorage();
+        const localWorkflows = await workflowStorage.getAllWorkflowsAsync();
+
+        setSavedWorkflows(localWorkflows);
+      } catch (storageError) {
+        console.error('Error loading from local storage:', storageError);
+        setSavedWorkflows([]);
+      }
+    };
+
+    await loadWorkflows();
+  };
+
+  // Load workflows on component mount and when API URL or token changes
   useEffect(() => {
-    const workflowStorage = new WorkflowStorage();
-    const workflows = workflowStorage.getAllWorkflows();
-    setSavedWorkflows(workflows);
-  }, []);
+    reloadWorkflows();
+  }, [apiUrl, apiToken]);
 
   // Filter workflows based on search term and active tab
   const filteredWorkflows = savedWorkflows.filter((workflow) => {
     const matchesSearch =
       workflow.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      workflow.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (workflow.tags && workflow.tags.some((tag) => tag.toLowerCase().includes(searchTerm.toLowerCase())));
+      workflow.description?.toLowerCase().includes(searchTerm.toLowerCase());
 
     if (activeTab === 'all') return matchesSearch;
     if (activeTab === 'favorites') return matchesSearch && workflow.favorited;
@@ -56,103 +112,12 @@ export const DashboardPage = () => {
     return matchesSearch;
   });
 
-  // Re-run a workflow
-  const rerunWorkflow = async (workflow: SavedWorkflow) => {
-    try {
-      if (!apiUrl) {
-        console.error('API URL is not available');
-        return;
-      }
-
-      // Show executing state in the UI
-      const updatingWorkflow = {
-        ...workflow,
-        executing: true,
-      };
-      setSavedWorkflows((prev) => prev.map((wf) => (wf.id === workflow.id ? updatingWorkflow : wf)));
-
-      const response = await axios.post(`${apiUrl}/workflow/execute`, {
-        workflow: workflow.workflow,
-        debug: true,
-      });
-
-      if (response.data.success && response.data.results) {
-        // Update the saved workflow with new results
-        const workflowStorage = new WorkflowStorage();
-        const updatedWorkflow = {
-          ...workflow,
-          results: response.data.results.map((result: any) => result.uiElement),
-          timestamp: new Date().toISOString(),
-          executing: false,
-          lastExecutionError: null,
-        };
-        workflowStorage.updateWorkflow(updatedWorkflow);
-
-        // Update state
-        setSavedWorkflows((prev) => prev.map((wf) => (wf.id === workflow.id ? updatedWorkflow : wf)));
-
-        console.log(`Workflow "${workflow.name}" executed successfully:`, response.data.results);
-      } else {
-        // Handle case where response is successful but no results
-        const updatedWorkflow = {
-          ...workflow,
-          executing: false,
-          lastExecutionError: 'Workflow executed but returned no results',
-        };
-        setSavedWorkflows((prev) => prev.map((wf) => (wf.id === workflow.id ? updatedWorkflow : wf)));
-        console.warn('Workflow executed but returned no results:', response.data);
-      }
-    } catch (error: any) {
-      // Update workflow with error state
-      const errorMessage = error.response?.data?.details || error.message || 'Unknown error';
-      const updatedWorkflow = {
-        ...workflow,
-        executing: false,
-        lastExecutionError: errorMessage,
-      };
-
-      setSavedWorkflows((prev) => prev.map((wf) => (wf.id === workflow.id ? updatedWorkflow : wf)));
-
-      console.error('Error re-running workflow:', errorMessage, error);
-    }
-  };
-
-  // Delete a workflow
-  const deleteWorkflow = (workflowId: string) => {
-    const workflowStorage = new WorkflowStorage();
-    workflowStorage.deleteWorkflow(workflowId);
-    setSavedWorkflows((prev) => prev.filter((wf) => wf.id !== workflowId));
-  };
-
-  // Toggle favorite status
-  const toggleFavorite = (workflowId: string) => {
-    const workflowStorage = new WorkflowStorage();
-    const workflow = savedWorkflows.find((wf) => wf.id === workflowId);
-    if (workflow) {
-      const updatedWorkflow = {
-        ...workflow,
-        favorited: !workflow.favorited,
-      };
-      workflowStorage.updateWorkflow(updatedWorkflow);
-      setSavedWorkflows((prev) => prev.map((wf) => (wf.id === workflowId ? updatedWorkflow : wf)));
-    }
-  };
-
-  // Create a new workflow (placeholder for now)
-  const createNewWorkflow = () => {
-    alert('Create a new workflow feature coming soon!');
-  };
-
   return (
     <Layout>
       <div className="flex flex-col items-center py-6 h-dvh bg-white dark:bg-zinc-900 overflow-auto">
         <div className="w-full max-w-6xl px-4">
           <div className="flex flex-col md:flex-row justify-between items-center mb-8">
             <h1 className="text-2xl font-bold mb-4 md:mb-0">Workflow Dashboard</h1>
-            <Button disabled={!connectedToHub} onClick={createNewWorkflow}>
-              <Plus className="h-4 w-4 mr-2" />
-              Create Workflow
-            </Button>
           </div>
 
           <div className="grid grid-cols-1 gap-6">
@@ -193,6 +158,20 @@ export const DashboardPage = () => {
                       Currently Disconnected
                     </div>
                   </div>
+                ) : loading ? (
+                  <div className="flex flex-col items-center justify-center py-10 text-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-4"></div>
+                    <p className="text-muted-foreground">Loading workflows...</p>
+                  </div>
+                ) : error ? (
+                  <div className="flex flex-col items-center justify-center py-10 text-center">
+                    <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">Error Loading Workflows</h3>
+                    <p className="text-muted-foreground max-w-md mb-4">{error}</p>
+                    <Button variant="outline" onClick={() => window.location.reload()}>
+                      Retry
+                    </Button>
+                  </div>
                 ) : (
                   <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                     <TabsList className="grid w-full grid-cols-3">
@@ -205,19 +184,12 @@ export const DashboardPage = () => {
                       {filteredWorkflows.length === 0 ? (
                         <div className="text-center py-10">
                           <p className="text-muted-foreground mb-4">No workflows found.</p>
-                          <Button variant="outline" onClick={createNewWorkflow}>
-                            <Plus className="h-4 w-4 mr-2" />
-                            Create New Workflow
-                          </Button>
                         </div>
                       ) : apiUrl ? (
                         <WorkflowDashboard
                           workflows={filteredWorkflows}
                           apiUrl={apiUrl}
-                          onRerunWorkflow={rerunWorkflow}
-                          onDeleteWorkflow={deleteWorkflow}
-                          onToggleFavorite={toggleFavorite}
-                          onAddWorkflow={createNewWorkflow}
+                          onWorkflowsChange={reloadWorkflows}
                         />
                       ) : (
                         <div className="text-center py-10">

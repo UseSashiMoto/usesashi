@@ -6,6 +6,7 @@ import { WorkflowResultViewer } from '@/components/workflows/WorkflowResultViewe
 import { WorkflowSaveForm } from '@/components/workflows/WorkflowSaveForm';
 import { WorkflowUICard } from '@/components/workflows/WorkflowUICard';
 import { WorkflowVisualizer } from '@/components/WorkflowVisualizer';
+import { sendExecuteWorkflow } from '@/services/workflow.service';
 import { Label } from '@radix-ui/react-dropdown-menu';
 import { PaperPlaneIcon } from '@radix-ui/react-icons';
 import axios from 'axios';
@@ -20,9 +21,10 @@ import { MessageItem } from 'src/store/models';
 import { Layout } from '../components/Layout';
 import {
   GeneralResponse,
-  LabelPayload,
+  isWorkflowExecutionSuccess,
   PayloadObject,
   UIWorkflowDefinition,
+  WorkflowExecutionSuccess,
   WorkflowResponse,
   WorkflowResult,
 } from '../models/payload';
@@ -60,14 +62,11 @@ const WorkflowForm: React.FC<WorkflowFormProps> = ({ workflow, apiUrl }) => {
       return { ...action, parameters: updatedParams };
     });
 
-    const finalWorkflow = { ...workflow, actions: updatedActions };
-    const response = await axios.post(`${apiUrl}/workflow/execute`, {
-      workflow: finalWorkflow,
-    });
-
-    console.log('handleExecute response', response.data);
-
-    setResults(response.data.results);
+    const finalWorkflow = { ...workflow, actions: updatedActions } as WorkflowResponse;
+    const response = await sendExecuteWorkflow(apiUrl, finalWorkflow);
+    if (isWorkflowExecutionSuccess(response.data)) {
+      setResults((response.data as WorkflowExecutionSuccess).results || []);
+    }
   };
 
   const userInputKeys = new Set<string>();
@@ -91,12 +90,7 @@ const WorkflowForm: React.FC<WorkflowFormProps> = ({ workflow, apiUrl }) => {
       ))}
       <Button onClick={handleExecute}>Run Workflow</Button>
       {results.length > 0 && <WorkflowResultViewer results={results.map((result) => result.uiElement)} />}
-      <WorkflowSaveForm
-        workflow={workflow}
-        onSave={(encoded) => {
-          console.log('Saved:', encoded); // store or log it
-        }}
-      />
+      <WorkflowSaveForm workflow={workflow} onSave={(encoded) => {}} />
     </div>
   );
 };
@@ -106,7 +100,6 @@ export interface WorkflowConfirmationCardProps {
   onExecute: () => void;
   onGenerateUI: () => void;
   onCancel: () => void;
-  onSave?: (workflowId: string) => void;
 }
 
 // Component for displaying a workflow and its execution options
@@ -410,7 +403,6 @@ export const HomePage = () => {
   };
 
   async function processChat({ text, continuation }: { text?: string; continuation?: PayloadObject }) {
-    console.log('processing chat', text, continuation);
     const previous = messageItems.map((item) => {
       return {
         role: item.role,
@@ -436,7 +428,6 @@ export const HomePage = () => {
     try {
       const result = await sendMessage({ payload });
 
-      console.log('result from server', result);
       if (result.type === 'general') {
         const generalResult: GeneralResponse = result;
         // Only add text content if there were no visualizations
@@ -454,15 +445,12 @@ export const HomePage = () => {
 
       if (result.type === 'workflow') {
         const workflowResult: WorkflowResponse = result;
-        console.log('workflowResult', workflowResult);
         // show confirmation card
         setWorkflowConfirmationCard(workflowResult);
 
         resetScroll();
       }
     } catch (error: any) {
-      console.error('Error processing chat:', error.response?.data);
-
       // Extract error details from the response
       const errorResponse = error.response?.data;
 
@@ -503,12 +491,7 @@ export const HomePage = () => {
     setLoading(true);
 
     try {
-      const response = await axios.post(`${apiUrl}/workflow/execute`, {
-        workflow: workflowConfirmationCard,
-        debug: true, // Enable debug mode to get detailed logs
-      });
-
-      console.log('workflow execution response', response.data);
+      const response = await sendExecuteWorkflow(apiUrl!, workflowConfirmationCard);
 
       // Store the results in the workflowConfirmationCard to be displayed
       if (response.data.success && response.data.results) {
@@ -532,82 +515,69 @@ export const HomePage = () => {
   }
 
   async function generateUI() {
-    if (!workflowConfirmationCard) return;
-
+    setLoading(true);
     try {
-      const response = await axios.post(`${apiUrl}/workflow/ui-entry-type`, {
-        workflow: workflowConfirmationCard,
-      });
-
-      // Check if we have an error in the response, even with status 200
-      if (response.data.error) {
-        console.error('Error from API:', response.data.error);
-        // Use default error label UI
-        const defaultUI: UIWorkflowDefinition = {
-          workflow: workflowConfirmationCard,
-          entry: {
-            entryType: 'label',
-            description: 'Error Processing Workflow',
-            payload: {
-              isError: true,
-              message: response.data.message || 'Unable to determine how to display this workflow',
-            } as LabelPayload,
-          },
-        };
-        setUiWorkflowCard(defaultUI);
-        setWorkflowConfirmationCard(undefined);
+      // Execute the workflow and parse the UI elements
+      const workflow = workflowConfirmationCard;
+      if (!workflow) {
+        console.error('No workflow available for UI generation');
         return;
       }
 
-      const uiDef: UIWorkflowDefinition = {
-        workflow: workflowConfirmationCard,
-        entry: response.data.entry,
-      };
+      if (!apiUrl) {
+        console.error('API URL is not available');
+        return;
+      }
 
-      setUiWorkflowCard(uiDef);
-      setWorkflowConfirmationCard(undefined);
-    } catch (error: any) {
-      console.error('Error generating UI', error);
+      const response = await sendExecuteWorkflow(apiUrl!, workflow);
 
-      // If request fails completely, still show a label UI with error
-      if (workflowConfirmationCard) {
-        const defaultUI: UIWorkflowDefinition = {
-          workflow: workflowConfirmationCard,
+      if (response.data.success && response.data.results) {
+        // Create a UIWorkflowDefinition with the results
+        const uiWorkflowDefinition: UIWorkflowDefinition = {
+          workflow: {
+            ...workflow,
+            executionResults: response.data.results,
+          },
           entry: {
-            entryType: 'label',
-            description: 'Error Processing Workflow',
-            payload: {
-              isError: true,
-              message: "We couldn't connect to the server to process this workflow",
-            } as LabelPayload,
+            entryType: workflow.options?.generate_ui ? 'form' : 'button',
+            description: workflow.actions?.[0]?.description || 'Generated Workflow',
           },
         };
-        setUiWorkflowCard(defaultUI);
+
+        setUiWorkflowCard(uiWorkflowDefinition);
         setWorkflowConfirmationCard(undefined);
+
+        console.log('Generated UI workflow definition:', uiWorkflowDefinition);
+      } else {
+        console.error('Failed to generate UI: No valid results returned');
       }
+    } catch (error) {
+      console.error('Error generating UI:', error);
+    } finally {
+      setLoading(false);
     }
   }
 
-  // Function to provide feedback when a workflow is saved to dashboard
-  const handleWorkflowSave = (workflowId: string) => {
-    // Get a default name for the workflow
-    let workflowName = 'Unnamed Workflow';
+  // Handle workflow save completion for chat feedback
+  const handleWorkflowSaveComplete = (success: boolean, message: string, workflowId?: string) => {
+    const icon = success ? '✅' : '❌';
+    const content = `${icon} ${message}${workflowId ? ` You can access it anytime from the Workflows section.` : ''}`;
 
-    // Try to get the workflow name from the current context
-    if (uiWorkflowCard && uiWorkflowCard.entry.description) {
-      workflowName = uiWorkflowCard.entry.description;
-    }
-
-    // Add a message to the chat to show feedback
-    const newAssistantMessage: MessageItem = {
+    const saveResultMessage: MessageItem = {
       id: getUniqueId(),
       created_at: new Date().toISOString(),
       role: 'assistant',
-      content: `✅ Workflow "${workflowName}" has been saved to your dashboard with ID: ${workflowId}. You can access it anytime from the Workflows section.`,
+      content: content,
+      isError: !success,
     };
-    setMessageItems((prev) => [...prev, newAssistantMessage]);
-    addMessage(newAssistantMessage);
-    setUiWorkflowCard(undefined);
+
+    setMessageItems((prev) => [...prev, saveResultMessage]);
+    addMessage(saveResultMessage);
+
+    // If save was successful, dismiss the workflow card
+    if (success) {
+      setUiWorkflowCard(undefined);
+    }
 
     // Scroll to show the message
     resetScroll();
@@ -665,7 +635,6 @@ export const HomePage = () => {
                 onExecute={executeWorkflow}
                 onGenerateUI={generateUI}
                 onCancel={() => setWorkflowConfirmationCard(undefined)}
-                onSave={handleWorkflowSave}
               />
             )}
 
@@ -674,8 +643,8 @@ export const HomePage = () => {
                 workflow={uiWorkflowCard}
                 apiUrl={apiUrl}
                 onClose={() => setUiWorkflowCard(undefined)}
+                onSaveComplete={handleWorkflowSaveComplete}
                 isInChat={true}
-                onSave={handleWorkflowSave}
               />
             )}
 
