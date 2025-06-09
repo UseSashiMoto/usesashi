@@ -1,5 +1,11 @@
 # @sashi/ui
 
+## 6.2.0
+
+### Minor Changes
+
+- 1d69718: workflow saving
+
 ## 6.1.0
 
 ### Minor Changes
