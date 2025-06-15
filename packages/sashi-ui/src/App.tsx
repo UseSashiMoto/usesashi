@@ -9,6 +9,25 @@ import { SettingPage } from './pages/SettingPage';
 import useAppStore from './store/chat-store';
 import { HEADER_SESSION_TOKEN } from './utils/contants';
 
+// Debug overlay component
+const DebugOverlay = () => {
+  const apiUrl = useAppStore((state) => state.apiUrl);
+  const sessionToken = useAppStore((state) => state.sessionToken);
+  const connectedToHub = useAppStore((state) => state.connectedToHub);
+  const rehydrated = useAppStore((state) => state.rehydrated);
+
+  return (
+    <div className="fixed bottom-4 right-4 bg-black/80 text-white p-4 rounded-lg text-xs font-mono z-50">
+      <div className="space-y-1">
+        <div>API URL: {apiUrl || 'Not set'}</div>
+        <div>Session: {sessionToken ? '✓' : '✗'}</div>
+        <div>Hub: {connectedToHub ? '✓' : '✗'}</div>
+        <div>Rehydrated: {rehydrated ? '✓' : '✗'}</div>
+      </div>
+    </div>
+  );
+};
+
 type PagesProps = {
   // URL to the API
   apiUrl: string;
@@ -25,7 +44,11 @@ export const App = ({ apiUrl: oldApiUrl, sessionToken: initialSessionToken }: Pa
   const rehydrated = useAppStore((state) => state.rehydrated);
   const [ready, setReady] = useState(false);
 
-  const debugMode = process.env.NODE_ENV !== 'production';
+  // More robust debug mode detection that works in npm package context
+  const debugMode =
+    process.env.NODE_ENV !== 'production' ||
+    (typeof window !== 'undefined' && window.location.search.includes('debug=true'));
+
   const setConnectedToHub = useAppStore((state: { setConnectedToHub: any }) => state.setConnectedToHub);
 
   useEffect(() => {
@@ -132,6 +155,7 @@ export const App = ({ apiUrl: oldApiUrl, sessionToken: initialSessionToken }: Pa
   }, []);
 
   if (!ready) {
+    console.log('not ready', ready);
     return null;
   }
 
@@ -159,6 +183,7 @@ export const App = ({ apiUrl: oldApiUrl, sessionToken: initialSessionToken }: Pa
     <>
       <RouterProvider router={router} />
       <Toaster />
+      {debugMode && <DebugOverlay />}
     </>
   );
 };
