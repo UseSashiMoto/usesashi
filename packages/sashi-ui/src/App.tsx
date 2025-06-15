@@ -29,14 +29,16 @@ const DebugOverlay = () => {
 };
 
 type PagesProps = {
+  // Path name
+  baseName?: string;
   // URL to the API
   apiUrl: string;
 
   // Session token
   sessionToken: string;
 };
-export const App = ({ apiUrl: oldApiUrl, sessionToken: initialSessionToken }: PagesProps) => {
-  const pathName = oldApiUrl.replace(/^https?:\/\/[^\/]+/, '').replace(/^[^\/]+/, '');
+export const App = ({ apiUrl: oldApiUrl, sessionToken: initialSessionToken, baseName }: PagesProps) => {
+  const pathName = baseName || oldApiUrl.replace(/^https?:\/\/[^\/]+/, '').replace(/^[^\/]+/, '');
   const apiUrl = useAppStore((state) => state.apiUrl);
   const setAPIUrl = useAppStore((state) => state.setAPIUrl);
   const sessionToken = useAppStore((state) => state.sessionToken);
