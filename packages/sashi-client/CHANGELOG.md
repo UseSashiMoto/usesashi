@@ -1,5 +1,11 @@
 # @sashi/client
 
+## 6.4.0
+
+### Minor Changes
+
+- c7e84e1: added the ability to change the basename
+
 ## 6.3.0
 
 ### Minor Changes
