@@ -1,5 +1,11 @@
 # sashi-lib
 
+## 6.3.0
+
+### Minor Changes
+
+- d6fa8ca: debug overlay
+
 ## 6.2.0
 
 ### Minor Changes
