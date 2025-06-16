@@ -6,7 +6,7 @@ import { WorkflowStorage } from '@/utils/workflowStorage';
 import { DashboardIcon, GearIcon, GitHubLogoIcon } from '@radix-ui/react-icons';
 import * as Toast from '@radix-ui/react-toast';
 import axios from 'axios';
-import { ChevronDown, ChevronUp, HomeIcon, MessageSquare } from 'lucide-react';
+import { ChevronDown, ChevronUp, History, HomeIcon, MessageSquare } from 'lucide-react';
 import React, { useEffect, useMemo, useState, type FC, type PropsWithChildren } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from './Button';
@@ -227,6 +227,14 @@ export const Layout: FC<{} & PropsWithChildren> = ({ children }) => {
                   </Link>
 
                   <Link
+                    to="/audit-logs"
+                    className="flex items-center space-x-3 rounded-lg px-3 py-2 text-slate-900 transition-all hover:bg-slate-100 dark:text-slate-50 dark:hover:bg-slate-800"
+                  >
+                    <History className="h-5 w-5" />
+                    <span className="text-sm font-medium">Audit Logs</span>
+                  </Link>
+
+                  <Link
                     to="/setting"
                     className="flex items-center space-x-3 rounded-lg px-3 py-2 text-slate-900 transition-all hover:bg-slate-100 dark:text-slate-50 dark:hover:bg-slate-800"
                   >
@@ -278,6 +286,18 @@ export const Layout: FC<{} & PropsWithChildren> = ({ children }) => {
                     className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-100 text-slate-900 shadow-sm transition duration-150 ease-in-out hover:bg-slate-200 active:bg-slate-300 dark:bg-slate-600 dark:text-slate-50 dark:hover:bg-slate-500"
                   >
                     <GearIcon />
+                  </Link>
+                )}
+                {location.pathname === '/audit-logs' ? (
+                  <span className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-200 text-slate-900 shadow-sm dark:bg-slate-500 dark:text-slate-50">
+                    <History className="h-4 w-4" />
+                  </span>
+                ) : (
+                  <Link
+                    to="/audit-logs"
+                    className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-100 text-slate-900 shadow-sm transition duration-150 ease-in-out hover:bg-slate-200 active:bg-slate-300 dark:bg-slate-600 dark:text-slate-50 dark:hover:bg-slate-500"
+                  >
+                    <History className="h-4 w-4" />
                   </Link>
                 )}
               </div>
