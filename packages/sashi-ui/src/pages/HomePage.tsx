@@ -129,6 +129,10 @@ export function WorkflowConfirmationCard({
       }
     };
 
+    if (!window) {
+      return;
+    }
+
     window.addEventListener('workflow-executed', handleWorkflowExecuted as EventListener);
 
     return () => {

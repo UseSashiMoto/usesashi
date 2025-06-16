@@ -989,10 +989,56 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     router.post('/workflow/execute', sessionValidation, async (req, res) => {
         const { workflow: _workflow, debug = false } = req.body;
         const workflow: WorkflowResponse = _workflow as WorkflowResponse;
+        const startTime = new Date();
+        const sessionId = req.headers[HEADER_SESSION_TOKEN] as string;
+        const userId = req.headers['x-user-id'] as string; // Optional, if you have user ID in headers
 
+        // Generate a unique ID for this workflow execution
+        const workflowExecutionId = `wf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+        // Audit log data structure
+        const auditLog = {
+            sessionId,
+            userId,
+            workflowId: workflowExecutionId, // Use generated ID instead of workflow.id
+            input: {
+                workflow,
+                debug
+            },
+            startTime,
+            endTime: null as Date | null,
+            duration: 0,
+            status: 'pending' as 'pending' | 'success' | 'error',
+            result: null as any,
+            error: null as any,
+            metadata: {
+                actionCount: workflow.actions?.length || 0,
+                tools: workflow.actions?.map(a => a.tool) || []
+            }
+        };
 
         if (!workflow || !workflow.actions || !Array.isArray(workflow.actions)) {
-            return res.status(400).json({ error: 'Invalid workflow format' });
+            const error = { error: 'Invalid workflow format' };
+            auditLog.status = 'error';
+            auditLog.error = error;
+            auditLog.endTime = new Date();
+            auditLog.duration = auditLog.endTime.getTime() - startTime.getTime();
+
+            // Try to send audit log to hub
+            try {
+                await fetch(`${process.env.HUB_URL}/audit/workflow`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        [HEADER_API_TOKEN]: apiSecretKey ? apiSecretKey : ''
+                    },
+                    body: JSON.stringify(auditLog)
+                });
+            } catch (hubError) {
+                console.error('Failed to send audit log to hub:', hubError);
+            }
+
+            return res.status(400).json(error);
         }
 
         if (debug) {
@@ -1279,11 +1325,55 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                 }
             };
 
+            // Update audit log with success
+            auditLog.status = 'success';
+            auditLog.result = finalWorkflowResult;
+            auditLog.endTime = new Date();
+            auditLog.duration = auditLog.endTime.getTime() - startTime.getTime();
+
+            // Try to send audit log to hub
+            try {
+                await fetch(`${process.env.HUB_URL}/audit/workflow`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        [HEADER_API_TOKEN]: apiSecretKey ? apiSecretKey : ''
+                    },
+                    body: JSON.stringify(auditLog)
+                });
+            } catch (hubError) {
+                console.error('Failed to send audit log to hub:', hubError);
+            }
+
             res.json(createWorkflowExecutionSuccess([finalWorkflowResult]));
 
         } catch (error: unknown) {
             const errorMessage = 'Failed to execute workflow';
             const details = error instanceof Error ? error.message : 'Unknown error';
+
+            // Update audit log with error
+            auditLog.status = 'error';
+            auditLog.error = {
+                message: errorMessage,
+                details,
+                errors: errors.length > 0 ? errors : undefined
+            };
+            auditLog.endTime = new Date();
+            auditLog.duration = auditLog.endTime.getTime() - startTime.getTime();
+
+            // Try to send audit log to hub
+            try {
+                await fetch(`${process.env.HUB_URL}/audit/workflow`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        [HEADER_API_TOKEN]: apiSecretKey ? apiSecretKey : ''
+                    },
+                    body: JSON.stringify(auditLog)
+                });
+            } catch (hubError) {
+                console.error('Failed to send audit log to hub:', hubError);
+            }
 
             res.status(500).json(
                 createWorkflowExecutionError(errorMessage, details, errors.length > 0 ? errors : undefined)
@@ -1299,6 +1389,11 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         res.redirect(newPath);
         return;
     });
+
+    // =============== AUDIT ENDPOINTS ===============
+    router.get('/audit/workflow', sessionValidation, asyncHandler(async (req, res) => {
+        return handleWorkflowRequest(req, res, '/audit/workflow', 'GET');
+    }));
 
 
 

@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import type { UserPreferences } from './components/ThemeSwitcher';
 import { Toaster } from './components/ui/toaster';
+import { AuditLogsPage } from './pages/AuditLogsPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { HomePage } from './pages/HomePage';
 import { SettingPage } from './pages/SettingPage';
@@ -146,7 +147,7 @@ export const App = ({ apiUrl: oldApiUrl, sessionToken: initialSessionToken, base
         document.documentElement.classList.remove('dark');
       }
     } else {
-      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      if (window && window.matchMedia('(prefers-color-scheme: dark)').matches) {
         document.documentElement.classList.add('dark');
       } else {
         document.documentElement.classList.remove('dark');
@@ -174,6 +175,10 @@ export const App = ({ apiUrl: oldApiUrl, sessionToken: initialSessionToken, base
       {
         path: '/setting',
         element: <SettingPage />,
+      },
+      {
+        path: '/audit-logs',
+        element: <AuditLogsPage />,
       },
     ],
     {
