@@ -58,7 +58,6 @@ export function AuditLogsPage() {
             'x-sashi-session-token': sessionToken,
           },
         });
-        console.log("logs", response.data);
         setLogs(response.data.logs);
         setError(null);
       } catch (err) {
