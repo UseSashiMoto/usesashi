@@ -12,7 +12,7 @@ import useAppStore from 'src/store/chat-store';
 import { Layout } from '../components/Layout';
 import { HEADER_API_TOKEN } from '../utils/contants';
 
-export const DashboardPage = () => {
+export const WorkflowCollectionPage = () => {
   const [savedWorkflows, setSavedWorkflows] = useState<SavedWorkflow[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('all');
@@ -117,7 +117,7 @@ export const DashboardPage = () => {
       <div className="flex flex-col items-center py-6 h-dvh bg-white dark:bg-zinc-900 overflow-auto">
         <div className="w-full max-w-6xl px-4">
           <div className="flex flex-col md:flex-row justify-between items-center mb-8">
-            <h1 className="text-2xl font-bold mb-4 md:mb-0">Workflow Dashboard</h1>
+            <h1 className="text-2xl font-bold mb-4 md:mb-0">Workflow Collection</h1>
           </div>
 
           <div className="grid grid-cols-1 gap-6">

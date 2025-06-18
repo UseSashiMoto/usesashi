@@ -8,6 +8,9 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip } from '@/components/ui/tooltip';
+import { Chart } from '@/components/visualizations/Chart';
+import { Table } from '@/components/visualizations/Table';
+import { VisualizationPicker } from '@/components/visualizations/VisualizationPicker';
 import { sendExecuteWorkflow } from '@/services/workflow.service';
 import useAppStore from '@/store/chat-store';
 import { HEADER_API_TOKEN } from '@/utils/contants';
@@ -67,6 +70,10 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
   const [isCopied, setIsCopied] = useState(false);
   const connectedToHub = useAppStore((state) => state.connectedToHub);
   const formRef = useRef<HTMLFormElement>(null);
+  const [selectedVisualization, setSelectedVisualization] = useState<{
+    type: string;
+    config: any;
+  } | null>(null);
 
   // Form field validation
   const isFormValid = () => {
@@ -436,6 +443,43 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
     }
   };
 
+  const handleVisualizationSelect = (type: string, config: any) => {
+    setSelectedVisualization({ type, config });
+  };
+
+  const renderVisualization = () => {
+    if (!selectedVisualization || !results.length) return null;
+
+    const result = results[0]; // Use the first result for now
+    const data = Array.isArray(result.result)
+      ? result.result
+      : typeof result.result === 'object'
+      ? [result.result]
+      : [];
+
+    if (selectedVisualization.type === 'table') {
+      return (
+        <Table
+          data={data}
+          columns={selectedVisualization.config.columns || []}
+          title={result.uiElement.content.title}
+        />
+      );
+    }
+
+    return (
+      <Chart
+        type={selectedVisualization.type as any}
+        data={data}
+        xAxis={selectedVisualization.config.xAxis || ''}
+        yAxis={selectedVisualization.config.yAxis || ''}
+        colorField={selectedVisualization.config.colorField}
+        sizeField={selectedVisualization.config.sizeField}
+        title={result.uiElement.content.title}
+      />
+    );
+  };
+
   return (
     <Card className={`w-full md:w-[500px] ${isDraggable ? 'cursor-grab active:cursor-grabbing' : ''}`}>
       <CardHeader className="pb-2 flex flex-row items-start justify-between">
@@ -712,6 +756,21 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
                     </span>
                   </div>
                 </div>
+
+                {!selectedVisualization ? (
+                  <VisualizationPicker result={results[0]} onVisualizationSelect={handleVisualizationSelect} />
+                ) : (
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <h3 className="text-lg font-semibold">Visualization</h3>
+                      <Button variant="outline" size="sm" onClick={() => setSelectedVisualization(null)}>
+                        Change Visualization
+                      </Button>
+                    </div>
+                    {renderVisualization()}
+                  </div>
+                )}
+
                 <WorkflowResultViewer results={results.map((result) => result.uiElement)} />
               </div>
             ) : (

@@ -172,6 +172,17 @@ export interface UIWorkflowDefinition {
     layout?: 'card' | 'table' | 'badge';
     config?: Record<string, any>; // Optional: charts, colors, etc.
   };
+  visualization?: {
+    type: 'line' | 'bar' | 'pie' | 'area' | 'table';
+    config: {
+      title: string;
+      description?: string;
+      xAxis?: string;
+      yAxis?: string;
+      columns?: string[];
+      refreshInterval?: number;
+    };
+  };
 }
 
 export type SavedWorkflow = {
