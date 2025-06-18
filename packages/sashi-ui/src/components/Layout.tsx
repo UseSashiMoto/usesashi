@@ -6,7 +6,7 @@ import { WorkflowStorage } from '@/utils/workflowStorage';
 import { DashboardIcon, GearIcon, GitHubLogoIcon } from '@radix-ui/react-icons';
 import * as Toast from '@radix-ui/react-toast';
 import axios from 'axios';
-import { ChevronDown, ChevronUp, History, HomeIcon, MessageSquare } from 'lucide-react';
+import { ChevronDown, ChevronUp, Grid2X2, History, HomeIcon, MessageSquare } from 'lucide-react';
 import React, { useEffect, useMemo, useState, type FC, type PropsWithChildren } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from './Button';
@@ -219,11 +219,19 @@ export const Layout: FC<{} & PropsWithChildren> = ({ children }) => {
                   </Link>
 
                   <Link
-                    to="/dashboard"
+                    to="/workflows"
                     className="flex items-center space-x-3 rounded-lg px-3 py-2 text-slate-900 transition-all hover:bg-slate-100 dark:text-slate-50 dark:hover:bg-slate-800"
                   >
                     <DashboardIcon className="h-5 w-5" />
-                    <span className="text-sm font-medium">Dashboard</span>
+                    <span className="text-sm font-medium">Workflows</span>
+                  </Link>
+
+                  <Link
+                    to="/visualizations"
+                    className="flex items-center space-x-3 rounded-lg px-3 py-2 text-slate-900 transition-all hover:bg-slate-100 dark:text-slate-50 dark:hover:bg-slate-800"
+                  >
+                    <Grid2X2 className="h-5 w-5" />
+                    <span className="text-sm font-medium">Visualizations</span>
                   </Link>
 
                   <Link

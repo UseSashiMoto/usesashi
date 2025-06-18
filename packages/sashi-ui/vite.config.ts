@@ -18,6 +18,9 @@ export default defineConfig({
   },
   optimizeDeps: {
     include: ['recharts'],
+    esbuildOptions: {
+      target: 'esnext'
+    }
   },
   build: {
     minify: false,
@@ -25,17 +28,15 @@ export default defineConfig({
       compress: false,
       mangle: false,
     },
-
     reportCompressedSize: true,
     lib: {
       entry: path.resolve(__dirname, 'src/main.ts'),
       name: 'Sashi Lib',
       fileName: 'main',
-      formats: ['cjs', 'es'],
+      formats: ['es'],
     },
     rollupOptions: {
-
-      external: ['react', 'react-dom'],
+      external: ['react', 'react-dom', 'recharts'],
       plugins: [
         nodeResolve(),
         commonjs(),

@@ -4,9 +4,10 @@ import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import type { UserPreferences } from './components/ThemeSwitcher';
 import { Toaster } from './components/ui/toaster';
 import { AuditLogsPage } from './pages/AuditLogsPage';
-import { DashboardPage } from './pages/DashboardPage';
+import { WorkflowCollectionPage } from './pages/DashboardPage';
 import { HomePage } from './pages/HomePage';
 import { SettingPage } from './pages/SettingPage';
+import { WorkflowVisualizationPage } from './pages/WorkflowVisualizationPage';
 import useAppStore from './store/chat-store';
 import { HEADER_SESSION_TOKEN } from './utils/contants';
 
@@ -169,8 +170,12 @@ export const App = ({ apiUrl: oldApiUrl, sessionToken: initialSessionToken, base
         element: <HomePage />,
       },
       {
-        path: '/dashboard',
-        element: <DashboardPage />,
+        path: '/workflows',
+        element: <WorkflowCollectionPage />,
+      },
+      {
+        path: '/visualizations',
+        element: <WorkflowVisualizationPage />,
       },
       {
         path: '/setting',
