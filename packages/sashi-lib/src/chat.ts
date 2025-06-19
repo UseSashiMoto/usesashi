@@ -1,4 +1,4 @@
-import { callFunctionFromRegistryFromObject, generateFilteredToolSchemas, getFunctionRegistry, VisualizationFunction } from "./ai-function-loader";
+import { callFunctionFromRegistryFromObject, generateSplitToolSchemas, getFunctionRegistry, VisualizationFunction } from "./ai-function-loader";
 import { getAIBot } from "./aibot";
 import { trim_array } from "./utils";
 
@@ -85,15 +85,24 @@ export const processChatRequest = async ({ inquiry, previous }: { inquiry: strin
     const context = trim_array(previous, 20);
     const system_prompt = getSystemPrompt();
 
-    // Use filtered tool schemas to prevent max token issues
-    const toolsSchema = generateFilteredToolSchemas(undefined, false);
+    // Use split tool schemas to handle large schemas
+    const toolsSchemaChunks = generateSplitToolSchemas(8000);
 
     let messages: any[] = [
-        { role: 'system', content: system_prompt },
-        { role: "system", content: `Available backend functions:\n ${JSON.stringify(toolsSchema, null, 2)}` }
+        { role: 'system', content: system_prompt }
     ];
 
-    console.log("toolsSchema", `Available backend functions:\n ${JSON.stringify(toolsSchema, null, 2)}`)
+    // Add tool schema chunks as separate system messages
+    toolsSchemaChunks.forEach((chunk, index) => {
+        const chunkContent = index === 0
+            ? `Available backend functions:\n${JSON.stringify(chunk, null, 2)}`
+            : `Additional backend functions (part ${index + 1}):\n${JSON.stringify(chunk, null, 2)}`;
+
+        messages.push({ role: "system", content: chunkContent });
+    });
+
+    console.log(`toolsSchema split into ${toolsSchemaChunks.length} chunks`);
+
     if (context.length > 0) {
         messages = messages.concat(context);
     }
@@ -108,7 +117,6 @@ export const processChatRequest = async ({ inquiry, previous }: { inquiry: strin
         )
     })
 
-
     return result
 }
 
@@ -121,7 +129,6 @@ export const processFunctionRequest = async ({ tools, previous }: { tools: any[]
     }
 
     const tools_output = [];
-
 
     for (let tool of tools) {
         const funcName = tool.function?.name;
@@ -178,10 +185,20 @@ export const processFunctionRequest = async ({ tools, previous }: { tools: any[]
     const context = trim_array(previous, 20);
     const system_prompt = getSystemPrompt();
 
-    // Use filtered tool schemas to prevent max token issues
-    const toolsSchema = generateFilteredToolSchemas(undefined, false);
+    // Use split tool schemas to handle large schemas
+    const toolsSchemaChunks = generateSplitToolSchemas(8000);
 
     let messages: any[] = [{ role: 'system', content: system_prompt }];
+
+    // Add tool schema chunks as separate system messages
+    toolsSchemaChunks.forEach((chunk, index) => {
+        const chunkContent = index === 0
+            ? `Available backend functions:\n${JSON.stringify(chunk, null, 2)}`
+            : `Additional backend functions (part ${index + 1}):\n${JSON.stringify(chunk, null, 2)}`;
+
+        messages.push({ role: "system", content: chunkContent });
+    });
+
     if (context.length > 0) {
         messages = messages.concat(context);
     }
@@ -227,7 +244,6 @@ export const processFunctionRequest = async ({ tools, previous }: { tools: any[]
                 ) as unknown as VisualizationFunction[]
             })
 
-
         return {
             output: result?.message,
             tool_calls: result?.message?.tool_calls,
@@ -235,6 +251,5 @@ export const processFunctionRequest = async ({ tools, previous }: { tools: any[]
         }
     } catch (error: any) {
         throw new Error('Error processing request');
-
     }
 }

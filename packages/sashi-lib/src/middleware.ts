@@ -303,7 +303,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
             functions: Array.from(getFunctionRegistry().values())
                 .filter(func => {
                     const functionAttribute = getFunctionAttributes().get(func.getName());
-                    // Filter out hidden functions
+                    // Filter out hidden functions from UI metadata (but they're still available in tools schema)
                     return !functionAttribute?.isHidden;
                 })
                 .map((func) => {

@@ -748,7 +748,7 @@ export function generateToolSchemas() {
     return { tools };
 }
 
-export function generateFilteredToolSchemas(filterFn?: (fn: AIFunction) => boolean, includeHiddenFunctions: boolean = false) {
+export function generateFilteredToolSchemas(filterFn?: (fn: AIFunction) => boolean, includeHiddenFunctions: boolean = true) {
     const registry = getFunctionRegistry();
 
     let functions = Array.from(registry.values());
@@ -758,7 +758,8 @@ export function generateFilteredToolSchemas(filterFn?: (fn: AIFunction) => boole
         functions = functions.filter(filterFn);
     }
 
-    // Filter out hidden functions unless explicitly requested
+    // Always include hidden functions (default functions) in tools schema
+    // Only filter them out if explicitly requested not to include them
     if (!includeHiddenFunctions) {
         functions = functions.filter(fn => {
             const functionAttribute = getFunctionAttributes().get(fn.getName());
@@ -767,7 +768,7 @@ export function generateFilteredToolSchemas(filterFn?: (fn: AIFunction) => boole
     }
 
     // Limit the number of functions to prevent token overflow
-    const maxFunctions = 50; // Adjust this number based on your needs
+    const maxFunctions = 200; // Increased limit since we're including all functions
     if (functions.length > maxFunctions) {
         console.warn(`Too many functions (${functions.length}), limiting to ${maxFunctions} most relevant ones`);
         functions = functions.slice(0, maxFunctions);
@@ -775,8 +776,51 @@ export function generateFilteredToolSchemas(filterFn?: (fn: AIFunction) => boole
 
     const tools = functions.map((fn) => fn.description());
 
-    console.log(`generated ${tools.length} filtered tools`);
+    console.log(`generated ${tools.length} filtered tools (including hidden functions)`);
 
     return { tools };
+}
+
+export function generateSplitToolSchemas(maxChars: number = 8000) {
+    const registry = getFunctionRegistry();
+    const functions = Array.from(registry.values());
+    const tools = functions.map((fn) => fn.description());
+
+    const toolsSchema = { tools };
+    const schemaString = JSON.stringify(toolsSchema, null, 2);
+
+    console.log(`Total tools schema size: ${schemaString.length} characters`);
+
+    // If schema is small enough, return as single message
+    if (schemaString.length <= maxChars) {
+        return [{ tools }];
+    }
+
+    // Split into multiple chunks
+    const chunks: Array<{ tools: any[] }> = [];
+    let currentChunk: any[] = [];
+    let currentSize = 0;
+
+    for (const tool of tools) {
+        const toolString = JSON.stringify(tool, null, 2);
+
+        // If adding this tool would exceed the limit, start a new chunk
+        if (currentSize + toolString.length > maxChars && currentChunk.length > 0) {
+            chunks.push({ tools: currentChunk });
+            currentChunk = [tool];
+            currentSize = toolString.length;
+        } else {
+            currentChunk.push(tool);
+            currentSize += toolString.length;
+        }
+    }
+
+    // Add the last chunk if it has tools
+    if (currentChunk.length > 0) {
+        chunks.push({ tools: currentChunk });
+    }
+
+    console.log(`Split tools schema into ${chunks.length} chunks`);
+    return chunks;
 }
 

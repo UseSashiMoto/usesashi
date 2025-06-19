@@ -372,35 +372,45 @@ For more information on how users can use the workflows you enable, direct them 
 
 ## Default Functions
 
-Sashi includes a set of built-in utility functions that are hidden from the UI by default. These functions are still available for use in workflows and AI processing, but they won't appear in the function dropdown.
+Sashi includes a set of built-in utility functions that are hidden from the UI by default but always available for AI processing. These functions are automatically included in the tools schema and split into multiple messages if they exceed 8000 characters to prevent token limits.
 
-### Manual Loading (Recommended)
+### Automatic Loading
 
-Load only the functions you need in your application:
+Default functions are automatically available to the AI without any manual loading:
 
 ```typescript
 import express from "express"
 import { createMiddleware } from "@sashimo/lib"
-import {
-    loadDefaultFunctionsOnDemand,
-    registerMathFunctions,
-    registerTextProcessingFunctions,
-} from "@sashimo/lib"
 
 const app = express()
-
-// Load only essential functions
-loadDefaultFunctionsOnDemand(["math", "text"])
-
-// Or load individual categories
-registerMathFunctions()
-registerTextProcessingFunctions()
 
 app.use(
     "/sashi",
     createMiddleware({
         openAIKey: process.env.OPENAI_API_KEY || "",
-        // Hidden functions are automatically excluded from UI
+        // Default functions are automatically available to AI
+        // but hidden from the UI dropdown
+    })
+)
+```
+
+### Manual Loading (Optional)
+
+If you want to load specific categories of default functions, you can still do so:
+
+```typescript
+import express from "express"
+import { createMiddleware, loadDefaultFunctionsOnDemand } from "@sashimo/lib"
+
+const app = express()
+
+// Load specific categories (optional - they're available anyway)
+loadDefaultFunctionsOnDemand(["math", "text"])
+
+app.use(
+    "/sashi",
+    createMiddleware({
+        openAIKey: process.env.OPENAI_API_KEY || "",
     })
 )
 ```
@@ -413,12 +423,12 @@ app.use(
 -   `system` - System utilities (get_current_time, generate_uuid)
 -   `text` - Text processing (to_uppercase, to_lowercase, trim)
 
-### Why Hidden Functions?
+### How It Works
 
-The default functions are hidden from the UI because:
-
-1. **Performance**: Only show what users actually need to see
-3. **Flexibility**: Functions are still available for AI processing and workflows, just not visible in the dropdown
+1. **Always Available**: Default functions are always included in the tools schema sent to the AI
+2. **Smart Splitting**: If the schema exceeds 8000 characters, it's automatically split into multiple system messages
+3. **UI Hidden**: Functions don't appear in the UI dropdown to keep it clean
+4. **Full Access**: AI can use all default functions in workflows and processing
 
 ### Making Functions Visible
 
