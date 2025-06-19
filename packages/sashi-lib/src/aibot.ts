@@ -201,6 +201,8 @@ Finally, if you decide that a component should be generated, you will output the
         messages: any[]
         tool_choice?: any
     }) => {
+
+        console.log("messages sending to openai", messages.map((m) => m.content.length))
         let options: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming = {
             messages,
             model,

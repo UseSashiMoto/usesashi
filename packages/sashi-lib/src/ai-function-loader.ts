@@ -299,12 +299,14 @@ export class AIFunction {
     private _returnType?: AIField<any> | AIObject | AIArray;
     private _implementation: Function;
     private _needsConfirm: boolean;
+    private _isHidden: boolean;
 
     constructor(
         name: string,
         description: string,
         repo?: string,
-        needsConfirm: boolean = false
+        needsConfirm: boolean = false,
+        isHidden: boolean = false
     ) {
         this._name = name;
         this._description = description;
@@ -312,6 +314,7 @@ export class AIFunction {
         this._implementation = () => { };
         this._repo = repo;
         this._needsConfirm = needsConfirm;
+        this._isHidden = isHidden;
     }
 
     args(...params: (AIField<any> | AIObject | AIArray | AIFieldEnum)[]) {
@@ -352,6 +355,10 @@ export class AIFunction {
 
     getNeedsConfirm(): boolean {
         return this._needsConfirm;
+    }
+
+    isHidden(): boolean {
+        return this._isHidden;
     }
 
     validateAIField = (
@@ -597,7 +604,7 @@ interface RegisteredFunction<F extends AIFunction> extends FunctionMetadata<F> {
 type FunctionRegistry = Map<string, AIFunction>;
 type FunctionAttributes = Map<
     string,
-    { active: boolean; isVisualization: boolean }
+    { active: boolean; isVisualization: boolean; isHidden: boolean }
 >;
 
 type RepoRegistry = Map<string, RepoMetadata>;
@@ -632,6 +639,7 @@ export function registerFunctionIntoAI<F extends AIFunction>(
     functionAttributes.set(fn.getName(), {
         active: true,
         isVisualization: isVisualization,
+        isHidden: fn.isHidden(),
     });
 }
 
@@ -643,7 +651,7 @@ export function registerRepoFunctionsIntoAI<F extends AIFunction>(
         fn.name,
         new AIFunction(fn.name, fn.description, repoToken, fn.needConfirmation)
     );
-    functionAttributes.set(fn.name, { active: true, isVisualization: false });
+    functionAttributes.set(fn.name, { active: true, isVisualization: false, isHidden: false });
 }
 
 export function registerRepo(repo: RepoMetadata, token: string) {
@@ -736,6 +744,38 @@ export function generateToolSchemas() {
     const tools = Array.from(registry.values()).map((fn) => fn.description());
 
     console.log('generatedtools', tools);
+
+    return { tools };
+}
+
+export function generateFilteredToolSchemas(filterFn?: (fn: AIFunction) => boolean, includeHiddenFunctions: boolean = false) {
+    const registry = getFunctionRegistry();
+
+    let functions = Array.from(registry.values());
+
+    // Apply filter if provided
+    if (filterFn) {
+        functions = functions.filter(filterFn);
+    }
+
+    // Filter out hidden functions unless explicitly requested
+    if (!includeHiddenFunctions) {
+        functions = functions.filter(fn => {
+            const functionAttribute = getFunctionAttributes().get(fn.getName());
+            return !functionAttribute?.isHidden;
+        });
+    }
+
+    // Limit the number of functions to prevent token overflow
+    const maxFunctions = 50; // Adjust this number based on your needs
+    if (functions.length > maxFunctions) {
+        console.warn(`Too many functions (${functions.length}), limiting to ${maxFunctions} most relevant ones`);
+        functions = functions.slice(0, maxFunctions);
+    }
+
+    const tools = functions.map((fn) => fn.description());
+
+    console.log(`generated ${tools.length} filtered tools`);
 
     return { tools };
 }

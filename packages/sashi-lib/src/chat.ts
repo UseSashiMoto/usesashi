@@ -1,4 +1,4 @@
-import { callFunctionFromRegistryFromObject, generateToolSchemas, getFunctionRegistry, VisualizationFunction } from "./ai-function-loader";
+import { callFunctionFromRegistryFromObject, generateFilteredToolSchemas, getFunctionRegistry, VisualizationFunction } from "./ai-function-loader";
 import { getAIBot } from "./aibot";
 import { trim_array } from "./utils";
 
@@ -85,8 +85,8 @@ export const processChatRequest = async ({ inquiry, previous }: { inquiry: strin
     const context = trim_array(previous, 20);
     const system_prompt = getSystemPrompt();
 
-
-    const toolsSchema = generateToolSchemas();
+    // Use filtered tool schemas to prevent max token issues
+    const toolsSchema = generateFilteredToolSchemas(undefined, false);
 
     let messages: any[] = [
         { role: 'system', content: system_prompt },
@@ -177,6 +177,9 @@ export const processFunctionRequest = async ({ tools, previous }: { tools: any[]
 
     const context = trim_array(previous, 20);
     const system_prompt = getSystemPrompt();
+
+    // Use filtered tool schemas to prevent max token issues
+    const toolsSchema = generateFilteredToolSchemas(undefined, false);
 
     let messages: any[] = [{ role: 'system', content: system_prompt }];
     if (context.length > 0) {
