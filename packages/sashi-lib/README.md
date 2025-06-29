@@ -8,68 +8,68 @@ Sashi is the core TypeScript/JavaScript library that powers the Sashi workflow s
 
 ## ✨ Core Features
 
-- 🔹 **Function Registration Interface**: Declaratively expose your backend functions
-- 🔹 **Workflow Execution Runtime**: Run complex workflows with simple commands
-- 🔹 **UI Metadata Hooks**: Auto-generate beautiful interfaces
-- 🔹 **SashiHub Integration**: Connect with the external SashiHub API
-- 🔹 **AI-Powered Chat**: Execute admin tasks with natural language
-- 🔹 **Secure & Reliable**: Built-in support for sensitive function confirmation
+-   🔹 **Function Registration Interface**: Declaratively expose your backend functions
+-   🔹 **Workflow Execution Runtime**: Run complex workflows with simple commands
+-   🔹 **UI Metadata Hooks**: Auto-generate beautiful interfaces
+-   🔹 **SashiHub Integration**: Connect with the external SashiHub API
+-   🔹 **AI-Powered Chat**: Execute admin tasks with natural language
+-   🔹 **Secure & Reliable**: Built-in support for sensitive function confirmation
 
 ## 🧩 Core Responsibilities
 
 ### 1. Function Registration
 
-- Provides a `registerFunction()` API to declare named functions, their parameters, and return types
-- Supports:
-    - Zod-based parameter schemas
-    - Sync and async functions
-    - Visualization functions (with metadata)
-    - Repository-scoped functions
+-   Provides a `registerFunction()` API to declare named functions, their parameters, and return types
+-   Supports:
+    -   Zod-based parameter schemas
+    -   Sync and async functions
+    -   Visualization functions (with metadata)
+    -   Repository-scoped functions
 
 ### 2. Function Metadata
 
 Functions are registered with:
 
-- Name/ID
-- Description (used for AI prompt/context)
-- Input parameter schema (Zod)
-- Return value type (for UI rendering)
-- Optional visibility/config flags (e.g., hidden, inactive)
-- Automatically generates metadata used by the AI layer and/or workflow editor
+-   Name/ID
+-   Description (used for AI prompt/context)
+-   Input parameter schema (Zod)
+-   Return value type (for UI rendering)
+-   Optional visibility/config flags (e.g., hidden, inactive)
+-   Automatically generates metadata used by the AI layer and/or workflow editor
 
 ### 3. Workflow Execution
 
-- Accepts a serialized workflow object (steps + parameters) and executes them in sequence
-- Handles:
-    - Parameter chaining
-    - Type conversion
-    - Error catching and reporting
-    - Array mapping ([*] style execution)
-    - Optionally runs in debug mode for step-by-step inspection
+-   Accepts a serialized workflow object (steps + parameters) and executes them in sequence
+-   Handles:
+    -   Parameter chaining
+    -   Type conversion
+    -   Error catching and reporting
+    -   Array mapping ([*] style execution)
+    -   Optionally runs in debug mode for step-by-step inspection
 
 ### 4. UI Metadata & Type Hints
 
-- Includes utility to infer UI types from data (e.g., table, badge, graph)
-- Used by the LLM and front-end UI generator to create input/output forms
+-   Includes utility to infer UI types from data (e.g., table, badge, graph)
+-   Used by the LLM and front-end UI generator to create input/output forms
 
 ### 5. Communication with SashiHub (sashihub)
 
-- Sends workflow save/load requests to sashihub via authenticated API calls
-- Relies on the developer to provide an x-api-token
-- Supports repository metadata sync via forward-call or metadata endpoints
+-   Sends workflow save/load requests to sashihub via authenticated API calls
+-   Relies on the developer to provide an x-api-token
+-   Supports repository metadata sync via forward-call or metadata endpoints
 
 ## 🔒 Assumptions and Boundaries
 
-- sashilib is frontend-safe if used in limited exposure contexts
-- It does not persist workflows itself — all workflow state lives in sashihub
-- It does not handle user auth or rate limiting — this is up to the surrounding app or sashihub
+-   sashilib is frontend-safe if used in limited exposure contexts
+-   It does not persist workflows itself — all workflow state lives in sashihub
+-   It does not handle user auth or rate limiting — this is up to the surrounding app or sashihub
 
 ## 🛠️ Use Cases
 
-- Register custom backend logic to be used in workflows
-- Create a shared interface for internal tools or ops automation
-- Power AI-driven workflows with securely validated parameters
-- Chain local and remote function calls in one workflow
+-   Register custom backend logic to be used in workflows
+-   Create a shared interface for internal tools or ops automation
+-   Power AI-driven workflows with securely validated parameters
+-   Chain local and remote function calls in one workflow
 
 ## 📦 Installation
 
@@ -217,10 +217,10 @@ registerFunctionIntoAI("change_user_type", ChangeUserRoleFunction)
 
 This example shows how to:
 
-- Use `AIFieldEnum` to create a dropdown selector in the UI
-- Define allowed values for the enum parameter
-- Handle enum validation automatically
-- Provide clear descriptions for the UI and AI
+-   Use `AIFieldEnum` to create a dropdown selector in the UI
+-   Define allowed values for the enum parameter
+-   Handle enum validation automatically
+-   Provide clear descriptions for the UI and AI
 
 ## 🛡️ Security
 
@@ -369,6 +369,98 @@ As a developer, you only need to:
 The workflow storage, execution, and visualization are all handled automatically by the Sashi system.
 
 For more information on how users can use the workflows you enable, direct them to our [Workflow Documentation](https://docs.sashi.ai/workflows).
+
+## Default Functions
+
+Sashi includes a set of built-in utility functions that are hidden from the UI by default but always available for AI processing. These functions are automatically included in the tools schema and split into multiple messages if they exceed 8000 characters to prevent token limits.
+
+### Automatic Loading
+
+Default functions are automatically available to the AI without any manual loading:
+
+```typescript
+import express from "express"
+import { createMiddleware } from "@sashimo/lib"
+
+const app = express()
+
+app.use(
+    "/sashi",
+    createMiddleware({
+        openAIKey: process.env.OPENAI_API_KEY || "",
+        // Default functions are automatically available to AI
+        // but hidden from the UI dropdown
+    })
+)
+```
+
+### Manual Loading (Optional)
+
+If you want to load specific categories of default functions, you can still do so:
+
+```typescript
+import express from "express"
+import { createMiddleware, loadDefaultFunctionsOnDemand } from "@sashimo/lib"
+
+const app = express()
+
+// Load specific categories (optional - they're available anyway)
+loadDefaultFunctionsOnDemand(["math", "text"])
+
+app.use(
+    "/sashi",
+    createMiddleware({
+        openAIKey: process.env.OPENAI_API_KEY || "",
+    })
+)
+```
+
+### Available Categories
+
+-   `math` - Basic math operations (add, subtract, multiply, divide, round)
+-   `data` - Data manipulation (extract, replace, split, join, filter)
+-   `datetime` - Date and time operations (format_date, add_days)
+-   `system` - System utilities (get_current_time, generate_uuid)
+-   `text` - Text processing (to_uppercase, to_lowercase, trim)
+
+### How It Works
+
+1. **Always Available**: Default functions are always included in the tools schema sent to the AI
+2. **Smart Splitting**: If the schema exceeds 8000 characters, it's automatically split into multiple system messages
+3. **UI Hidden**: Functions don't appear in the UI dropdown to keep it clean
+4. **Full Access**: AI can use all default functions in workflows and processing
+
+### Making Functions Visible
+
+If you want to make specific default functions visible in the UI, you can create custom wrapper functions:
+
+```typescript
+import { AIFunction, registerFunctionIntoAI } from "@sashimo/lib"
+
+// Create a visible wrapper for a hidden function
+const VisibleAddFunction = new AIFunction(
+    "add_numbers",
+    "add two or more numbers together"
+)
+    .args({
+        name: "numbers",
+        description: "array of numbers to add together",
+        type: "array",
+        required: true,
+    })
+    .returns({
+        name: "result",
+        description: "the sum of the numbers",
+        type: "number",
+    })
+    .implement(async (numbers: number[]) => {
+        // Call the hidden function
+        const result = await callFunctionFromRegistry("add", numbers)
+        return result.result
+    })
+
+registerFunctionIntoAI("add_numbers", VisibleAddFunction)
+```
 
 ---
 

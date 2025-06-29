@@ -126,7 +126,6 @@ interface MiddlewareOptions {
     sashiServerUrl?: string //where the sashi server is hosted if you can't find it automatically
     apiSecretKey?: string // used to validate requests from and to the hub
     hubUrl?: string // hub where all the repos are hosted
-    addStdLib?: boolean // add the standard library to the hub
     langFuseInfo?: {
         publicKey: string
         secretKey: string
@@ -186,7 +185,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         apiSecretKey,
         repos = [],
         hubUrl: rawHubUrl = 'https://hub.usesashi.com',
-        addStdLib = true,
         getSession,
         validateSession,
         sessionSecret
@@ -195,10 +193,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     // Ensure URLs have proper protocols
     const sashiServerUrl = rawSashiServerUrl ? ensureUrlProtocol(rawSashiServerUrl) : undefined;
     const hubUrl = ensureUrlProtocol(rawHubUrl);
-
-    if (addStdLib) {
-        repos.push("sashi-stdlib")
-    }
 
     const router = Router();
 
@@ -213,7 +207,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     router.options('*', cors());
 
     createAIBot({ apiKey: openAIKey, sashiSecretKey: apiSecretKey, hubUrl })
-
 
     async function checkSetup(debug: boolean) {
         console.log('\n🔍 Sashi Middleware Status Check\n')
@@ -258,7 +251,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
             console.log(`  • Server URL: ${detectedUrl}`);
             console.log(`  • Debug: ${debug}`)
-            console.log(`  • Standard Library: ${addStdLib ? 'Enabled' : 'Disabled'}`)
             console.log(`  • Session Management: ${getSession ? 'Custom' : 'Default'}\n`)
         } catch (error) {
             console.error('Error during status checks:', error)
@@ -308,8 +300,13 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     router.get('/metadata', validateRepoRequest({ sashiServerUrl, sashiHubUrl: hubUrl }), asyncHandler(async (_req, res, next) => {
         const metadata: MetaData = {
             hubUrl: hubUrl,
-            functions: Array.from(getFunctionRegistry().values()).map(
-                (func) => {
+            functions: Array.from(getFunctionRegistry().values())
+                .filter(func => {
+                    const functionAttribute = getFunctionAttributes().get(func.getName());
+                    // Filter out hidden functions from UI metadata (but they're still available in tools schema)
+                    return !functionAttribute?.isHidden;
+                })
+                .map((func) => {
                     const functionAttribute = getFunctionAttributes().get(
                         func.getName()
                     );
@@ -321,8 +318,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                         active: functionAttribute?.active ?? true,
                         isVisualization: false,
                     };
-                }
-            ),
+                }),
         };
         return res.json(metadata);
     }))

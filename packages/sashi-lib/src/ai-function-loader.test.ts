@@ -7,6 +7,10 @@ import {
     AIFunction,
     AIObject,
     callFunctionFromRegistry,
+    generateFilteredToolSchemas,
+    generateSplitToolSchemas,
+    getFunctionAttributes,
+    getFunctionRegistry,
     registerFunctionIntoAI
 } from "./ai-function-loader"; // Adjust the import path as needed
 
@@ -349,3 +353,120 @@ describe("AI Function Registry", () => {
         )
     })
 })
+
+describe('Tool Schema Generation', () => {
+    beforeEach(() => {
+        const registry = getFunctionRegistry();
+        registry.clear();
+        const attributes = getFunctionAttributes();
+        attributes.clear();
+    });
+
+    describe('generateSplitToolSchemas', () => {
+        it('should return single chunk for small schemas', () => {
+            // Create a small function
+            const testFunction = new AIFunction("test_function", "A test function")
+                .args({
+                    name: "param",
+                    description: "test parameter",
+                    type: "string",
+                    required: true
+                })
+                .implement(async (param: string) => param);
+
+            registerFunctionIntoAI("test_function", testFunction);
+
+            const chunks = generateSplitToolSchemas(8000);
+            expect(chunks).toHaveLength(1);
+            expect(chunks[0]?.tools).toHaveLength(1);
+        });
+
+        it('should split large schemas into multiple chunks', () => {
+            // Create many functions to exceed the character limit
+            for (let i = 0; i < 50; i++) {
+                const testFunction = new AIFunction(
+                    `test_function_${i}`,
+                    `A test function ${i} with a very long description that will make the schema larger and help us test the splitting functionality`
+                )
+                    .args({
+                        name: "param1",
+                        description: "test parameter 1 with a very long description",
+                        type: "string",
+                        required: true
+                    })
+                    .args({
+                        name: "param2",
+                        description: "test parameter 2 with another very long description",
+                        type: "number",
+                        required: false
+                    })
+                    .implement(async (param1: string, param2?: number) => ({ param1, param2 }));
+
+                registerFunctionIntoAI(`test_function_${i}`, testFunction);
+            }
+
+            const chunks = generateSplitToolSchemas(1000); // Small limit to force splitting
+            expect(chunks.length).toBeGreaterThan(1);
+
+            // Verify all functions are included across chunks
+            const allTools = chunks.flatMap(chunk => chunk.tools);
+            expect(allTools).toHaveLength(50);
+        });
+
+        it('should include hidden functions in split schemas', () => {
+            // Create a hidden function
+            const hiddenFunction = new AIFunction("hidden_function", "A hidden function", undefined, false, true)
+                .args({
+                    name: "param",
+                    description: "test parameter",
+                    type: "string",
+                    required: true
+                })
+                .implement(async (param: string) => param);
+
+            registerFunctionIntoAI("hidden_function", hiddenFunction);
+
+            const chunks = generateSplitToolSchemas(8000);
+            const allTools = chunks.flatMap(chunk => chunk.tools);
+
+            // Hidden function should be included in tools schema
+            expect(allTools.some(tool => tool.function.name === "hidden_function")).toBe(true);
+        });
+    });
+
+    describe('generateFilteredToolSchemas', () => {
+        it('should include hidden functions by default', () => {
+            // Create a hidden function
+            const hiddenFunction = new AIFunction("hidden_function", "A hidden function", undefined, false, true)
+                .args({
+                    name: "param",
+                    description: "test parameter",
+                    type: "string",
+                    required: true
+                })
+                .implement(async (param: string) => param);
+
+            registerFunctionIntoAI("hidden_function", hiddenFunction);
+
+            const schema = generateFilteredToolSchemas();
+            expect(schema.tools.some(tool => tool.function.name === "hidden_function")).toBe(true);
+        });
+
+        it('should exclude hidden functions when explicitly requested', () => {
+            // Create a hidden function
+            const hiddenFunction = new AIFunction("hidden_function", "A hidden function", undefined, false, true)
+                .args({
+                    name: "param",
+                    description: "test parameter",
+                    type: "string",
+                    required: true
+                })
+                .implement(async (param: string) => param);
+
+            registerFunctionIntoAI("hidden_function", hiddenFunction);
+
+            const schema = generateFilteredToolSchemas(undefined, false);
+            expect(schema.tools.some(tool => tool.function.name === "hidden_function")).toBe(false);
+        });
+    });
+});
