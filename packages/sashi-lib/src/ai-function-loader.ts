@@ -318,7 +318,7 @@ export class AIFunction {
     }
 
     args(...params: (AIField<any> | AIObject | AIArray | AIFieldEnum)[]) {
-        this._params = params;
+        this._params.push(...params);
         return this;
     }
 

@@ -261,11 +261,6 @@ const FilterFunction = new AIFunction("filter", "filter an array based on a cond
         type: "string",
         required: true
     })
-    .returns(new AIArray("FilteredResult", "filtered array", {
-        name: "item",
-        description: "a filtered item",
-        type: "string"
-    }))
     .implement(async (array: any[], condition: string) => {
         // Simple condition parsing - this could be enhanced
         const result = array.filter(item => {
