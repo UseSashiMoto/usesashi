@@ -26,6 +26,9 @@ coverage
 out/
 build
 dist
+dist-simple
+dist-simple/
+dist-simple/*
 
 
 # Debug
