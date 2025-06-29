@@ -27,6 +27,15 @@
     ],
     "author": "Sashi Team",
     "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/UseSashiMoto/usesashi.git",
+        "directory": "packages/sashi-cli"
+    },
+    "homepage": "https://docs.usesashi.com",
+    "bugs": {
+        "url": "https://github.com/UseSashiMoto/usesashi/issues"
+    },
     "dependencies": {
         "commander": "^11.0.0"
     },
@@ -38,7 +47,9 @@
     },
     "files": [
         "dist-simple/**/*",
-        "README.md"
+        "README.md",
+        "CHANGELOG.md",
+        "LICENSE"
     ],
     "engines": {
         "node": ">=16.0.0"
