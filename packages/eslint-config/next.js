@@ -7,7 +7,7 @@ module.exports = {
   extends: [
     "eslint:recommended",
     "prettier",
-    require.resolve("@vercel/style-guide/eslint/next")
+    "next/core-web-vitals"
   ],
   globals: {
     React: true,
