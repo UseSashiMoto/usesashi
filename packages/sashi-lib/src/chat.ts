@@ -163,22 +163,73 @@ export const processFunctionRequest = async ({ tools, previous }: { tools: any[]
             });
         } else {
             // Proceed with execution if no confirmation is needed
-            const output = await callFunctionFromRegistryFromObject(
-                funcName,
-                functionArguments
-            );
+            try {
+                console.log(`[Function] Executing function: ${funcName}`);
 
-            tools_output.push({
-                tool_call_id: tool.id, // Use 'id' instead of 'tool_call_id'
-                id: tool.id, // Use 'id' instead of 'tool_call_id'
-                role: 'tool',
-                type: 'function',
-                function: {
-                    name: funcName,
-                    arguments: tool.function?.arguments,
-                },
-                content: JSON.stringify(output, null, 2),
-            });
+                // Add timeout for individual function calls
+                const functionTimeout = new Promise<never>((_, reject) => {
+                    setTimeout(() => reject(new Error(`FUNCTION_EXECUTION_TIMEOUT: ${funcName}`)), 30000); // 30 second timeout per function
+                });
+
+                const functionCallPromise = callFunctionFromRegistryFromObject(
+                    funcName,
+                    functionArguments
+                );
+
+                const output = await Promise.race([functionCallPromise, functionTimeout]);
+
+                tools_output.push({
+                    tool_call_id: tool.id, // Use 'id' instead of 'tool_call_id'
+                    id: tool.id, // Use 'id' instead of 'tool_call_id'
+                    role: 'tool',
+                    type: 'function',
+                    function: {
+                        name: funcName,
+                        arguments: tool.function?.arguments,
+                    },
+                    content: JSON.stringify(output, null, 2),
+                });
+
+                console.log(`[Function] Successfully executed: ${funcName}`);
+            } catch (error: any) {
+                console.error(`[Function] Error executing ${funcName}:`, error);
+
+                // Handle timeout specifically
+                if (error.message.includes('FUNCTION_EXECUTION_TIMEOUT')) {
+                    tools_output.push({
+                        tool_call_id: tool.id,
+                        id: tool.id,
+                        role: 'tool',
+                        type: 'function',
+                        function: {
+                            name: funcName,
+                            arguments: tool.function?.arguments,
+                        },
+                        content: JSON.stringify({
+                            error: 'Function execution timeout',
+                            message: `Function ${funcName} took too long to execute (>30 seconds)`,
+                            timestamp: new Date().toISOString()
+                        }, null, 2),
+                    });
+                } else {
+                    // Handle other errors
+                    tools_output.push({
+                        tool_call_id: tool.id,
+                        id: tool.id,
+                        role: 'tool',
+                        type: 'function',
+                        function: {
+                            name: funcName,
+                            arguments: tool.function?.arguments,
+                        },
+                        content: JSON.stringify({
+                            error: 'Function execution failed',
+                            message: error.message || 'Unknown error occurred',
+                            timestamp: new Date().toISOString()
+                        }, null, 2),
+                    });
+                }
+            }
         }
     }
 
@@ -217,14 +268,23 @@ export const processFunctionRequest = async ({ tools, previous }: { tools: any[]
     messages.push(...tools_output);
 
     try {
-        const result = await aiBot.chatCompletion({
+        console.log(`[Function] Calling AI for response generation`);
+
+        // Add timeout for the AI response call
+        const aiTimeout = new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error('AI_RESPONSE_TIMEOUT')), 35000); // 35 second timeout for AI
+        });
+
+        const aiCallPromise = aiBot.chatCompletion({
             temperature: 0.3,
             messages: messages.filter(
                 (message) =>
                     typeof message.content !== "object" ||
                     message.content === null
             )
-        })
+        });
+
+        const result = await Promise.race([aiCallPromise, aiTimeout]);
 
         const shouldShowVisualization =
             await aiBot.shouldShowVisualization({
@@ -244,12 +304,26 @@ export const processFunctionRequest = async ({ tools, previous }: { tools: any[]
                 ) as unknown as VisualizationFunction[]
             })
 
+        console.log(`[Function] Successfully generated AI response`);
+
         return {
             output: result?.message,
             tool_calls: result?.message?.tool_calls,
             visualization: shouldShowVisualization
         }
     } catch (error: any) {
-        throw new Error('Error processing request');
+        console.error('[Function] Error in AI response generation:', error);
+
+        // Handle AI timeout specifically
+        if (error.message === 'AI_RESPONSE_TIMEOUT') {
+            throw new Error('AI response generation timed out after function execution');
+        }
+
+        // Handle OpenAI timeout from aibot.ts
+        if (error.message.includes('AI service timeout')) {
+            throw error; // Re-throw with existing message
+        }
+
+        throw new Error('Error processing function request: ' + error.message);
     }
 }

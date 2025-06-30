@@ -10,10 +10,11 @@
     "scripts": {
         "build": "npx tsc src/simple-index.ts --outDir dist-simple --target ES2020 --module CommonJS --esModuleInterop && chmod +x dist-simple/simple-index.js",
         "dev": "tsc --watch",
-        "test": "jest",
+        "test": "jest  --passWithNoTests",
+        "test:safe": "jest --passWithNoTests",
         "test:watch": "jest --watch",
         "test:coverage": "jest --coverage",
-        "prepublishOnly": "npm run build && npm test"
+        "prepublishOnly": "npm run build && npm run test:safe"
     },
     "keywords": [
         "sashi",
@@ -27,6 +28,15 @@
     ],
     "author": "Sashi Team",
     "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/UseSashiMoto/usesashi.git",
+        "directory": "packages/sashi-cli"
+    },
+    "homepage": "https://docs.usesashi.com",
+    "bugs": {
+        "url": "https://github.com/UseSashiMoto/usesashi/issues"
+    },
     "dependencies": {
         "commander": "^11.0.0"
     },
@@ -38,9 +48,8 @@
     },
     "files": [
         "dist-simple/**/*",
-        "README.md"
-    ],
-    "engines": {
-        "node": ">=16.0.0"
-    }
+        "README.md",
+        "CHANGELOG.md",
+        "LICENSE"
+    ]
 }

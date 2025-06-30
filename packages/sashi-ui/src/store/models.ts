@@ -8,7 +8,11 @@ export type MessageItem = {
   role: 'assistant' | 'user';
   content: string | VisualizationContent;
   isError?: boolean;
-
+  retryData?: {
+    originalText?: string;
+    retryText: string;
+    canRetry: boolean;
+  };
 };
 
 export type FunctionMetadata = {

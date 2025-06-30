@@ -216,12 +216,31 @@ Finally, if you decide that a component should be generated, you will output the
         }
 
         try {
+            // Add timeout wrapper to prevent hanging
+            const openaiTimeout = new Promise<never>((_, reject) => {
+                setTimeout(() => reject(new Error('OPENAI_API_TIMEOUT')), 40000); // 40 second timeout
+            });
 
-            const result = await this.openai.chat.completions.create(options)
+            const openaiCallPromise = this.openai.chat.completions.create(options);
+
+            const result = await Promise.race([openaiCallPromise, openaiTimeout]);
+
+            if (!result || !result.choices || !result.choices[0]) {
+                console.error("Invalid response from OpenAI:", result);
+                throw new Error('Invalid response structure from OpenAI API');
+            }
+
             return result.choices[0]
 
         } catch (error: any) {
             console.error("Error in chatCompletion:", error)
+
+            // Handle specific timeout error
+            if (error.message === 'OPENAI_API_TIMEOUT') {
+                throw new Error('AI service timeout - the request took too long to process');
+            }
+
+            // Re-throw the original error with more context
             throw error
         }
     }

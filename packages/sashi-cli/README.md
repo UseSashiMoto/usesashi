@@ -275,9 +275,14 @@ sashi add functions
 sashi add workflows
 ```
 
+## Community
+
+-   **GitHub**: [https://github.com/UseSashiMoto/usesashi](https://github.com/UseSashiMoto/usesashi)
+-   **Discord**: Join our community at [https://discord.gg/3a9S6XPc6Q](https://discord.gg/3a9S6XPc6Q)
+
 ## Contributing
 
-See the main [Sashi repository](https://github.com/usesashi/sashi) for contribution guidelines.
+See the main [Sashi repository](https://github.com/UseSashiMoto/usesashi) for contribution guidelines.
 
 ## License
 

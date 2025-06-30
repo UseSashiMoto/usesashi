@@ -11,5 +11,9 @@ jobs:
 
         steps:
             - uses: actions/checkout@v3
+            - uses: actions/setup-node@v3
+              with:
+                  node-version: 18.x
+                  cache: "yarn"
             - name: Check if package.json & yarn.lock are in sync
               run: yarn install --frozen-lockfile

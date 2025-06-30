@@ -290,6 +290,7 @@ export const HomePage = () => {
   const [isMounted, setMounted] = React.useState(false);
 
   const [loading, setLoading] = React.useState(false);
+  const [loadingTimeout, setLoadingTimeout] = React.useState(false);
   const [inputText, setInputText] = React.useState('');
   const [messageItems, setMessageItems] = React.useState<MessageItem[]>([]);
 
@@ -333,8 +334,46 @@ export const HomePage = () => {
       ...payload,
       previous: payload.previous ? prepareMessageForPayload(payload.previous) : undefined,
     };
-    const response = await axios.post(`${apiUrl}/chat`, sanitizedPayload);
-    return response.data.output as GeneralResponse | WorkflowResponse;
+
+    console.log('🚀 [DEBUG] Sending request to:', `${apiUrl}/chat`);
+    console.log('📦 [DEBUG] Payload:', JSON.stringify(sanitizedPayload, null, 2));
+    console.log('⏰ [DEBUG] Request started at:', new Date().toISOString());
+
+    try {
+      const response = await axios.post(`${apiUrl}/chat`, sanitizedPayload, {
+        timeout: 65000, // 65 second timeout (slightly longer than backend)
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      console.log('✅ [DEBUG] Response received:', response.status, response.statusText);
+      console.log('📄 [DEBUG] Response data:', JSON.stringify(response.data, null, 2));
+
+      if (!response.data || !response.data.output) {
+        console.error('❌ [DEBUG] Invalid response structure:', response.data);
+        throw new Error('Invalid response structure from server');
+      }
+
+      return response.data.output as GeneralResponse | WorkflowResponse;
+    } catch (error: any) {
+      console.error('💥 [DEBUG] Request failed:', error);
+      console.error('📊 [DEBUG] Error details:', {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        headers: error.response?.headers,
+        config: {
+          url: error.config?.url,
+          method: error.config?.method,
+          timeout: error.config?.timeout,
+        },
+      });
+
+      // Re-throw the error so it can be handled by processChat
+      throw error;
+    }
   };
 
   const handleClearMessages = async () => {
@@ -407,6 +446,8 @@ export const HomePage = () => {
   };
 
   async function processChat({ text, continuation }: { text?: string; continuation?: PayloadObject }) {
+    console.log('🎯 [DEBUG] processChat called with:', { text, continuation });
+
     const previous = messageItems.map((item) => {
       return {
         role: item.role,
@@ -429,11 +470,55 @@ export const HomePage = () => {
         }
       : { inquiry: text, previous, type: '/chat/message' };
 
+    console.log('📋 [DEBUG] Final payload:', payload);
+
+    // Set up timeout warning after 30 seconds
+    const timeoutWarning = setTimeout(() => {
+      console.log('⏰ [DEBUG] 30-second timeout warning triggered');
+      setLoadingTimeout(true);
+    }, 30000);
+
     try {
+      console.log('📡 [DEBUG] Calling sendMessage...');
       const result = await sendMessage({ payload });
 
-      if (result.type === 'general') {
-        const generalResult: GeneralResponse = result;
+      // Clear timeout warning since we got a response
+      clearTimeout(timeoutWarning);
+      setLoadingTimeout(false);
+
+      console.log('🎉 [DEBUG] sendMessage completed successfully:', result);
+
+      // Handle different response formats
+      let processedResult: GeneralResponse | WorkflowResponse;
+
+      // Check if we have the expected wrapped format
+      if (result && typeof result === 'object' && 'type' in result) {
+        console.log('📋 [DEBUG] Response is in expected wrapped format');
+        processedResult = result;
+      }
+      // Handle raw OpenAI response format
+      else if (result && typeof result === 'object' && 'content' in result) {
+        console.log('🔄 [DEBUG] Converting raw OpenAI response to expected format');
+        processedResult = {
+          type: 'general',
+          content: (result as any).content,
+        } as GeneralResponse;
+      }
+      // Handle string responses
+      else if (typeof result === 'string') {
+        console.log('📝 [DEBUG] Converting string response to expected format');
+        processedResult = {
+          type: 'general',
+          content: result,
+        } as GeneralResponse;
+      } else {
+        console.error('❌ [DEBUG] Unexpected response format:', result);
+        throw new Error('Unexpected response format from server');
+      }
+
+      if (processedResult.type === 'general') {
+        console.log('📝 [DEBUG] Processing general response');
+        const generalResult: GeneralResponse = processedResult;
         // Only add text content if there were no visualizations
         const newAssistantMessage: MessageItem = {
           id: getUniqueId(),
@@ -447,30 +532,140 @@ export const HomePage = () => {
         resetScroll();
       }
 
-      if (result.type === 'workflow') {
-        const workflowResult: WorkflowResponse = result;
+      if (processedResult.type === 'workflow') {
+        console.log('⚙️ [DEBUG] Processing workflow response');
+        const workflowResult: WorkflowResponse = processedResult;
         // show confirmation card
         setWorkflowConfirmationCard(workflowResult);
 
         resetScroll();
       }
     } catch (error: any) {
+      // Clear timeout warning since we got an error response
+      clearTimeout(timeoutWarning);
+      setLoadingTimeout(false);
+
+      console.error('💥 [DEBUG] processChat error caught:', error);
+
       // Extract error details from the response
       const errorResponse = error.response?.data;
+      const statusCode = error.response?.status;
 
-      // Format the error message in a more readable way
-      let errorContent = '❌ Error occurred while processing your request\n\n';
+      console.log('📊 [DEBUG] Error analysis:', {
+        hasResponse: !!error.response,
+        statusCode,
+        hasData: !!errorResponse,
+        errorMessage: error.message,
+        errorType: typeof error,
+      });
 
-      if (errorResponse?.error) {
-        errorContent += `Error: ${errorResponse.error}\n`;
+      let errorContent = '';
+      let showRetryButton = false;
+      let retryText = '';
+
+      // Handle different error types with specific user-friendly messages
+      if (statusCode === 408) {
+        // Timeout errors
+        errorContent =
+          '⏱️ **Request Timeout**\n\nYour request took too long to process. This can happen with complex requests or when the AI service is busy.';
+        showRetryButton = true;
+        retryText = 'Try again';
+
+        if (errorResponse?.error?.includes('AI response timeout')) {
+          errorContent += '\n\n💡 **Tip**: Try breaking your request into smaller, simpler parts.';
+        }
+      } else if (statusCode === 429) {
+        // Rate limiting
+        errorContent =
+          "🚦 **Too Many Requests**\n\nYou're sending requests too quickly. Please wait a moment before trying again.";
+        showRetryButton = true;
+        retryText = 'Retry in 30 seconds';
+
+        // Auto-retry after 30 seconds for rate limits
+        setTimeout(() => {
+          if (text) {
+            processChat({ text });
+          }
+        }, 30000);
+      } else if (statusCode === 503) {
+        // Service unavailable
+        errorContent =
+          '🔧 **Service Temporarily Unavailable**\n\nThe AI service is currently experiencing issues. Please try again in a few minutes.';
+        showRetryButton = true;
+        retryText = 'Try again';
+
+        if (errorResponse?.error?.includes('Quota exceeded')) {
+          errorContent =
+            '📊 **Service Quota Exceeded**\n\nThe AI service has reached its usage limit. Please contact support or try again later.';
+          showRetryButton = false;
+        } else if (errorResponse?.error?.includes('Network connectivity')) {
+          errorContent += '\n\n🌐 **Check your internet connection** and make sure you can access the internet.';
+        }
+      } else if (statusCode === 400) {
+        // Bad request - validation errors
+        if (errorResponse?.error?.includes('Invalid input')) {
+          errorContent =
+            '📝 **Invalid Input**\n\nThere was an issue with your request format. Please try rephrasing your message.';
+        } else if (errorResponse?.error?.includes('Invalid workflow')) {
+          errorContent =
+            '⚙️ **Workflow Error**\n\nThere was an issue with the workflow structure. Please try a different approach.';
+        } else if (errorResponse?.error?.includes('Function not found')) {
+          errorContent =
+            '🔍 **Function Not Available**\n\nThe requested function is not currently available. Please try a different request.';
+        } else {
+          errorContent =
+            '❌ **Request Error**\n\nThere was an issue with your request. Please check your input and try again.';
+        }
+        showRetryButton = true;
+        retryText = 'Try again';
+      } else if (statusCode >= 500) {
+        // Server errors
+        errorContent = "🛠️ **Server Error**\n\nSomething went wrong on our end. We're working to fix this issue.";
+        showRetryButton = true;
+        retryText = 'Try again';
+      } else if (!statusCode && error.message.includes('timeout')) {
+        // Network timeout (no status code)
+        errorContent =
+          '🌐 **Network Timeout**\n\nThe request timed out. This could be due to a slow connection or server overload.';
+        showRetryButton = true;
+        retryText = 'Try again';
+      } else if (!statusCode && error.message.includes('Network Error')) {
+        // Network error (no status code)
+        errorContent =
+          '🌐 **Network Error**\n\nUnable to connect to the server. Please check your internet connection.';
+        showRetryButton = true;
+        retryText = 'Try again';
+      } else {
+        // Generic error fallback
+        errorContent = '❌ **Something went wrong**\n\nAn unexpected error occurred while processing your request.';
+        showRetryButton = true;
+        retryText = 'Try again';
       }
 
+      // Add more specific error details if available
       if (errorResponse?.details) {
-        errorContent += `\nDetails: ${errorResponse.details}\n`;
+        errorContent += `\n\n**Details**: ${errorResponse.details}`;
       }
 
-      if (errorResponse?.debug_info) {
-        errorContent += `\nDebug Information:\n${JSON.stringify(errorResponse.debug_info, null, 2)}`;
+      // Add debug info in development mode
+      if (debug && errorResponse?.debug_info) {
+        errorContent += `\n\n**Debug Info** (dev mode):\n\`\`\`json\n${JSON.stringify(
+          errorResponse.debug_info,
+          null,
+          2
+        )}\n\`\`\``;
+      }
+
+      // Add raw error info for debugging
+      if (debug) {
+        errorContent += `\n\n**Raw Error** (dev mode):\n\`\`\`\nMessage: ${error.message}\nStatus: ${
+          statusCode || 'No status'
+        }\nType: ${typeof error}\n\`\`\``;
+      }
+
+      // Add retry button if applicable
+      if (showRetryButton) {
+        errorContent += `\n\n---\n🔄 **Want to try again?** Click the "${retryText}" button below.`;
       }
 
       const errorMessageItem: MessageItem = {
@@ -479,13 +674,22 @@ export const HomePage = () => {
         role: 'assistant',
         content: errorContent,
         isError: true,
+        retryData: showRetryButton
+          ? {
+              originalText: text,
+              retryText: retryText,
+              canRetry: true,
+            }
+          : undefined,
       };
 
       setMessageItems((prev) => [...prev, errorMessageItem]);
       addMessage(errorMessageItem);
       resetScroll();
     } finally {
+      console.log('🏁 [DEBUG] processChat finally block executed');
       setLoading(false);
+      setLoadingTimeout(false);
     }
   }
 
@@ -587,6 +791,44 @@ export const HomePage = () => {
     resetScroll();
   };
 
+  const handleRetry = (originalText?: string) => {
+    if (originalText) {
+      processChat({ text: originalText });
+    }
+  };
+
+  // Debug function to test API connection
+  const testConnection = async () => {
+    console.log('🔗 [DEBUG] Testing API connection...');
+    console.log('🌐 [DEBUG] API URL:', apiUrl);
+
+    if (!apiUrl) {
+      console.error('❌ [DEBUG] No API URL configured!');
+      return;
+    }
+
+    try {
+      const response = await axios.get(`${apiUrl}/health`, { timeout: 10000 });
+      console.log('✅ [DEBUG] Health check successful:', response.data);
+    } catch (error: any) {
+      console.error('❌ [DEBUG] Health check failed:', error);
+      console.error('📊 [DEBUG] Health check error details:', {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        url: error.config?.url,
+      });
+    }
+  };
+
+  // Run connection test on mount in debug mode
+  useEffect(() => {
+    if (debug && apiUrl) {
+      console.log('🚀 [DEBUG] Component mounted, running connection test...');
+      testConnection();
+    }
+  }, [debug, apiUrl]);
+
   return (
     <Layout>
       <div className="flex flex-row justify-center pb-20 h-dvh bg-white dark:bg-zinc-900">
@@ -620,10 +862,25 @@ export const HomePage = () => {
               </motion.div>
             )}
             {messageItems.map((item) => (
-              <Message role={item.role} content={item.content} />
+              <Message
+                key={item.id}
+                role={item.role}
+                content={item.content}
+                isError={item.isError}
+                retryData={item.retryData}
+                onRetry={handleRetry}
+              />
             ))}
 
-            {loading && <Message role="assistant" isThinking={true} />}
+            {loading && (
+              <Message
+                role="assistant"
+                isThinking={true}
+                content={
+                  loadingTimeout ? '⏱️ This is taking longer than usual. The request might timeout soon...' : undefined
+                }
+              />
+            )}
 
             {!!confirmationData && (
               <ConfirmationCard
@@ -657,7 +914,24 @@ export const HomePage = () => {
             <div ref={messagesEndRef} />
           </div>
 
-          <div className="grid sm:grid-cols-2 gap-2 w-full px-4 md:px-0 mx-auto md:max-w-[500px] mb-4"></div>
+          <div className="grid sm:grid-cols-2 gap-2 w-full px-4 md:px-0 mx-auto md:max-w-[500px] mb-4">
+            {debug && (
+              <div className="col-span-2 bg-gray-100 dark:bg-gray-800 p-3 rounded-lg text-xs">
+                <div className="font-bold mb-2">🐛 Debug Panel</div>
+                <div>API URL: {apiUrl || 'Not configured'}</div>
+                <div>Connected to Hub: {connectedToHub ? 'Yes' : 'No'}</div>
+                <div>Loading: {loading ? 'Yes' : 'No'}</div>
+                <div>Loading Timeout Warning: {loadingTimeout ? 'Yes' : 'No'}</div>
+                <div>Messages Count: {messageItems.length}</div>
+                <button
+                  onClick={testConnection}
+                  className="mt-2 px-2 py-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-600"
+                >
+                  Test Connection
+                </button>
+              </div>
+            )}
+          </div>
 
           <form
             className="flex w-full flex-row gap-2 relative justify-center items-center"

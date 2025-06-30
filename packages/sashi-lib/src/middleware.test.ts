@@ -108,8 +108,7 @@ describe('Chat Endpoint', () => {
             expect(response.body).toEqual({
                 output: {
                     content: 'Hello, how can I help?',
-                    role: 'assistant',
-                    refusal: null,
+                    "type": "general",
                 },
             });
 
@@ -138,7 +137,7 @@ describe('Chat Endpoint', () => {
             expect(Object.keys(response.body)).toContain('message');
             expect(Object.keys(response.body)).toContain('error');
             expect(response.body.message).toBe('Error processing request');
-            expect(response.body.error).toBe('Chat error');
+            expect(response.body.error).toBe('AI service error');
         });
 
         test('should use local OpenAI instance when useCloud is false', async () => {
@@ -155,8 +154,7 @@ describe('Chat Endpoint', () => {
             expect(response.body).toEqual({
                 output: {
                     content: 'Hello, how can I help?',
-                    role: 'assistant',
-                    refusal: null,
+                    "type": "general"
                 },
             });
 

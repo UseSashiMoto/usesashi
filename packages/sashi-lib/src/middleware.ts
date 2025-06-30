@@ -694,194 +694,415 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
     router.post('/chat', sessionValidation, async (req, res) => {
         const { tools, previous, type } = req.body;
-        if (type === '/chat/message') {
-            const { inquiry, previous } = req.body;
 
-            // Add error testing conditions
-            if (inquiry.startsWith('/error')) {
-                const errorType = inquiry.split(' ')[1]?.toLowerCase();
-
-                switch (errorType) {
-                    case 'empty':
-                        return res.status(400).json({
-                            message: 'Error processing request',
-                            error: 'No response generated',
-                            details: 'The AI assistant was unable to generate a response (Empty Response Test)',
-                            debug_info: {
-                                inquiry,
-                                error_type: 'empty_response_test'
-                            }
-                        });
-
-                    case 'invalid':
-                        return res.status(400).json({
-                            message: 'Error processing request',
-                            error: 'Invalid response format',
-                            details: 'The AI generated an invalid response format (Invalid Format Test)',
-                            debug_info: {
-                                inquiry,
-                                error_type: 'invalid_format_test',
-                                invalid_response: { type: 'unknown_type' }
-                            }
-                        });
-
-                    case 'workflow':
-                        return res.status(400).json({
-                            message: 'Error processing request',
-                            error: 'Workflow Validation Failed',
-                            details: 'The workflow is invalid or missing required components',
-                            debug_info: {
-                                error_type: 'workflow_error_test',
-                                validation_errors: [
-                                    'Missing required actions array',
-                                    'Invalid workflow structure'
-                                ],
-                                workflow_state: {
-                                    type: 'workflow',
-                                    actions: null
-                                }
-                            }
-                        });
-
-                    case 'server':
-                        return res.status(500).json({
-                            message: 'Error processing request',
-                            error: 'Internal server error',
-                            details: 'An unexpected error occurred while processing the request (Server Error Test)',
-                            debug_info: {
-                                inquiry,
-                                error_type: 'server_error_test',
-                                stack: 'Test error stack trace'
-                            }
-                        });
-
-                    default:
-                        return res.status(400).json({
-                            message: 'Error processing request',
-                            error: 'Unknown error type',
-                            details: 'Please specify an error type: /error [empty|invalid|workflow|server]',
-                            debug_info: {
-                                available_types: ['empty', 'invalid', 'workflow', 'server'],
-                                received: errorType
-                            }
-                        });
-                }
-            }
-
-            try {
-                const result = await processChatRequest({ inquiry, previous })
-
-                // Check for empty or invalid result
-                if (!result?.message) {
-                    return res.status(400).json({
-                        message: 'Error processing request',
-                        error: 'No response generated',
-                        debug_info: {
-                            inquiry,
-                            result
-                        }
-                    });
-                }
-
-                try {
-                    // Check if the result content is JSON
-                    if (result.message.content) {
-                        try {
-                            const parsedResult = JSON.parse(result.message.content)
-
-                            // Validate workflow response
-                            if (parsedResult.type === 'workflow') {
-                                const workflowResult: WorkflowResponse = parsedResult
-
-                                // Validate workflow structure
-                                if (!workflowResult.actions || !Array.isArray(workflowResult.actions)) {
-                                    return res.status(400).json({
-                                        message: 'Error processing request',
-                                        error: 'Invalid workflow format',
-                                        debug_info: {
-                                            workflow: workflowResult
-                                        }
-                                    });
-                                }
-
-                                // Clean up function. prefix from tool names before sending to client
-                                if (workflowResult.type === 'workflow' && workflowResult.actions) {
-                                    workflowResult.actions = workflowResult.actions.map(action => ({
-                                        ...action,
-                                        tool: action.tool.replace(/^functions\./, '')
-                                    }))
-                                }
-
-                                return res.json({ output: workflowResult })
-                            }
-
-                            if (parsedResult.type === 'general') {
-                                const result: GeneralResponse = parsedResult
-                                if (!result.content) {
-                                    return res.status(400).json({
-                                        message: 'Error processing request',
-                                        error: 'Empty response content',
-                                        debug_info: { result }
-                                    });
-                                }
-                                return res.status(200).json({
-                                    output: result,
-                                })
-                            }
-
-                            // If we get here, the response type is unknown
-                            return res.status(400).json({
-                                message: 'Error processing request',
-                                error: 'Invalid response type',
-                                debug_info: { parsedResult }
-                            });
-
-                        } catch (parseError: any) {
-                            // Not JSON, just return the message directly if it has content
-                            if (result.message.content) {
-                                return res.json({
-                                    output: result.message,
-                                });
-                            } else {
-                                return res.status(400).json({
-                                    message: 'Error processing request',
-                                    error: 'Empty response',
-                                    debug_info: {
-                                        result: result.message,
-                                        parseError: parseError.message
-                                    }
-                                });
-                            }
-                        }
-                    }
-
-                    // If we get here, there's no content in the message
-                    return res.status(400).json({
-                        message: 'Error processing request',
-                        error: 'Empty response',
-                        debug_info: { result }
-                    });
-
-                } catch (e: any) {
-                    return res.status(500).json({
-                        message: 'Error processing request',
-                        error: e.message,
-                        debug_info: {
-                            result,
-                            stack: e.stack
-                        }
-                    });
-                }
-            } catch (e: any) {
-                return res.status(500).json({
-                    message: 'Error processing request',
-                    error: e.message,
+        // Add request timeout - ensure we always respond within 60 seconds
+        const requestTimeout = setTimeout(() => {
+            if (!res.headersSent) {
+                res.status(408).json({
+                    message: 'Request timeout',
+                    error: 'The request took too long to process',
+                    details: 'The AI service didn\'t respond within the expected time limit. Please try again.',
                     debug_info: {
-                        inquiry,
-                        stack: e.stack
+                        timeout: '60 seconds',
+                        type,
+                        timestamp: new Date().toISOString()
                     }
                 });
             }
+        }, 60000); // 60 second timeout
+
+        try {
+            if (type === '/chat/message') {
+                const { inquiry, previous } = req.body;
+
+                // Validate required fields
+                if (!inquiry || typeof inquiry !== 'string') {
+                    clearTimeout(requestTimeout);
+                    return res.status(400).json({
+                        message: 'Error processing request',
+                        error: 'Invalid input',
+                        details: 'Inquiry is required and must be a string',
+                        debug_info: {
+                            received_inquiry: inquiry,
+                            type_of_inquiry: typeof inquiry
+                        }
+                    });
+                }
+
+                // Add error testing conditions
+                if (inquiry.startsWith('/error')) {
+                    clearTimeout(requestTimeout);
+                    const errorType = inquiry.split(' ')[1]?.toLowerCase();
+
+                    switch (errorType) {
+                        case 'empty':
+                            return res.status(400).json({
+                                message: 'Error processing request',
+                                error: 'No response generated',
+                                details: 'The AI assistant was unable to generate a response (Empty Response Test)',
+                                debug_info: {
+                                    inquiry,
+                                    error_type: 'empty_response_test'
+                                }
+                            });
+
+                        case 'invalid':
+                            return res.status(400).json({
+                                message: 'Error processing request',
+                                error: 'Invalid response format',
+                                details: 'The AI generated an invalid response format (Invalid Format Test)',
+                                debug_info: {
+                                    inquiry,
+                                    error_type: 'invalid_format_test',
+                                    invalid_response: { type: 'unknown_type' }
+                                }
+                            });
+
+                        case 'workflow':
+                            return res.status(400).json({
+                                message: 'Error processing request',
+                                error: 'Workflow Validation Failed',
+                                details: 'The workflow is invalid or missing required components',
+                                debug_info: {
+                                    error_type: 'workflow_error_test',
+                                    validation_errors: [
+                                        'Missing required actions array',
+                                        'Invalid workflow structure'
+                                    ],
+                                    workflow_state: {
+                                        type: 'workflow',
+                                        actions: null
+                                    }
+                                }
+                            });
+
+                        case 'server':
+                            return res.status(500).json({
+                                message: 'Error processing request',
+                                error: 'Internal server error',
+                                details: 'An unexpected error occurred while processing the request (Server Error Test)',
+                                debug_info: {
+                                    inquiry,
+                                    error_type: 'server_error_test',
+                                    stack: 'Test error stack trace'
+                                }
+                            });
+
+                        default:
+                            return res.status(400).json({
+                                message: 'Error processing request',
+                                error: 'Unknown error type',
+                                details: 'Please specify an error type: /error [empty|invalid|workflow|server]',
+                                debug_info: {
+                                    available_types: ['empty', 'invalid', 'workflow', 'server'],
+                                    received: errorType
+                                }
+                            });
+                    }
+                }
+
+                try {
+                    console.log(`[Chat] Processing inquiry: "${inquiry.substring(0, 100)}${inquiry.length > 100 ? '...' : ''}"`);
+
+                    // Add a promise race with timeout for the AI call
+                    const aiCallTimeout = new Promise<never>((_, reject) => {
+                        setTimeout(() => reject(new Error('AI_TIMEOUT')), 45000); // 45 second AI timeout
+                    });
+
+                    const aiCallPromise = processChatRequest({ inquiry, previous });
+
+                    const result: any = await Promise.race([aiCallPromise, aiCallTimeout]);
+
+                    // Clear the main timeout since we got a response
+                    clearTimeout(requestTimeout);
+
+                    // Check for empty or invalid result
+                    if (!result?.message) {
+                        console.error('[Chat] Empty result from processChatRequest:', result);
+                        return res.status(500).json({
+                            message: 'Error processing request',
+                            error: 'No response generated',
+                            details: 'The AI assistant failed to generate a response. This could be due to API issues or rate limiting.',
+                            debug_info: {
+                                inquiry: inquiry.substring(0, 100) + (inquiry.length > 100 ? '...' : ''),
+                                result: result ? 'result_exists_but_no_message' : 'result_is_null_or_undefined',
+                                timestamp: new Date().toISOString()
+                            }
+                        });
+                    }
+
+                    try {
+                        // Check if the result content is JSON
+                        if (result.message.content) {
+                            try {
+                                const parsedResult = JSON.parse(result.message.content)
+
+                                // Validate workflow response
+                                if (parsedResult.type === 'workflow') {
+                                    const workflowResult: WorkflowResponse = parsedResult
+
+                                    // Validate workflow structure
+                                    if (!workflowResult.actions || !Array.isArray(workflowResult.actions)) {
+                                        console.error('[Chat] Invalid workflow structure:', workflowResult);
+                                        return res.status(400).json({
+                                            message: 'Error processing request',
+                                            error: 'Invalid workflow format',
+                                            details: 'The AI generated a workflow with invalid structure. Missing or invalid actions array.',
+                                            debug_info: {
+                                                workflow: workflowResult,
+                                                timestamp: new Date().toISOString()
+                                            }
+                                        });
+                                    }
+
+                                    // Clean up function. prefix from tool names before sending to client
+                                    if (workflowResult.type === 'workflow' && workflowResult.actions) {
+                                        workflowResult.actions = workflowResult.actions.map(action => ({
+                                            ...action,
+                                            tool: action.tool.replace(/^functions\./, '')
+                                        }))
+                                    }
+
+                                    console.log(`[Chat] Successfully processed workflow with ${workflowResult.actions.length} actions`);
+                                    return res.json({ output: workflowResult })
+                                }
+
+                                if (parsedResult.type === 'general') {
+                                    const generalResponse: GeneralResponse = parsedResult
+                                    if (!generalResponse.content) {
+                                        console.error('[Chat] Empty general response content:', generalResponse);
+                                        return res.status(500).json({
+                                            message: 'Error processing request',
+                                            error: 'Empty response content',
+                                            details: 'The AI generated a response but the content was empty.',
+                                            debug_info: {
+                                                result: generalResponse,
+                                                timestamp: new Date().toISOString()
+                                            }
+                                        });
+                                    }
+                                    console.log(`[Chat] Successfully processed general response`);
+                                    return res.status(200).json({
+                                        output: generalResponse,
+                                    })
+                                }
+
+                                // If we get here, the response type is unknown
+                                console.error('[Chat] Unknown response type:', parsedResult);
+                                return res.status(500).json({
+                                    message: 'Error processing request',
+                                    error: 'Invalid response type',
+                                    details: `The AI generated a response with an unknown type: ${parsedResult.type || 'undefined'}. Expected 'workflow' or 'general'.`,
+                                    debug_info: {
+                                        parsedResult,
+                                        timestamp: new Date().toISOString()
+                                    }
+                                });
+
+                            } catch (parseError: any) {
+                                // Not JSON, wrap the response in the expected format
+                                if (result.message.content && result.message.content.trim()) {
+                                    console.log(`[Chat] Wrapping non-JSON response in general format`);
+                                    const generalResponse: GeneralResponse = {
+                                        type: 'general',
+                                        content: result.message.content
+                                    };
+                                    return res.json({
+                                        output: generalResponse,
+                                    });
+                                } else {
+                                    console.error('[Chat] Empty content after parse error:', parseError);
+                                    return res.status(500).json({
+                                        message: 'Error processing request',
+                                        error: 'Empty response',
+                                        details: 'The AI response could not be parsed and contained no usable content.',
+                                        debug_info: {
+                                            result: result.message,
+                                            parseError: parseError.message,
+                                            timestamp: new Date().toISOString()
+                                        }
+                                    });
+                                }
+                            }
+                        }
+
+                        // If we get here, there's no content in the message
+                        console.error('[Chat] No content in message:', result);
+                        return res.status(500).json({
+                            message: 'Error processing request',
+                            error: 'Empty response',
+                            details: 'The AI assistant generated a response but it contained no content.',
+                            debug_info: {
+                                result,
+                                timestamp: new Date().toISOString()
+                            }
+                        });
+
+                    } catch (e: any) {
+                        console.error('[Chat] Error processing AI response:', e);
+                        clearTimeout(requestTimeout);
+                        return res.status(500).json({
+                            message: 'Error processing request',
+                            error: 'Response processing failed',
+                            details: `An error occurred while processing the AI response: ${e.message}`,
+                            debug_info: {
+                                result,
+                                stack: e.stack,
+                                timestamp: new Date().toISOString()
+                            }
+                        });
+                    }
+                } catch (e: any) {
+                    console.error('[Chat] Error in AI request:', e);
+                    clearTimeout(requestTimeout);
+
+                    // Handle specific timeout error
+                    if (e.message === 'AI_TIMEOUT') {
+                        return res.status(408).json({
+                            message: 'Request timeout',
+                            error: 'AI response timeout',
+                            details: 'The AI service took too long to respond. This might be due to high load or complex processing. Please try again with a simpler request.',
+                            debug_info: {
+                                inquiry: inquiry.substring(0, 100) + (inquiry.length > 100 ? '...' : ''),
+                                timeout: '45 seconds',
+                                timestamp: new Date().toISOString()
+                            }
+                        });
+                    }
+
+                    // Handle OpenAI specific errors
+                    if (e.message.includes('rate_limit_exceeded')) {
+                        return res.status(429).json({
+                            message: 'Rate limit exceeded',
+                            error: 'Too many requests',
+                            details: 'The AI service is currently experiencing high demand. Please wait a moment and try again.',
+                            debug_info: {
+                                inquiry: inquiry.substring(0, 100) + (inquiry.length > 100 ? '...' : ''),
+                                error_type: 'rate_limit',
+                                timestamp: new Date().toISOString()
+                            }
+                        });
+                    }
+
+                    if (e.message.includes('insufficient_quota')) {
+                        return res.status(503).json({
+                            message: 'Service temporarily unavailable',
+                            error: 'Quota exceeded',
+                            details: 'The AI service quota has been exceeded. Please contact support or try again later.',
+                            debug_info: {
+                                inquiry: inquiry.substring(0, 100) + (inquiry.length > 100 ? '...' : ''),
+                                error_type: 'quota_exceeded',
+                                timestamp: new Date().toISOString()
+                            }
+                        });
+                    }
+
+                    // Handle network errors
+                    if (e.code === 'ECONNREFUSED' || e.code === 'ENOTFOUND' || e.code === 'ETIMEDOUT') {
+                        return res.status(503).json({
+                            message: 'Service temporarily unavailable',
+                            error: 'Network connectivity issue',
+                            details: 'Unable to connect to the AI service. Please check your internet connection and try again.',
+                            debug_info: {
+                                inquiry: inquiry.substring(0, 100) + (inquiry.length > 100 ? '...' : ''),
+                                error_code: e.code,
+                                error_type: 'network_error',
+                                timestamp: new Date().toISOString()
+                            }
+                        });
+                    }
+
+                    // Generic error fallback
+                    return res.status(500).json({
+                        message: 'Error processing request',
+                        error: 'AI service error',
+                        details: `An unexpected error occurred while communicating with the AI service: ${e.message}`,
+                        debug_info: {
+                            inquiry: inquiry.substring(0, 100) + (inquiry.length > 100 ? '...' : ''),
+                            stack: e.stack,
+                            timestamp: new Date().toISOString()
+                        }
+                    });
+                }
+            }
+
+            // Handle unknown request types
+            clearTimeout(requestTimeout);
+            return res.status(400).json({
+                message: 'Error processing request',
+                error: 'Unknown request type',
+                details: `The request type '${type}' is not supported. Supported type is: '/chat/message'`,
+                debug_info: {
+                    received_type: type,
+                    supported_types: ['/chat/message'],
+                    timestamp: new Date().toISOString()
+                }
+            });
+        } catch (e: any) {
+            console.error('[Chat] Error in chat request:', e);
+            clearTimeout(requestTimeout);
+            return res.status(500).json({
+                message: 'Error processing request',
+                error: 'Internal server error',
+                details: `An unexpected error occurred while processing the request: ${e.message}`,
+                debug_info: {
+                    stack: e.stack,
+                    timestamp: new Date().toISOString()
+                }
+            });
+        }
+    });
+
+    // Test endpoint for error handling verification
+    router.post('/test/error-handling', sessionValidation, async (req, res) => {
+        const { testType } = req.body;
+
+        console.log(`[Test] Testing error handling type: ${testType}`);
+
+        switch (testType) {
+            case 'timeout':
+                // Simulate a timeout
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                return res.json({
+                    success: true,
+                    message: 'Timeout test completed - if you see this, timeouts are working correctly',
+                    testType: 'timeout'
+                });
+
+            case 'error':
+                // Simulate an error
+                throw new Error('Test error - error handling is working correctly');
+
+            case 'validation':
+                // Test validation
+                if (!req.body.requiredField) {
+                    return res.status(400).json({
+                        message: 'Validation test',
+                        error: 'Missing required field',
+                        details: 'This is a test validation error to verify error handling is working',
+                        debug_info: {
+                            testType: 'validation',
+                            timestamp: new Date().toISOString()
+                        }
+                    });
+                }
+                return res.json({
+                    success: true,
+                    message: 'Validation test passed',
+                    testType: 'validation'
+                });
+
+            default:
+                return res.status(400).json({
+                    message: 'Invalid test type',
+                    error: 'Unknown test type',
+                    details: 'Available test types: timeout, error, validation',
+                    debug_info: {
+                        received: testType,
+                        available: ['timeout', 'error', 'validation'],
+                        timestamp: new Date().toISOString()
+                    }
+                });
         }
     });
 
