@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion';
 import React from 'react';
+import { Button } from './Button';
 import { DataCardComponent } from './DataCardComponent';
 
 import { BotIcon, UserIcon } from './message-icons';
@@ -11,13 +12,23 @@ interface VisualizationContent {
   type: string;
   data: any;
 }
+
+interface RetryData {
+  originalText?: string;
+  retryText: string;
+  canRetry: boolean;
+}
+
 interface MessageProps {
   role: 'assistant' | 'user';
   content?: string | VisualizationContent;
   isThinking?: boolean;
+  isError?: boolean;
+  retryData?: RetryData;
+  onRetry?: (originalText?: string) => void;
 }
 
-export const Message = ({ role, content, isThinking }: MessageProps) => {
+export const Message = ({ role, content, isThinking, isError, retryData, onRetry }: MessageProps) => {
   let visualizationComponent: React.ReactNode | string | undefined;
 
   // Handle different visualization types dynamically
@@ -33,7 +44,25 @@ export const Message = ({ role, content, isThinking }: MessageProps) => {
         visualizationComponent = <p>Unsupported visualization type.</p>;
     }
   } else if (typeof content === 'string') {
-    visualizationComponent = content;
+    // Enhanced markdown-style rendering for error messages
+    const processedContent = content
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold text
+      .replace(
+        /```json\n([\s\S]*?)\n```/g,
+        '<pre class="bg-gray-100 dark:bg-gray-800 p-2 rounded text-xs overflow-x-auto"><code>$1</code></pre>'
+      ) // JSON code blocks
+      .replace(
+        /```([\s\S]*?)```/g,
+        '<pre class="bg-gray-100 dark:bg-gray-800 p-2 rounded text-xs overflow-x-auto"><code>$1</code></pre>'
+      ) // Regular code blocks
+      .replace(/\n/g, '<br>'); // Line breaks
+
+    visualizationComponent = (
+      <div
+        className={`${isError ? 'text-red-600 dark:text-red-400' : ''}`}
+        dangerouslySetInnerHTML={{ __html: processedContent }}
+      />
+    );
   } else {
     visualizationComponent = <p>Invalid content type</p>;
   }
@@ -51,6 +80,15 @@ export const Message = ({ role, content, isThinking }: MessageProps) => {
       <div className="flex flex-col gap-1 w-full">
         <div className="text-zinc-800 dark:text-zinc-300 flex flex-col gap-4">
           {isThinking ? <ThinkingIndicator /> : visualizationComponent}
+
+          {/* Retry button for error messages */}
+          {isError && retryData?.canRetry && onRetry && (
+            <div className="flex gap-2 mt-2">
+              <Button onClick={() => onRetry(retryData.originalText)} variant="outline" size="sm" className="text-sm">
+                🔄 {retryData.retryText}
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </motion.div>
