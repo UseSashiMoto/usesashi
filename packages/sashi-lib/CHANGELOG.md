@@ -1,5 +1,11 @@
 # sashi-lib
 
+## 6.5.0
+
+### Minor Changes
+
+- f331ace: better error handle and ai routing
+
 ## 6.4.0
 
 ### Minor Changes
