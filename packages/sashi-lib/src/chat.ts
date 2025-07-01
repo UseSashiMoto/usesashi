@@ -1,4 +1,4 @@
-import { callFunctionFromRegistryFromObject, generateSplitToolSchemas, getFunctionRegistry, VisualizationFunction } from "./ai-function-loader";
+import { generateSplitToolSchemas } from "./ai-function-loader";
 import { getAIBot } from "./aibot";
 import { trim_array } from "./utils";
 
@@ -15,20 +15,30 @@ const getSystemPrompt = () => {
 
     const system_prompt =
         `
-    You are an assistant capable of two distinct response types based on the user's request:\n
-    ## Response Type 1: General Conversation\n
-    If the user's message is conversational, informational, 
-    or does NOT explicitly request a workflow involving backend functions, respond clearly and concisely using this JSON format:\n
+    You are an assistant that provides two distinct response types. You MUST choose exactly one format based on the user's request:
 
+    ## Response Type 1: General Conversation
+    Use this ONLY when the user is:
+    - Asking theoretical questions about how something works
+    - Requesting explanations or documentation
+    - Having casual conversation
+    - NOT asking you to actually perform any workflow or backend operations
+
+    Format:
     {
         "type": "general",
         "content": "<your natural conversational response here>"
     }
 
-    ## Response Type 2: Workflow Definition
-    If the user's message explicitly requests or clearly describes a workflow involving backend functions or tasks, 
-    respond strictly in structured JSON format as follows:\n
+    ## Response Type 2: Workflow Definition  
+    Use this when the user is:
+    - Requesting you to perform a specific task or operation
+    - Asking you to create, execute, or run a workflow
+    - Providing specific data/parameters for a task
+    - Using action words like "get", "create", "delete", "update", "find", "show me", "retrieve"
+    - Asking for actual results from backend functions
 
+    Format:
     {
         "type": "workflow",
         "description": "<short description of workflow>",
@@ -68,11 +78,19 @@ const getSystemPrompt = () => {
     - Example mapping workflow:
       * Step 1: Gets a list of users (\`get_all_users\` returns array of user objects)
       * Step 2: Gets files for each user using \`"map": true\` and \`"userId": "get_all_users[*].email"\`
+    - NEVER include workflow JSON inside a general response's content field
+    - If unsure, lean towards "workflow" if there's any action being requested
+    - ONLY use functions that exist in the tool_schema
+    
+    ## Examples:
+    User: "How do workflows work?" → Use "general" type
+    User: "Show me workflow documentation" → Use "general" type  
+    User: "Get user with ID 123" → Use "workflow" type
+    User: "Find all users in the system" → Use "workflow" type
+    User: "How do I get a user by ID in a workflow" → Use "workflow" type (they want the actual workflow)
 
-    If the user's message doesn't clearly request a workflow, always default to a general conversational response format.
-
-    Always respond strictly with JSON as defined above.` +
-        `Today is ${today}`;
+    Always respond with valid JSON in exactly one of the two formats above.` +
+        `\nToday is ${today}`;
 
     return system_prompt;
 };
@@ -121,209 +139,3 @@ export const processChatRequest = async ({ inquiry, previous }: { inquiry: strin
 }
 
 
-export const processFunctionRequest = async ({ tools, previous }: { tools: any[], previous: any[] }) => {
-    const aiBot = getAIBot()
-
-    if (!Array.isArray(tools) || !Array.isArray(previous)) {
-        throw new Error('Bad system prompt');
-    }
-
-    const tools_output = [];
-
-    for (let tool of tools) {
-        const funcName = tool.function?.name;
-        const functionArguments = JSON.parse(
-            tool.function?.arguments || '{}'
-        );
-
-        // Check if function name is missing
-        if (!funcName) {
-            throw new Error('Missing function name in tool call.');
-        }
-
-        // Check if the tool needs confirmation
-        const functionRegistry = getFunctionRegistry();
-        const registeredFunction = functionRegistry.get(funcName);
-        const needsConfirm =
-            registeredFunction?.getNeedsConfirm() || false;
-
-        if (needsConfirm && !tool.confirmed) {
-            tools_output.push({
-                tool_call_id: tool.id, // Use 'id' instead of 'tool_call_id'
-                id: tool.id, // Use 'id' instead of 'tool_call_id'
-                role: 'tool',
-                type: 'function',
-                content: `This tool (${funcName}) requires confirmation before it can be executed.`,
-                needsConfirm: true,
-                function: {
-                    name: funcName,
-                    arguments: tool.function?.arguments,
-                },
-                args: JSON.stringify(functionArguments, null, 2),
-            });
-        } else {
-            // Proceed with execution if no confirmation is needed
-            try {
-                console.log(`[Function] Executing function: ${funcName}`);
-
-                // Add timeout for individual function calls
-                const functionTimeout = new Promise<never>((_, reject) => {
-                    setTimeout(() => reject(new Error(`FUNCTION_EXECUTION_TIMEOUT: ${funcName}`)), 30000); // 30 second timeout per function
-                });
-
-                const functionCallPromise = callFunctionFromRegistryFromObject(
-                    funcName,
-                    functionArguments
-                );
-
-                const output = await Promise.race([functionCallPromise, functionTimeout]);
-
-                tools_output.push({
-                    tool_call_id: tool.id, // Use 'id' instead of 'tool_call_id'
-                    id: tool.id, // Use 'id' instead of 'tool_call_id'
-                    role: 'tool',
-                    type: 'function',
-                    function: {
-                        name: funcName,
-                        arguments: tool.function?.arguments,
-                    },
-                    content: JSON.stringify(output, null, 2),
-                });
-
-                console.log(`[Function] Successfully executed: ${funcName}`);
-            } catch (error: any) {
-                console.error(`[Function] Error executing ${funcName}:`, error);
-
-                // Handle timeout specifically
-                if (error.message.includes('FUNCTION_EXECUTION_TIMEOUT')) {
-                    tools_output.push({
-                        tool_call_id: tool.id,
-                        id: tool.id,
-                        role: 'tool',
-                        type: 'function',
-                        function: {
-                            name: funcName,
-                            arguments: tool.function?.arguments,
-                        },
-                        content: JSON.stringify({
-                            error: 'Function execution timeout',
-                            message: `Function ${funcName} took too long to execute (>30 seconds)`,
-                            timestamp: new Date().toISOString()
-                        }, null, 2),
-                    });
-                } else {
-                    // Handle other errors
-                    tools_output.push({
-                        tool_call_id: tool.id,
-                        id: tool.id,
-                        role: 'tool',
-                        type: 'function',
-                        function: {
-                            name: funcName,
-                            arguments: tool.function?.arguments,
-                        },
-                        content: JSON.stringify({
-                            error: 'Function execution failed',
-                            message: error.message || 'Unknown error occurred',
-                            timestamp: new Date().toISOString()
-                        }, null, 2),
-                    });
-                }
-            }
-        }
-    }
-
-    const context = trim_array(previous, 20);
-    const system_prompt = getSystemPrompt();
-
-    // Use split tool schemas to handle large schemas
-    const toolsSchemaChunks = generateSplitToolSchemas(8000);
-
-    let messages: any[] = [{ role: 'system', content: system_prompt }];
-
-    // Add tool schema chunks as separate system messages
-    toolsSchemaChunks.forEach((chunk, index) => {
-        const chunkContent = index === 0
-            ? `Available backend functions:\n${JSON.stringify(chunk, null, 2)}`
-            : `Additional backend functions (part ${index + 1}):\n${JSON.stringify(chunk, null, 2)}`;
-
-        messages.push({ role: "system", content: chunkContent });
-    });
-
-    if (context.length > 0) {
-        messages = messages.concat(context);
-    }
-
-    // Assistant's message includes tool_calls
-    messages.push({
-        role: 'assistant',
-        content: null,
-        tool_calls: tools.map((tool: any) => ({
-            type: 'function',
-            id: tool.id,
-            function: tool.function,
-        })),
-    });
-
-    messages.push(...tools_output);
-
-    try {
-        console.log(`[Function] Calling AI for response generation`);
-
-        // Add timeout for the AI response call
-        const aiTimeout = new Promise<never>((_, reject) => {
-            setTimeout(() => reject(new Error('AI_RESPONSE_TIMEOUT')), 35000); // 35 second timeout for AI
-        });
-
-        const aiCallPromise = aiBot.chatCompletion({
-            temperature: 0.3,
-            messages: messages.filter(
-                (message) =>
-                    typeof message.content !== "object" ||
-                    message.content === null
-            )
-        });
-
-        const result = await Promise.race([aiCallPromise, aiTimeout]);
-
-        const shouldShowVisualization =
-            await aiBot.shouldShowVisualization({
-                messages: [
-                    ...messages,
-                    {
-                        id: getUniqueId(),
-                        role: "assistant",
-                        content: result?.message.content,
-                        created_at: new Date().toISOString()
-                    }
-                ],
-                viz_tools: Array.from(
-                    getFunctionRegistry().values()
-                ).filter(
-                    (func) => func instanceof VisualizationFunction
-                ) as unknown as VisualizationFunction[]
-            })
-
-        console.log(`[Function] Successfully generated AI response`);
-
-        return {
-            output: result?.message,
-            tool_calls: result?.message?.tool_calls,
-            visualization: shouldShowVisualization
-        }
-    } catch (error: any) {
-        console.error('[Function] Error in AI response generation:', error);
-
-        // Handle AI timeout specifically
-        if (error.message === 'AI_RESPONSE_TIMEOUT') {
-            throw new Error('AI response generation timed out after function execution');
-        }
-
-        // Handle OpenAI timeout from aibot.ts
-        if (error.message.includes('AI service timeout')) {
-            throw error; // Re-throw with existing message
-        }
-
-        throw new Error('Error processing function request: ' + error.message);
-    }
-}
