@@ -1,5 +1,11 @@
 # sashi-lib
 
+## 7.0.0
+
+### Major Changes
+
+- 947b97b: improved input ui builder
+
 ## 6.5.0
 
 ### Minor Changes
