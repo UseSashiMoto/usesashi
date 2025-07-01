@@ -295,7 +295,6 @@ export const HomePage = () => {
   const [messagesContainerRef, messagesEndRef] = useScrollToBottom<HTMLDivElement>();
 
   const [confirmationData, setConfirmationData] = useState<ConfirmationData>();
-  const [workflowConfirmationCard, setWorkflowConfirmationCard] = useState<WorkflowResponse>();
   const [uiPreviewCard, setUiPreviewCards] = useState<WorkflowResponse>();
   const [uiWorkflowCard, setUiWorkflowCard] = useState<UIWorkflowDefinition>();
   const connectedToHub: boolean = useAppStore((state: { connectedToHub: any }) => state.connectedToHub);
@@ -533,8 +532,8 @@ export const HomePage = () => {
       if (processedResult.type === 'workflow') {
         console.log('⚙️ [DEBUG] Processing workflow response');
         const workflowResult: WorkflowResponse = processedResult;
-        // show confirmation card
-        setWorkflowConfirmationCard(workflowResult);
+        // automatically generate UI instead of showing confirmation card
+        await generateUIFromWorkflow(workflowResult);
 
         resetScroll();
       }
@@ -691,35 +690,6 @@ export const HomePage = () => {
     }
   }
 
-  async function executeWorkflow(): Promise<void> {
-    if (!workflowConfirmationCard) return;
-
-    setLoading(true);
-
-    try {
-      const response = await sendExecuteWorkflow(apiUrl!, workflowConfirmationCard);
-
-      // Store the results in the workflowConfirmationCard to be displayed
-      if (response.data.success && response.data.results) {
-        // Update the workflow confirmation card to include results
-        setWorkflowConfirmationCard({
-          ...workflowConfirmationCard,
-          executionResults: response.data.results,
-        } as WorkflowResponse);
-
-        // Set the active tab to 'results' in the WorkflowUICard
-        const event = new CustomEvent('workflow-executed', {
-          detail: { results: response.data.results },
-        }) as WorkflowExecutedEvent;
-        window.dispatchEvent(event);
-      }
-    } catch (error) {
-      console.error('Error executing workflow:', error);
-    } finally {
-      setLoading(false);
-    }
-  }
-
   // Helper function to analyze workflow characteristics
   const analyzeWorkflowCharacteristics = (workflow: WorkflowResponse) => {
     const actionNames = workflow.actions.map((action) => action.tool.toLowerCase());
@@ -801,11 +771,11 @@ export const HomePage = () => {
    * The system uses both AI classification and local analysis to make intelligent decisions.
    */
 
-  async function generateUI() {
+  async function generateUIFromWorkflow(workflowResponse: WorkflowResponse) {
     setLoading(true);
     try {
       // Execute the workflow and parse the UI elements
-      let workflow = extractWorkflowFromNested(workflowConfirmationCard);
+      let workflow = extractWorkflowFromNested(workflowResponse);
 
       if (!workflow) {
         console.error('❌ No valid workflow available for UI generation');
@@ -849,7 +819,6 @@ export const HomePage = () => {
 
         console.log('📝 Generated form UI definition:', uiWorkflowDefinition);
         setUiWorkflowCard(uiWorkflowDefinition);
-        setWorkflowConfirmationCard(undefined);
         return;
       }
 
@@ -909,7 +878,6 @@ export const HomePage = () => {
         console.log('Generated UI workflow definition:', uiWorkflowDefinition);
 
         setUiWorkflowCard(uiWorkflowDefinition);
-        setWorkflowConfirmationCard(undefined);
 
         // Add feedback message about the classification
         if (debug) {
@@ -937,7 +905,6 @@ export const HomePage = () => {
         console.error('Response data:', response.data);
 
         // Try to create a form UI as fallback if possible
-        const workflow = workflowConfirmationCard;
         if (workflow) {
           const fallbackAnalysis = detectWorkflowEntryType(workflow);
           if (fallbackAnalysis.entryType === 'form') {
@@ -953,7 +920,6 @@ export const HomePage = () => {
             };
 
             setUiWorkflowCard(fallbackUIDefinition);
-            setWorkflowConfirmationCard(undefined);
           }
         }
       }
@@ -961,7 +927,7 @@ export const HomePage = () => {
       console.error('💥 Error generating UI:', error);
 
       // Try to create a form UI as fallback if possible
-      const workflow = workflowConfirmationCard;
+      let workflow = extractWorkflowFromNested(workflowResponse);
       if (workflow) {
         const fallbackAnalysis = detectWorkflowEntryType(workflow);
         if (fallbackAnalysis.entryType === 'form') {
@@ -977,12 +943,15 @@ export const HomePage = () => {
           };
 
           setUiWorkflowCard(fallbackUIDefinition);
-          setWorkflowConfirmationCard(undefined);
         }
       }
     } finally {
       setLoading(false);
     }
+  }
+
+  async function generateUI() {
+    console.error('❌ generateUI() is deprecated. Use generateUIFromWorkflow() directly with a workflow response.');
   }
 
   // Helper function to explain why a workflow was classified a certain way
@@ -1072,7 +1041,7 @@ export const HomePage = () => {
         analyzeWorkflowCharacteristics,
         getClassificationExplanation,
         testConnection,
-        getCurrentWorkflow: () => workflowConfirmationCard,
+        getCurrentWorkflow: () => null, // workflowConfirmationCard no longer used
         getCurrentUIWorkflow: () => uiWorkflowCard,
         // Helper to create test workflows
         createTestWorkflow: (type: 'form' | 'query' | 'mutation') => {
@@ -1188,7 +1157,7 @@ export const HomePage = () => {
       console.log('Example: sashiDebug.testWorkflowClassification(sashiDebug.createTestWorkflow("form"))');
       console.log('Your issue: sashiDebug.testUserWorkflow()');
     }
-  }, [debug, workflowConfirmationCard, uiWorkflowCard]);
+  }, [debug, uiWorkflowCard]);
 
   return (
     <Layout>
@@ -1251,15 +1220,6 @@ export const HomePage = () => {
               />
             )}
 
-            {!!workflowConfirmationCard && (
-              <WorkflowConfirmationCard
-                workflow={workflowConfirmationCard!}
-                onExecute={executeWorkflow}
-                onGenerateUI={generateUI}
-                onCancel={() => setWorkflowConfirmationCard(undefined)}
-              />
-            )}
-
             {uiWorkflowCard && apiUrl && (
               <WorkflowUICard
                 workflow={uiWorkflowCard}
@@ -1300,7 +1260,6 @@ export const HomePage = () => {
               event.preventDefault();
               handleSubmit(event);
               setInputText('');
-              setWorkflowConfirmationCard(undefined);
               setUiWorkflowCard(undefined);
             }}
           >
