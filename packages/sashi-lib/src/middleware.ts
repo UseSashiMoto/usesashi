@@ -664,7 +664,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     }
 
     // Function to enhance UI type determination with LLM
-    async function enhanceUIWithLLM(result: any, initialType: string, aibot: any): Promise<{
+    async function enhanceOutputUIWithLLM(result: any, initialType: string, aibot: any): Promise<{
         type: 'card' | 'table' | 'badge' | 'text' | 'textarea' | 'graph';
         config?: Record<string, any>;
     }> {
@@ -1591,7 +1591,8 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
             try {
                 const aibot = getAIBot();
-                const enhancedUI = await enhanceUIWithLLM(finalResult, initialUIType, aibot);
+                const enhancedUI = await enhanceOutputUIWithLLM(finalResult, initialUIType, aibot);
+                console.log("enhancedUI", enhancedUI)
                 uiType = enhancedUI.type;
                 uiConfig = enhancedUI.config || {};
 
@@ -1601,6 +1602,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                 }
             } catch (error) {
                 // Silently fall back to initial UI type
+                console.log("ui choosing error", error)
             }
 
             const finalWorkflowResult: NewWorkflowResult = {
