@@ -310,6 +310,169 @@ describe('Workflow Classification System', () => {
                 expect(activeField.type).toBe('boolean');
                 expect(activeField.required).toBe(false);
             });
+
+            it('should handle workflows with enum parameters (select dropdowns)', () => {
+                const enumWorkflow: WorkflowResponse = {
+                    type: 'workflow',
+                    actions: [
+                        {
+                            id: 'change_user_type',
+                            tool: 'change_user_type',
+                            description: 'Change the type of a user',
+                            parameters: {
+                                userId: '<user_id>',
+                                type: '<new_type>'
+                            },
+                            parameterMetadata: {
+                                userId: {
+                                    type: 'string',
+                                    description: 'a users id',
+                                    required: true
+                                },
+                                type: {
+                                    type: 'string',
+                                    description: 'the type to change the user to',
+                                    enum: ['CASE_MANAGER', 'COMMUNITY_ENGAGEMENT'],
+                                    required: true
+                                }
+                            }
+                        } as any
+                    ],
+                    options: { execute_immediately: false, generate_ui: false }
+                };
+
+                const result = detectWorkflowEntryType(enumWorkflow);
+                expect(result.entryType).toBe('form');
+                expect(result.payload.fields).toHaveLength(2);
+
+                const userIdField = result.payload.fields.find((f: any) => f.key === 'userId');
+                const typeField = result.payload.fields.find((f: any) => f.key === 'type');
+
+                // userId should be a text input
+                expect(userIdField.type).toBe('string');
+                expect(userIdField.label).toBe('a users id');
+                expect(userIdField.required).toBe(true);
+                expect(userIdField.options).toBeUndefined();
+
+                // type should be an enum dropdown
+                expect(typeField.type).toBe('enum');
+                expect(typeField.label).toBe('the type to change the user to');
+                expect(typeField.required).toBe(true);
+                expect(typeField.enumValues).toHaveLength(2);
+                expect(typeField.enumValues[0]).toBe('CASE_MANAGER');
+                expect(typeField.enumValues[1]).toBe('COMMUNITY_ENGAGEMENT');
+            });
+
+            it('should handle enum fields with different naming conventions', () => {
+                const enumWorkflow: WorkflowResponse = {
+                    type: 'workflow',
+                    actions: [
+                        {
+                            id: 'action1',
+                            tool: 'test_function',
+                            description: 'Test enum handling',
+                            parameters: {
+                                status: '<status>',
+                                priority: '<priority>'
+                            },
+                            parameterMetadata: {
+                                status: {
+                                    type: 'string',
+                                    description: 'Status of the item',
+                                    enum: ['ACTIVE', 'INACTIVE', 'PENDING_REVIEW'],
+                                    required: true
+                                },
+                                priority: {
+                                    type: 'string',
+                                    description: 'Priority level',
+                                    enum: ['low', 'medium', 'high', 'urgent'],
+                                    required: true
+                                }
+                            }
+                        } as any
+                    ],
+                    options: { execute_immediately: false, generate_ui: false }
+                };
+
+                const result = detectWorkflowEntryType(enumWorkflow);
+                expect(result.entryType).toBe('form');
+                expect(result.payload.fields).toHaveLength(2);
+
+                const statusField = result.payload.fields.find((f: any) => f.key === 'status');
+                const priorityField = result.payload.fields.find((f: any) => f.key === 'priority');
+
+                // Check status field enum values
+                expect(statusField.type).toBe('enum');
+                expect(statusField.enumValues).toHaveLength(3);
+                expect(statusField.enumValues[0]).toBe('ACTIVE');
+                expect(statusField.enumValues[1]).toBe('INACTIVE');
+                expect(statusField.enumValues[2]).toBe('PENDING_REVIEW');
+
+                // Check priority field enum values
+                expect(priorityField.type).toBe('enum');
+                expect(priorityField.enumValues).toHaveLength(4);
+                expect(priorityField.enumValues[0]).toBe('low');
+                expect(priorityField.enumValues[1]).toBe('medium');
+                expect(priorityField.enumValues[2]).toBe('high');
+                expect(priorityField.enumValues[3]).toBe('urgent');
+            });
+
+            it('should handle nested workflow structure with enum fields (your specific case)', () => {
+                const nestedEnumWorkflow = {
+                    output: {
+                        type: 'workflow',
+                        description: "Change a user's type",
+                        actions: [
+                            {
+                                id: 'change_user_type',
+                                tool: 'change_user_type',
+                                description: 'Change the type of a user',
+                                parameters: {
+                                    userId: '<user_id>',
+                                    type: '<new_type>'
+                                },
+                                parameterMetadata: {
+                                    userId: {
+                                        type: 'string',
+                                        description: 'a users id',
+                                        required: true
+                                    },
+                                    type: {
+                                        type: 'string',
+                                        description: 'the type to change the user to',
+                                        enum: ['CASE_MANAGER', 'COMMUNITY_ENGAGEMENT'],
+                                        required: true
+                                    }
+                                },
+                                map: false
+                            } as any
+                        ]
+                    }
+                };
+
+                // Test extraction
+                const extracted = extractWorkflowFromNested(nestedEnumWorkflow);
+                expect(extracted).not.toBeNull();
+
+                // Test classification
+                const result = detectWorkflowEntryType(extracted!);
+                expect(result.entryType).toBe('form');
+                expect(result.payload.fields).toHaveLength(2);
+
+                const userIdField = result.payload.fields.find((f: any) => f.key === 'userId');
+                const typeField = result.payload.fields.find((f: any) => f.key === 'type');
+
+                // Verify userId is text input
+                expect(userIdField.type).toBe('string');
+                expect(userIdField.label).toBe('a users id');
+
+                // Verify type is enum dropdown with correct values
+                expect(typeField.type).toBe('enum');
+                expect(typeField.label).toBe('the type to change the user to');
+                expect(typeField.enumValues).toHaveLength(2);
+                expect(typeField.enumValues[0]).toBe('CASE_MANAGER');
+                expect(typeField.enumValues[1]).toBe('COMMUNITY_ENGAGEMENT');
+            });
         });
 
         describe('Label/Display workflows', () => {

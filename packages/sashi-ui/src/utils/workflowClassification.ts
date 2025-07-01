@@ -114,10 +114,21 @@ export const detectWorkflowEntryType = (workflow: WorkflowResponse): WorkflowCla
                 // Get metadata for this parameter if available
                 const paramMetadata = (action as any).parameterMetadata?.[paramKey];
 
+                // Determine field type based on metadata
+                let fieldType = paramMetadata?.type || 'string';
+                let fieldOptions = undefined;
+
+                // Handle enum fields - create enum dropdown
+                if (paramMetadata?.enum && Array.isArray(paramMetadata.enum)) {
+                    fieldType = 'enum';
+                    fieldOptions = paramMetadata.enum; // Just the raw enum values for enumValues property
+                }
+
                 formFields.push({
                     key: paramKey,
                     label: paramMetadata?.description || paramKey.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()),
-                    type: paramMetadata?.type || 'string',
+                    type: fieldType,
+                    enumValues: fieldOptions,
                     required: paramMetadata?.required !== false // Default to true unless explicitly false
                 });
             }
@@ -140,10 +151,21 @@ export const detectWorkflowEntryType = (workflow: WorkflowResponse): WorkflowCla
 
                     // Only add if not already added
                     if (!formFields.some(field => field.key === paramKey)) {
+                        // Determine field type based on metadata
+                        let fieldType = metadataTyped.type || 'string';
+                        let fieldOptions = undefined;
+
+                        // Handle enum fields - create enum dropdown
+                        if (metadataTyped.enum && Array.isArray(metadataTyped.enum)) {
+                            fieldType = 'enum';
+                            fieldOptions = metadataTyped.enum; // Just the raw enum values for enumValues property
+                        }
+
                         formFields.push({
                             key: paramKey,
                             label: metadataTyped.description || paramKey.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()),
-                            type: metadataTyped.type || 'string',
+                            type: fieldType,
+                            enumValues: fieldOptions,
                             required: true
                         });
                     }
