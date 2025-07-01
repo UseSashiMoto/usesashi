@@ -354,146 +354,68 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                 sessionId = await getSession(req, res);
             } catch (error) {
                 console.error('Error getting session ID:', error);
-                return res.status(401).json({
-                    error: 'Authentication failed',
-                    details: 'Unable to retrieve session information. Please check your authentication setup.',
-                    code: 'SESSION_ERROR'
-                });
             }
         }
 
-        // Check if hub configuration is available
-        if (!hubUrl || !apiSecretKey) {
-            console.error('Hub configuration missing:', { hubUrl: !!hubUrl, apiSecretKey: !!apiSecretKey });
-            return res.status(500).json({
-                error: 'Hub server not configured',
-                details: 'Missing hub URL or API secret key. Please check your server configuration.',
-                code: 'HUB_CONFIG_MISSING'
-            });
-        }
+        // Check if hub is available and we have a secret key
+        if (hubUrl && apiSecretKey) {
+            try {
+                const headers: Record<string, string> = {
+                    'Content-Type': 'application/json',
+                    [HEADER_API_TOKEN]: apiSecretKey,
+                };
 
-        try {
-            const headers: Record<string, string> = {
-                'Content-Type': 'application/json',
-                [HEADER_API_TOKEN]: apiSecretKey,
-            };
-
-            // Add session ID if available
-            if (sessionId) {
-                headers['X-Session-ID'] = sessionId;
-            }
-
-            // Prepare the request options
-            const fetchOptions: RequestInit = {
-                method,
-                headers,
-                // Add timeout to prevent hanging requests
-                signal: AbortSignal.timeout(30000), // 30 second timeout
-            };
-
-            // Add request body for POST/PUT requests
-            if (method === 'POST' || method === 'PUT') {
-                fetchOptions.body = JSON.stringify(req.body);
-            }
-
-            // Make the request to the hub
-            const hubResponse = await fetch(`${hubUrl}${hubPath}`, fetchOptions);
-
-            // If request was successful, return the response
-            if (hubResponse.ok) {
-                // For GET requests, return the JSON data
-                if (method === 'GET') {
-                    const data = await hubResponse.json();
-                    return res.json(data);
+                // Add session ID if available
+                if (sessionId) {
+                    headers['X-Session-ID'] = sessionId;
                 }
 
-                // For other methods, return success status
-                const data = await hubResponse.json();
-                return res.status(hubResponse.status).json(data);
+                // Prepare the request options
+                const fetchOptions: RequestInit = {
+                    method,
+                    headers,
+                };
+
+                // Add request body for POST/PUT requests
+                if (method === 'POST' || method === 'PUT') {
+                    fetchOptions.body = JSON.stringify(req.body);
+                }
+
+                // Make the request to the hub
+                const hubResponse = await fetch(`${hubUrl}${hubPath}`, fetchOptions);
+
+                // If request was successful, return the response
+                if (hubResponse.ok) {
+                    // For GET requests, return the JSON data
+                    if (method === 'GET') {
+                        const data = await hubResponse.json();
+                        return res.json(data);
+                    }
+
+                    // For other methods, return success status
+                    const data = await hubResponse.json();
+                    return res.status(hubResponse.status).json(data);
+                }
+
+
+                // If we get here, hub request failed but we'll try local fallback
+                console.warn(`Hub request failed for ${hubPath}`);
+                res.status(500).json({ error: 'Failed to connect to hub server' });
+                return
+            } catch (error) {
+                console.error(`Error forwarding workflow request to hub (${hubPath}):`, error);
+
+
+                // Otherwise, we'll continue to local handling
+                console.warn(`Hub request failed for ${hubPath}, falling back to local handling`);
+                res.status(500).json({ error: 'Failed to connect to hub server' });
+                return
             }
-
-            // Hub request failed - provide specific error based on status code
-            let errorMessage = 'Hub server request failed';
-            let errorDetails = `Server returned ${hubResponse.status} ${hubResponse.statusText}`;
-            let errorCode = 'HUB_REQUEST_FAILED';
-
-            if (hubResponse.status === 401) {
-                errorMessage = 'Hub authentication failed';
-                errorDetails = 'Invalid API credentials. Please check your API secret key.';
-                errorCode = 'HUB_AUTH_FAILED';
-            } else if (hubResponse.status === 403) {
-                errorMessage = 'Hub access forbidden';
-                errorDetails = 'Access denied to hub resource. Check your permissions.';
-                errorCode = 'HUB_ACCESS_DENIED';
-            } else if (hubResponse.status === 404) {
-                errorMessage = 'Hub endpoint not found';
-                errorDetails = `The requested endpoint '${hubPath}' was not found on the hub server.`;
-                errorCode = 'HUB_ENDPOINT_NOT_FOUND';
-            } else if (hubResponse.status === 429) {
-                errorMessage = 'Hub rate limit exceeded';
-                errorDetails = 'Too many requests to hub server. Please try again later.';
-                errorCode = 'HUB_RATE_LIMITED';
-            } else if (hubResponse.status >= 500) {
-                errorMessage = 'Hub server error';
-                errorDetails = `Hub server is experiencing issues (${hubResponse.status}). Please try again later.`;
-                errorCode = 'HUB_SERVER_ERROR';
-            }
-
-            console.warn(`Hub request failed for ${hubPath}:`, {
-                status: hubResponse.status,
-                statusText: hubResponse.statusText,
-                url: `${hubUrl}${hubPath}`
-            });
-
-            return res.status(hubResponse.status).json({
-                error: errorMessage,
-                details: errorDetails,
-                code: errorCode
-            });
-
-        } catch (error: any) {
-            console.error(`Error forwarding workflow request to hub (${hubPath}):`, error);
-
-            // Categorize different types of errors
-            let errorMessage = 'Hub connection failed';
-            let errorDetails = 'Unable to connect to hub server';
-            let errorCode = 'HUB_CONNECTION_ERROR';
-            let statusCode = 503;
-
-            if (error.name === 'AbortError' || error.message?.includes('timeout')) {
-                errorMessage = 'Hub request timeout';
-                errorDetails = 'Request to hub server timed out after 30 seconds. The server may be overloaded.';
-                errorCode = 'HUB_TIMEOUT';
-                statusCode = 408;
-            } else if (error.code === 'ECONNREFUSED') {
-                errorMessage = 'Hub server unavailable';
-                errorDetails = `Cannot connect to hub server at ${hubUrl}. The server may be down.`;
-                errorCode = 'HUB_CONNECTION_REFUSED';
-                statusCode = 503;
-            } else if (error.code === 'ENOTFOUND') {
-                errorMessage = 'Hub server not found';
-                errorDetails = `Cannot resolve hub server hostname: ${hubUrl}. Please check the URL.`;
-                errorCode = 'HUB_DNS_ERROR';
-                statusCode = 503;
-            } else if (error.code === 'ETIMEDOUT') {
-                errorMessage = 'Hub network timeout';
-                errorDetails = 'Network timeout while connecting to hub server.';
-                errorCode = 'HUB_NETWORK_TIMEOUT';
-                statusCode = 408;
-            } else if (error.message?.includes('Invalid URL')) {
-                errorMessage = 'Invalid hub URL';
-                errorDetails = `The configured hub URL is invalid: ${hubUrl}`;
-                errorCode = 'HUB_INVALID_URL';
-                statusCode = 500;
-            }
-
-            return res.status(statusCode).json({
-                error: errorMessage,
-                details: errorDetails,
-                code: errorCode,
-                hubUrl: hubUrl // Include for debugging
-            });
         }
+
+        // If we get here, either hub is not available, or hub request failed and we're using local fallback
+        res.status(500).json({ error: 'Failed to connect to hub server' });
+        return
     };
 
     // Get all workflows
@@ -664,7 +586,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     }
 
     // Function to enhance UI type determination with LLM
-    async function enhanceOutputUIWithLLM(result: any, initialType: string, aibot: any): Promise<{
+    async function enhanceUIWithLLM(result: any, initialType: string, aibot: any): Promise<{
         type: 'card' | 'table' | 'badge' | 'text' | 'textarea' | 'graph';
         config?: Record<string, any>;
     }> {
@@ -1591,8 +1513,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
             try {
                 const aibot = getAIBot();
-                const enhancedUI = await enhanceOutputUIWithLLM(finalResult, initialUIType, aibot);
-                console.log("enhancedUI", enhancedUI)
+                const enhancedUI = await enhanceUIWithLLM(finalResult, initialUIType, aibot);
                 uiType = enhancedUI.type;
                 uiConfig = enhancedUI.config || {};
 
@@ -1602,7 +1523,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                 }
             } catch (error) {
                 // Silently fall back to initial UI type
-                console.log("ui choosing error", error)
             }
 
             const finalWorkflowResult: NewWorkflowResult = {

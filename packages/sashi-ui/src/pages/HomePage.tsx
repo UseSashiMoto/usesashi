@@ -28,7 +28,6 @@ import {
   WorkflowResponse,
   WorkflowResult,
 } from '../models/payload';
-import { detectWorkflowEntryType, extractWorkflowFromNested } from '../utils/workflowClassification';
 
 // Custom event type for workflow execution
 interface WorkflowExecutedEvent extends CustomEvent {
@@ -111,6 +110,9 @@ export function WorkflowConfirmationCard({
   onCancel,
 }: WorkflowConfirmationCardProps) {
   const [activeTab, setActiveTab] = useState('workflow');
+  const [isSaving, setIsSaving] = useState(false);
+  const [workflowName, setWorkflowName] = useState('');
+  const [showSaveForm, setShowSaveForm] = useState(false);
 
   // If workflow execution results are present, default to showing results tab
   useEffect(() => {
@@ -720,292 +722,49 @@ export const HomePage = () => {
     }
   }
 
-  // Helper function to analyze workflow characteristics
-  const analyzeWorkflowCharacteristics = (workflow: WorkflowResponse) => {
-    const actionNames = workflow.actions.map((action) => action.tool.toLowerCase());
-    const actionDescriptions = workflow.actions.map((action) => action.description?.toLowerCase() || '');
-
-    // Keywords that suggest data queries/display
-    const queryKeywords = ['get', 'fetch', 'list', 'show', 'display', 'view', 'search', 'find', 'retrieve'];
-    const mutationKeywords = ['create', 'update', 'delete', 'add', 'remove', 'modify', 'save', 'execute', 'run'];
-
-    const hasQueryKeywords = [...actionNames, ...actionDescriptions].some((text) =>
-      queryKeywords.some((keyword) => text.includes(keyword))
-    );
-
-    const hasMutationKeywords = [...actionNames, ...actionDescriptions].some((text) =>
-      mutationKeywords.some((keyword) => text.includes(keyword))
-    );
-
-    // Check if all parameters are already set (no user input needed)
-    const hasUnsetParameters = workflow.actions.some((action) =>
-      Object.values(action.parameters || {}).some(
-        (value) =>
-          typeof value === 'string' && (value.includes('TODO') || value.includes('PLACEHOLDER') || value === '')
-      )
-    );
-
-    return {
-      isDataQuery: hasQueryKeywords && !hasMutationKeywords,
-      isMutation: hasMutationKeywords,
-      isDisplayOnly: workflow.executionResults && workflow.executionResults.length > 0 && hasQueryKeywords,
-      requiresExecution: hasUnsetParameters || hasMutationKeywords,
-      hasResults: !!(workflow.executionResults && workflow.executionResults.length > 0),
-    };
-  };
-
-  // Alternative: Use the AI classification endpoint
-  const classifyWorkflowWithAI = async (workflow: WorkflowResponse) => {
-    try {
-      const response = await axios.post(`${apiUrl}/workflow/ui-type`, { workflow });
-      return response.data.entry;
-    } catch (error) {
-      console.warn('Failed to classify workflow with AI, falling back to local detection:', error);
-      return detectWorkflowEntryType(workflow);
-    }
-  };
-
-  // Utility function for testing workflow classification (useful for debugging)
-  const testWorkflowClassification = (workflow: WorkflowResponse) => {
-    const local = detectWorkflowEntryType(workflow);
-    const characteristics = analyzeWorkflowCharacteristics(workflow);
-
-    console.log('🧪 Test Classification Results:');
-    console.log('  Local Detection:', local);
-    console.log('  Characteristics:', characteristics);
-    console.log('  Explanation:', getClassificationExplanation(local, characteristics));
-
-    return { local, characteristics };
-  };
-
-  /*
-   * 🎯 INTELLIGENT WORKFLOW CLASSIFICATION SYSTEM
-   *
-   * This system automatically determines how workflows should be presented to users:
-   *
-   * 📝 FORM workflows:
-   *    - Require user input (parameters with 'userInput.' prefix)
-   *    - Show form fields for data entry
-   *    - Execute with submitted form data
-   *
-   * 📊 LABEL/DISPLAY workflows:
-   *    - Display data without user interaction
-   *    - Query/read operations (get, fetch, list, show, etc.)
-   *    - Already executed with results to show
-   *
-   * ⚡ BUTTON workflows:
-   *    - Simple execution with no input needed
-   *    - Mutation operations (create, update, delete, etc.)
-   *    - Parameters are pre-filled or don't require user input
-   *
-   * The system uses both AI classification and local analysis to make intelligent decisions.
-   */
-
   async function generateUI() {
     setLoading(true);
     try {
       // Execute the workflow and parse the UI elements
-      let workflow = extractWorkflowFromNested(workflowConfirmationCard);
-
+      const workflow = workflowConfirmationCard;
       if (!workflow) {
-        console.error('❌ No valid workflow available for UI generation');
+        console.error('No workflow available for UI generation');
         return;
       }
 
       if (!apiUrl) {
-        console.error('❌ API URL is not available');
+        console.error('API URL is not available');
         return;
       }
 
-      console.log('🚀 Starting UI generation for workflow:', workflow);
-      console.log(
-        '📋 Workflow actions:',
-        workflow.actions?.map((a) => ({
-          id: a.id,
-          tool: a.tool,
-          parameters: a.parameters,
-          parameterMetadata: (a as any).parameterMetadata,
-        }))
-      );
-
-      // Pre-execution analysis (before sending to server)
-      const preExecutionAnalysis = detectWorkflowEntryType(workflow);
-      console.log('🔍 Pre-execution analysis:', preExecutionAnalysis);
-
-      // If we already know this should be a form, don't execute - just create the UI
-      if (preExecutionAnalysis.entryType === 'form') {
-        console.log('✅ Workflow identified as form type, creating UI without execution');
-
-        const uiWorkflowDefinition: UIWorkflowDefinition = {
-          workflow: workflow,
-          entry: {
-            entryType: 'form',
-            description: `📝 ${
-              (workflow as any).description || workflow.actions?.[0]?.description || 'Fill in the form below'
-            }`,
-            payload: preExecutionAnalysis.payload,
-          },
-        };
-
-        console.log('📝 Generated form UI definition:', uiWorkflowDefinition);
-        setUiWorkflowCard(uiWorkflowDefinition);
-        setWorkflowConfirmationCard(undefined);
-        return;
-      }
-
-      // For non-form workflows, execute first then analyze
-      console.log('⚡ Executing workflow before UI generation...');
       const response = await sendExecuteWorkflow(apiUrl!, workflow);
 
-      console.log('📡 Execution response:', response.data);
-
       if (response.data.success && response.data.results) {
-        // Update workflow with execution results
-        const workflowWithResults = {
-          ...workflow,
-          executionResults: response.data.results,
-        };
-
-        // Debug: Log workflow analysis
-        const localAnalysis = detectWorkflowEntryType(workflowWithResults);
-        const workflowCharacteristics = analyzeWorkflowCharacteristics(workflowWithResults);
-
-        console.log('🔍 Workflow Analysis Debug Info:');
-        console.log('  📊 Workflow characteristics:', workflowCharacteristics);
-        console.log('  🎯 Local classification:', localAnalysis);
-        console.log(
-          '  📋 Actions summary:',
-          workflow.actions.map((a) => ({ tool: a.tool, description: a.description }))
-        );
-
-        // Classify the workflow intelligently
-        const entryClassification = await classifyWorkflowWithAI(workflowWithResults);
-
-        console.log('  🤖 AI classification result:', entryClassification);
-        console.log('  ✅ Final entry type:', entryClassification.entryType);
-
-        // Enhance description based on classification type
-        let enhancedDescription =
-          entryClassification.description || workflow.actions?.[0]?.description || 'Generated Workflow';
-
-        if (entryClassification.entryType === 'form') {
-          enhancedDescription = `📝 ${enhancedDescription} (Fill in the form below)`;
-        } else if (entryClassification.entryType === 'label') {
-          enhancedDescription = `📊 ${enhancedDescription} (Data display)`;
-        } else if (entryClassification.entryType === 'button') {
-          enhancedDescription = `⚡ ${enhancedDescription} (Click to execute)`;
-        }
-
-        // Create a UIWorkflowDefinition with intelligent entry type
+        // Create a UIWorkflowDefinition with the results
         const uiWorkflowDefinition: UIWorkflowDefinition = {
-          workflow: workflowWithResults,
+          workflow: {
+            ...workflow,
+            executionResults: response.data.results,
+          },
           entry: {
-            entryType: entryClassification.entryType,
-            description: enhancedDescription,
-            payload: entryClassification.payload,
+            entryType: workflow.options?.generate_ui ? 'form' : 'button',
+            description: workflow.actions?.[0]?.description || 'Generated Workflow',
           },
         };
-
-        console.log('Generated UI workflow definition:', uiWorkflowDefinition);
 
         setUiWorkflowCard(uiWorkflowDefinition);
         setWorkflowConfirmationCard(undefined);
 
-        // Add feedback message about the classification
-        if (debug) {
-          const classificationMessage =
-            `🎯 **Workflow Classification Complete**\n\n` +
-            `**Type**: ${entryClassification.entryType.toUpperCase()}\n` +
-            `**Why**: ${getClassificationExplanation(entryClassification, workflowCharacteristics)}\n\n` +
-            `**Actions**: ${workflow.actions.length} step${workflow.actions.length === 1 ? '' : 's'}\n` +
-            `**Results**: ${response.data.results?.length || 0} result${
-              response.data.results?.length === 1 ? '' : 's'
-            }`;
-
-          const debugMessage: MessageItem = {
-            id: getUniqueId(),
-            created_at: new Date().toISOString(),
-            role: 'assistant',
-            content: classificationMessage,
-          };
-
-          setMessageItems((prev) => [...prev, debugMessage]);
-          addMessage(debugMessage);
-        }
+        console.log('Generated UI workflow definition:', uiWorkflowDefinition);
       } else {
-        console.error('❌ Failed to generate UI: No valid results returned');
-        console.error('Response data:', response.data);
-
-        // Try to create a form UI as fallback if possible
-        const workflow = workflowConfirmationCard;
-        if (workflow) {
-          const fallbackAnalysis = detectWorkflowEntryType(workflow);
-          if (fallbackAnalysis.entryType === 'form') {
-            console.log('🚑 Creating fallback form UI after error');
-
-            const fallbackUIDefinition: UIWorkflowDefinition = {
-              workflow: workflow,
-              entry: {
-                entryType: 'form',
-                description: `📝 ${(workflow as any).description || 'Please provide the required information'}`,
-                payload: fallbackAnalysis.payload,
-              },
-            };
-
-            setUiWorkflowCard(fallbackUIDefinition);
-            setWorkflowConfirmationCard(undefined);
-          }
-        }
+        console.error('Failed to generate UI: No valid results returned');
       }
     } catch (error) {
-      console.error('💥 Error generating UI:', error);
-
-      // Try to create a form UI as fallback if possible
-      const workflow = workflowConfirmationCard;
-      if (workflow) {
-        const fallbackAnalysis = detectWorkflowEntryType(workflow);
-        if (fallbackAnalysis.entryType === 'form') {
-          console.log('🚑 Creating fallback form UI after error');
-
-          const fallbackUIDefinition: UIWorkflowDefinition = {
-            workflow: workflow,
-            entry: {
-              entryType: 'form',
-              description: `📝 ${(workflow as any).description || 'Please provide the required information'}`,
-              payload: fallbackAnalysis.payload,
-            },
-          };
-
-          setUiWorkflowCard(fallbackUIDefinition);
-          setWorkflowConfirmationCard(undefined);
-        }
-      }
+      console.error('Error generating UI:', error);
     } finally {
       setLoading(false);
     }
   }
-
-  // Helper function to explain why a workflow was classified a certain way
-  const getClassificationExplanation = (classification: any, characteristics: any): string => {
-    if (classification.entryType === 'form') {
-      return 'This workflow requires user input parameters. Fill out the form to provide the necessary data.';
-    } else if (classification.entryType === 'label') {
-      if (characteristics.isDataQuery) {
-        return 'This workflow fetches and displays data. It appears to be a query/read operation.';
-      } else if (characteristics.hasResults) {
-        return 'This workflow has been executed and contains results to display.';
-      }
-      return 'This workflow is designed to display information without requiring user interaction.';
-    } else if (classification.entryType === 'button') {
-      if (characteristics.isMutation) {
-        return 'This workflow performs actions/mutations. Click the button to execute it.';
-      } else if (characteristics.requiresExecution) {
-        return 'This workflow needs to be executed to generate results.';
-      }
-      return 'This workflow can be executed with a simple button click.';
-    }
-    return 'Classification completed using AI analysis of workflow structure.';
-  };
 
   // Handle workflow save completion for chat feedback
   const handleWorkflowSaveComplete = (success: boolean, message: string, workflowId?: string) => {
@@ -1062,133 +821,13 @@ export const HomePage = () => {
     }
   };
 
-  // Global debugging helpers (available in browser console)
+  // Run connection test on mount in debug mode
   useEffect(() => {
-    if (debug && typeof window !== 'undefined') {
-      // Make debugging functions globally available
-      (window as any).sashiDebug = {
-        testWorkflowClassification,
-        detectWorkflowEntryType,
-        analyzeWorkflowCharacteristics,
-        getClassificationExplanation,
-        testConnection,
-        getCurrentWorkflow: () => workflowConfirmationCard,
-        getCurrentUIWorkflow: () => uiWorkflowCard,
-        // Helper to create test workflows
-        createTestWorkflow: (type: 'form' | 'query' | 'mutation') => {
-          const testWorkflows = {
-            form: {
-              type: 'workflow',
-              actions: [
-                {
-                  id: 'test_form',
-                  tool: 'create_user',
-                  description: 'Create a new user with provided information',
-                  parameters: {
-                    name: 'userInput.name',
-                    email: 'userInput.email',
-                    role: 'userInput.role',
-                  },
-                },
-              ],
-              options: { execute_immediately: false, generate_ui: true },
-            },
-            query: {
-              type: 'workflow',
-              actions: [
-                {
-                  id: 'test_query',
-                  tool: 'get_users',
-                  description: 'Fetch all users from the database',
-                  parameters: {},
-                },
-              ],
-              options: { execute_immediately: true, generate_ui: false },
-              executionResults: [{ actionId: 'test_query', result: { users: [] }, uiElement: { type: 'result' } }],
-            },
-            mutation: {
-              type: 'workflow',
-              actions: [
-                {
-                  id: 'test_mutation',
-                  tool: 'delete_old_files',
-                  description: 'Remove files older than 30 days',
-                  parameters: { days: 30 },
-                },
-              ],
-              options: { execute_immediately: false, generate_ui: false },
-            },
-          };
-          return testWorkflows[type];
-        },
-        // Test the user's specific workflow structure
-        testUserWorkflow: () => {
-          const userWorkflow = {
-            output: {
-              type: 'workflow',
-              description: 'Get user information and files for a user by user id',
-              actions: [
-                {
-                  id: 'get_user_info',
-                  tool: 'get_user_by_id',
-                  description: 'Get user information by user id',
-                  parameters: {
-                    userId: '<user_id>',
-                  },
-                  parameterMetadata: {
-                    userId: {
-                      type: 'number',
-                      description: 'a users id',
-                      required: true,
-                    },
-                  },
-                  map: false,
-                },
-                {
-                  id: 'get_user_files',
-                  tool: 'get_file_by_user_id',
-                  description: 'Get files for the user',
-                  parameters: {
-                    userId: 'get_user_info.id',
-                  },
-                  parameterMetadata: {
-                    userId: {
-                      type: 'number',
-                      description: 'a users id',
-                      required: true,
-                    },
-                  },
-                  map: false,
-                },
-              ],
-            },
-          };
-
-          console.log('🧪 Testing user workflow structure...');
-          console.log('Original structure:', userWorkflow);
-
-          // Test extraction from output key
-          const extractedWorkflow = userWorkflow.output;
-          console.log('Extracted workflow:', extractedWorkflow);
-
-          // Test classification
-          const classification = (window as any).sashiDebug.detectWorkflowEntryType(extractedWorkflow);
-          console.log('Classification result:', classification);
-
-          return { userWorkflow, extractedWorkflow, classification };
-        },
-      };
-
-      console.log('🛠️ Sashi Debug Tools Available:');
-      console.log('  sashiDebug.testWorkflowClassification(workflow) - Test workflow classification');
-      console.log('  sashiDebug.createTestWorkflow("form"|"query"|"mutation") - Create test workflows');
-      console.log('  sashiDebug.testUserWorkflow() - Test your specific workflow structure');
-      console.log('  sashiDebug.getCurrentWorkflow() - Get current workflow being processed');
-      console.log('  sashiDebug.testConnection() - Test API connection');
-      console.log('Example: sashiDebug.testWorkflowClassification(sashiDebug.createTestWorkflow("form"))');
-      console.log('Your issue: sashiDebug.testUserWorkflow()');
+    if (debug && apiUrl) {
+      console.log('🚀 [DEBUG] Component mounted, running connection test...');
+      testConnection();
     }
-  }, [debug, workflowConfirmationCard, uiWorkflowCard]);
+  }, [debug, apiUrl]);
 
   return (
     <Layout>
