@@ -110,9 +110,7 @@ export function WorkflowConfirmationCard({
   onCancel,
 }: WorkflowConfirmationCardProps) {
   const [activeTab, setActiveTab] = useState('workflow');
-  const [isSaving, setIsSaving] = useState(false);
-  const [workflowName, setWorkflowName] = useState('');
-  const [showSaveForm, setShowSaveForm] = useState(false);
+
 
   // If workflow execution results are present, default to showing results tab
   useEffect(() => {
