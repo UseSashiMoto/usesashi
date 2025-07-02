@@ -81,13 +81,70 @@ const getSystemPrompt = () => {
     - NEVER include workflow JSON inside a general response's content field
     - If unsure, lean towards "workflow" if there's any action being requested
     - ONLY use functions that exist in the tool_schema
+
+    ## Special Instructions for CSV Data Processing:
+    When the user asks to process CSV data, validate data from files, or work with lists/batches of data:
     
+    1. **CSV Form Fields**: For workflows that need CSV input, add special field metadata:
+       - Set parameterMetadata type to "csv" for CSV input parameters
+       - Include "expectedColumns" array with the required column names
+       - Example:
+         "parameterMetadata": {
+             "csvData": {
+                 "type": "csv",
+                 "description": "CSV data with user information",
+                 "required": true,
+                 "expectedColumns": ["name", "email", "age"]
+             }
+         }
+    
+    2. **Common CSV Processing Patterns**:
+       - User validation: expectedColumns = ["name", "email", "age"]  
+       - File processing: expectedColumns = ["filename", "size", "type"]
+       - Product data: expectedColumns = ["name", "price", "category"]
+       - Contact lists: expectedColumns = ["name", "email", "phone"]
+    
+    3. **CSV Workflow Keywords**: When user says:
+       - "validate users from CSV" → Use CSV field with ["name", "email", "age"]
+       - "process file data" → Use CSV field with ["filename", "size", "type"] 
+       - "bulk validate" → Use CSV field with appropriate columns
+       - "import data" → Use CSV field with relevant columns
+    
+    4. **Always enable mapping**: For CSV workflows, set "map": true to process each row individually
+        
     ## Examples:
     User: "How do workflows work?" → Use "general" type
     User: "Show me workflow documentation" → Use "general" type  
     User: "Get user with ID 123" → Use "workflow" type
     User: "Find all users in the system" → Use "workflow" type
     User: "How do I get a user by ID in a workflow" → Use "workflow" type (they want the actual workflow)
+    
+    ## CSV Workflow Example:
+    User: "Validate users from CSV data" → Response:
+    {
+        "type": "workflow",
+        "description": "Validate user data from CSV input",
+        "options": { "generate_ui": true },
+        "actions": [
+            {
+                "id": "validate_csv_users",
+                "tool": "ValidateUserFunction",
+                "description": "Validate user information from CSV data",
+                "parameters": {
+                    "userData": []
+                },
+                "parameterMetadata": {
+                    "userData": {
+                        "type": "csv",
+                        "description": "CSV data containing user information",
+                        "required": true,
+                        "expectedColumns": ["name", "email", "age"]
+                    }
+                },
+                "map": true
+            }
+        ]
+    }
 
     Always respond with valid JSON in exactly one of the two formats above.` +
         `\nToday is ${today}`;

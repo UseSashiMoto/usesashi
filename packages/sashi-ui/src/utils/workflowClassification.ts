@@ -140,13 +140,17 @@ export const detectWorkflowEntryType = (workflow: WorkflowResponse): WorkflowCla
                 const paramValue = action.parameters?.[paramKey];
                 const metadataTyped = metadata as any;
 
-                // If the parameter is required but missing or has a placeholder value
-                if (metadataTyped.required && (
+                // CSV fields always need user input regardless of current parameter value
+                const isCSVField = metadataTyped.type === 'csv';
+
+                // If the parameter is CSV type OR (required but missing or has a placeholder value)
+                if (isCSVField || (metadataTyped.required && (
                     paramValue === undefined ||
                     paramValue === null ||
                     paramValue === '' ||
-                    (typeof paramValue === 'string' && isPlaceholderValue(paramValue))
-                )) {
+                    (typeof paramValue === 'string' && isPlaceholderValue(paramValue)) ||
+                    (Array.isArray(paramValue) && paramValue.length === 0) // Empty array for CSV
+                ))) {
                     userInputKeys.add(paramKey);
 
                     // Only add if not already added
@@ -161,12 +165,18 @@ export const detectWorkflowEntryType = (workflow: WorkflowResponse): WorkflowCla
                             fieldOptions = metadataTyped.enum; // Just the raw enum values for enumValues property
                         }
 
+                        // For CSV fields, add expectedColumns to the field definition
+                        const csvFieldExtras = isCSVField ? {
+                            expectedColumns: metadataTyped.expectedColumns || []
+                        } : {};
+
                         formFields.push({
                             key: paramKey,
                             label: metadataTyped.description || paramKey.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()),
                             type: fieldType,
                             enumValues: fieldOptions,
-                            required: true
+                            required: metadataTyped.required !== false, // Default to true unless explicitly false
+                            ...csvFieldExtras
                         });
                     }
                 }

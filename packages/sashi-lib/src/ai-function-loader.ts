@@ -12,6 +12,7 @@ type AllowedTypes =
     | 'number'
     | 'boolean'
     | 'array'
+    | 'object'
     | 'enum'
     | AIField<string | number | boolean>[];
 
@@ -182,7 +183,8 @@ export class AIObject {
         > // For array transformations
         | z.ZodNull
         | z.ZodEnum<[string]>
-        | z.ZodEnum<[string, ...string[]]> => {
+        | z.ZodEnum<[string, ...string[]]>
+        | z.ZodAny => {
         switch (field.type) {
             case 'string':
                 return z.string();
@@ -222,6 +224,8 @@ export class AIObject {
                         }
                     })
                     .or(z.array(z.any())); // Support both strings (for stringified arrays) and arrays
+            case 'object':
+                return z.any();
             case 'enum':
                 if ((field as AIEnum).values.length) {
                     return z.enum(
@@ -395,6 +399,8 @@ export class AIFunction {
                     return z.boolean();
                 case 'array':
                     return z.array(z.any()); // Adjust based on the specific type of array elements
+                case 'object':
+                    return z.any();
                 case 'enum':
                     const enumValues = (param as AIEnum).values;
                     if (!enumValues?.length) {
