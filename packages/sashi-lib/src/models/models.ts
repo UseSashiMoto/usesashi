@@ -5,6 +5,7 @@ export interface GeneralResponse {
 
 export interface WorkflowResponse {
     type: 'workflow'
+    description?: string  // Add description for AI error recovery
     actions: {
         id: string
         description: string

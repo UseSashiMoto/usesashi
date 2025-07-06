@@ -514,69 +514,11 @@ const ProcessFileDataFunction = new AIFunction("ProcessFileDataFunction", "Proce
         };
     });
 
-// Validate single user data (works with map: true)
-const ValidateUserFunction = new AIFunction("ValidateUserFunction", "Validates a single user's data including name, email format, and age range")
-    .args({
-        name: "userData",
-        description: "User data to validate",
-        type: "object",
-        required: true
-    })
-    .returns(UserValidationResultObject)
-    .implement(async (userData: any): Promise<UserValidationResult> => {
-        console.log("validate userData", userData, "type:", typeof userData)
-        const errors: string[] = [];
-        let status: 'valid' | 'invalid' | 'warning' = 'valid';
 
-        // Ensure we have the right data structure
-        const name = userData.name || '';
-        const email = userData.email || '';
-        const age = parseInt(userData.age) || 0;
-
-        // Validate name
-        if (!name || name.trim().length < 2) {
-            errors.push("Name must be at least 2 characters long");
-        }
-
-        // Validate email
-        if (!email || !isValidEmail(email)) {
-            errors.push("Invalid email format");
-        }
-
-        // Validate age
-        if (!age || age < 18 || age > 120) {
-            if (age < 18) {
-                errors.push("Age must be 18 or older");
-            } else if (age > 120) {
-                errors.push("Age seems unrealistic (over 120)");
-            } else {
-                errors.push("Age is required");
-            }
-        } else if (age > 100) {
-            status = 'warning';
-            errors.push("Age over 100 - please verify");
-        }
-
-        const isValid = errors.length === 0 || status === 'warning';
-
-        if (!isValid) {
-            status = 'invalid';
-        }
-
-        return {
-            name,
-            email,
-            age,
-            isValid,
-            errors: errors.join(", "), // Convert array to string
-            status
-        };
-    });
 
 // Register the CSV processing functions
 registerFunctionIntoAI("ProcessUserDataFunction", ProcessUserDataFunction);
 registerFunctionIntoAI("ProcessFileDataFunction", ProcessFileDataFunction);
-registerFunctionIntoAI("ValidateUserFunction", ValidateUserFunction);
 
 // Register original file functions
 registerFunctionIntoAI("get_file_by_user_id", GetFileByUserIdFunction)
@@ -586,5 +528,5 @@ registerFunctionIntoAI("get_file_by_mime_type", GetFileByMimeTypeFunction)
 //registerFunctionIntoAI("update_file", UpdateFileFunction)
 
 // Export functions for testing
-export { ProcessFileDataFunction, ProcessUserDataFunction, ValidateUserFunction }
+export { ProcessFileDataFunction, ProcessUserDataFunction }
 

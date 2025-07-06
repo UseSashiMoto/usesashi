@@ -3,6 +3,7 @@ import express from "express"
 import { Express } from "express-serve-static-core"
 import "./services/file_service"
 import "./services/user_service"
+import "./services/workflow_service"
 
 require("dotenv").config()
 

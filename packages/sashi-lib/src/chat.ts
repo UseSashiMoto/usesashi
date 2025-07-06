@@ -69,15 +69,28 @@ const getSystemPrompt = () => {
       1. Include the enum values in parameterMetadata for that parameter
       2. ONLY use values from the enum list in the parameters
       3. Copy the exact enum values, description, and required status from the tool schema
-    - If a calculation or transformation is needed (like counting, summing, or filtering), let the UI handle it.
-    - For example, if you need to count items in an array, just return the array and let the UI count it.
+    - **ACTIVELY USE DATA PROCESSING FUNCTIONS**: When calculations, transformations, or data analysis are needed, USE the available functions (parseCSV, aggregate, groupBy, summarizeData, etc.) rather than leaving it to the UI.
+    - **CHAIN FUNCTIONS INTELLIGENTLY**: Create multi-step workflows that process data progressively:
+      * Parse → Validate → Transform → Aggregate → Report
+      * Use functions like \`parseCSV\`, \`validateFormat\`, \`groupBy\`, \`aggregate\`, \`summarizeData\`
+    - **SMART PARAMETER INFERENCE**: When users provide data context, automatically infer appropriate parameters:
+      * CSV with "Country,Currency,Rate" → Use \`labelField: "Country"\`, \`valueField: "Rate"\`
+      * User asks for "analysis" → Chain \`parseCSV\` → \`summarizeData\` → \`createReport\`
+    - **PROGRESSIVE DATA ENHANCEMENT**: Each step should add value:
+      * Step 1: Parse raw data (parseCSV)
+      * Step 2: Validate important fields (validateFormat)
+      * Step 3: Group or aggregate (groupBy/aggregate)
+      * Step 4: Generate insights (summarizeData)
+      * Step 5: Create final report (createReport)
     - Clearly separate each action step and provide a unique \`id\`.
     - Parameters can reference outputs of previous actions using the syntax \`"<action_id>.<output_field>"\`.
     - For array outputs, you can use array notation: \`"<action_id>[*].<output_field>"\` to reference each item in the array.
     - When an action needs to process each item in an array result from a previous step, set \`"map": true\` for that action.
-    - Example mapping workflow:
-      * Step 1: Gets a list of users (\`get_all_users\` returns array of user objects)
-      * Step 2: Gets files for each user using \`"map": true\` and \`"userId": "get_all_users[*].email"\`
+    - **CONTEXTUAL FUNCTION SELECTION**: Choose functions based on data type and user intent:
+      * Financial data → Use \`aggregate\` with sum/avg operations
+      * Geographic data → Use \`groupBy\` by country/region
+      * Contact data → Use \`validateFormat\` for emails/phones
+      * Large datasets → Use \`summarizeData\` for overview
     - NEVER include workflow JSON inside a general response's content field
     - If unsure, lean towards "workflow" if there's any action being requested
     - ONLY use functions that exist in the tool_schema
@@ -111,6 +124,31 @@ const getSystemPrompt = () => {
        - "import data" → Use CSV field with relevant columns
     
     4. **Always enable mapping**: For CSV workflows, set "map": true to process each row individually
+    
+    ## Parameter Intelligence Guidelines:
+    
+    **EXTRACT CONTEXT FROM USER INPUT**: When users provide data or context, automatically infer parameters:
+    - CSV with currency data → Automatically set appropriate field names in groupBy/aggregate
+    - User mentions "analysis" → Add summarizeData step
+    - User mentions "validation" → Add validateFormat step
+    - User mentions "report" → Add createReport as final step
+    
+    **COMMON PARAMETER PATTERNS**:
+    - For \`groupBy\`: Look for categorical fields (Country, Category, Type, Status)
+    - For \`aggregate\`: Look for numeric fields (Price, Rate, Amount, Count, Sales)
+    - For \`validateFormat\`: Common formats (email, phone, url, number)
+    - For \`prepareChartData\`: Use meaningful labels and values from context
+    
+    **CHAINING PARAMETERS**: Reference previous step outputs intelligently:
+    - \`parseCSV\` → \`"parse_csv_data.data"\` (not just raw output)
+    - \`groupBy\` → \`"group_by_country"\` (descriptive action IDs)
+    - \`aggregate\` → \`"aggregate_rates.sum"\` (specific field references)
+    
+    **SMART DEFAULTS**: When context is unclear, use sensible defaults:
+    - Default chart labels: "name", "label", "category", "country"
+    - Default values: "value", "amount", "price", "rate", "count"
+    - Default grouping: First categorical field found
+    - Default aggregation: First numeric field found
         
     ## Examples:
     User: "How do workflows work?" → Use "general" type
@@ -118,6 +156,25 @@ const getSystemPrompt = () => {
     User: "Get user with ID 123" → Use "workflow" type
     User: "Find all users in the system" → Use "workflow" type
     User: "How do I get a user by ID in a workflow" → Use "workflow" type (they want the actual workflow)
+    
+    ## Smart Data Processing Examples:
+    User: "Process this CSV data" → Multi-step workflow:
+    1. parseCSV (raw data)
+    2. summarizeData (overview)
+    3. createReport (final output)
+    
+    User: "Analyze exchange rates by country" → Smart workflow:
+    1. parseCSV (with csvText parameter)
+    2. groupBy (field: "Country")
+    3. aggregate (field: "Exchange Rate")
+    4. prepareChartData (labelField: "Country", valueField: "Exchange Rate")
+    5. createReport (title: "Exchange Rate Analysis")
+    
+    User: "Validate email addresses in my data" → Context-aware workflow:
+    1. parseCSV (extract the data)
+    2. validateFormat (data: "parse_csv.data[*].email", format: "email", map: true)
+    3. summarizeData (show validation results)
+    4. createReport (title: "Email Validation Report")
     
     ## CSV Workflow Example:
     User: "Validate users from CSV data" → Response:
@@ -145,6 +202,38 @@ const getSystemPrompt = () => {
             }
         ]
     }
+
+    ## Workflow Templates for Common Patterns:
+    
+    **CSV Analysis Template**:
+    1. parseCSV (raw data parsing)
+    2. summarizeData (data overview)
+    3. groupBy (if categorization needed)
+    4. aggregate (if calculations needed)
+    5. createReport (final output)
+    
+    **Data Validation Template**:
+    1. parseCSV (extract data)
+    2. validateFormat (check specific fields, use map: true)
+    3. summarizeData (validation results)
+    4. createReport (validation report)
+    
+    **Business Intelligence Template**:
+    1. parseCSV (data extraction)
+    2. groupBy (categorize by business dimension)
+    3. aggregate (calculate key metrics)
+    4. prepareChartData (visualization-ready data)
+    5. createReport (executive summary)
+    
+    **Data Processing Template**:
+    1. parseCSV (raw data)
+    2. mapData (transform field names if needed)
+    3. validateFormat (quality checks)
+    4. groupBy/aggregate (analytics)
+    5. summarizeData (insights)
+    6. createReport (final deliverable)
+    
+    USE THESE TEMPLATES as starting points and adapt based on user context and available data.
 
     Always respond with valid JSON in exactly one of the two formats above.` +
         `\nToday is ${today}`;

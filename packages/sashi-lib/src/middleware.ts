@@ -19,6 +19,7 @@ import { GeneralResponse, WorkflowResponse } from "./models/models"
 import { MetaData } from "./models/repo-metadata"
 import { createWorkflowExecutionError, createWorkflowExecutionSuccess, WorkflowResult as NewWorkflowResult } from './types/workflow'
 import { createSashiHtml, createSessionToken, ensureUrlProtocol } from './utils'
+import { createWorkflowErrorRecovery } from './workflow-error-recovery'
 
 
 const HEADER_API_TOKEN = 'x-api-token';
@@ -855,7 +856,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                             });
 
                         case 'server':
-                            return res.status(500).json({
+                            return res.status(400).json({
                                 message: 'Error processing request',
                                 error: 'Internal server error',
                                 details: 'An unexpected error occurred while processing the request (Server Error Test)',
@@ -1282,398 +1283,507 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
 
     router.post('/workflow/execute', sessionValidation, async (req, res) => {
-        const { workflow: _workflow, debug = false } = req.body;
-        const workflow: WorkflowResponse = _workflow as WorkflowResponse;
-        const startTime = new Date();
-        const sessionId = req.headers[HEADER_SESSION_TOKEN] as string;
-        const userId = req.headers['x-user-id'] as string; // Optional, if you have user ID in headers
-
-        // Generate a unique ID for this workflow execution
-        const workflowExecutionId = `wf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-        // Audit log data structure
-        const auditLog = {
-            sessionId,
-            userId,
-            workflowId: workflowExecutionId, // Use generated ID instead of workflow.id
-            input: {
-                workflow,
-                debug
-            },
-            startTime,
-            endTime: null as Date | null,
-            duration: 0,
-            status: 'pending' as 'pending' | 'success' | 'error',
-            result: null as any,
-            error: null as any,
-            metadata: {
-                actionCount: workflow.actions?.length || 0,
-                tools: workflow.actions?.map(a => a.tool) || []
-            }
-        };
-
-        if (!workflow || !workflow.actions || !Array.isArray(workflow.actions)) {
-            const error = { error: 'Invalid workflow format' };
-            auditLog.status = 'error';
-            auditLog.error = error;
-            auditLog.endTime = new Date();
-            auditLog.duration = auditLog.endTime.getTime() - startTime.getTime();
-
-            // Try to send audit log to hub
-            try {
-                await fetch(`${process.env.HUB_URL}/audit/workflow`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        [HEADER_API_TOKEN]: apiSecretKey ? apiSecretKey : ''
-                    },
-                    body: JSON.stringify(auditLog)
-                });
-            } catch (hubError) {
-                console.error('Failed to send audit log to hub:', hubError);
-            }
-
-            return res.status(400).json(error);
-        }
-
-        if (debug) {
-            console.log("Executing workflow:", JSON.stringify(workflow, null, 2));
-        }
-
-        const functionRegistry = getFunctionRegistry();
-        const actionResults: Record<string, any> = {};
-        const errors: Array<{ actionId: string, error: string }> = [];
-
         try {
-            for (let i = 0; i < workflow.actions.length; i++) {
-                const action = workflow.actions[i];
-                const actionId = action?.id || `action_${i}`;
-                const toolName = action?.tool.replace(/^functions\./, '') || '';
-                const { parameters } = action || {};
-                const registeredFunction = functionRegistry.get(toolName);
+            const { workflow: _workflow, debug = false } = req.body;
+            const workflow: WorkflowResponse = _workflow as WorkflowResponse;
+            const startTime = new Date();
+            const sessionId = req.headers[HEADER_SESSION_TOKEN] as string;
+            const userId = req.headers['x-user-id'] as string; // Optional, if you have user ID in headers
 
-                if (!registeredFunction) {
-                    throw new Error(`Function ${toolName} not found in registry for action "${actionId}"`);
+            // Generate a unique ID for this workflow execution
+            const workflowExecutionId = `wf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+            // Audit log data structure
+            const auditLog = {
+                sessionId,
+                userId,
+                workflowId: workflowExecutionId, // Use generated ID instead of workflow.id
+                input: {
+                    workflow,
+                    debug
+                },
+                startTime,
+                endTime: null as Date | null,
+                duration: 0,
+                status: 'pending' as 'pending' | 'success' | 'error',
+                result: null as any,
+                error: null as any,
+                metadata: {
+                    actionCount: workflow.actions?.length || 0,
+                    tools: workflow.actions?.map(a => a.tool) || []
+                }
+            };
+
+            if (!workflow || !workflow.actions || !Array.isArray(workflow.actions)) {
+                const error = { error: 'Invalid workflow format' };
+                auditLog.status = 'error';
+                auditLog.error = error;
+                auditLog.endTime = new Date();
+                auditLog.duration = auditLog.endTime.getTime() - startTime.getTime();
+
+                // Try to send audit log to hub
+                try {
+                    await fetch(`${process.env.HUB_URL}/audit/workflow`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            [HEADER_API_TOKEN]: apiSecretKey ? apiSecretKey : ''
+                        },
+                        body: JSON.stringify(auditLog)
+                    });
+                } catch (hubError) {
+                    console.error('Failed to send audit log to hub:', hubError);
                 }
 
-                // Debug logging
-                if (debug) {
-                    console.log(`\n[Workflow Step ${i + 1}] Processing action "${actionId}" using tool "${toolName}"`);
-                    console.log(`Original parameters:`, parameters);
-                    console.log(`Current actionResults:`, actionResults);
-                }
+                return res.status(400).json(error);
+            }
 
-                const processedParameters: Record<string, any> = { ...parameters };
-                const actionErrors: Array<{ actionId: string, error: string }> = [];
+            if (debug) {
+                console.log("Executing workflow:", JSON.stringify(workflow, null, 2));
+            }
 
-                // Process parameter references
-                for (const [key, value] of Object.entries(parameters || {})) {
-                    if (typeof value === 'string' && value.includes('.')) {
-                        try {
-                            // Check for array notation
-                            if (value.includes('[*]')) {
-                                const parts = value.split('.');
-                                if (parts.length < 2) {
-                                    throw new Error(`Invalid array reference format: ${value}`);
-                                }
-                                const refActionId = parts[0];
-                                if (!refActionId) {
-                                    throw new Error(`Missing action ID in array reference: ${value}`);
-                                }
-                                const baseActionId = refActionId.split('[')[0];
-                                const pathParts = parts.slice(1);
-                                if (debug) {
-                                    console.log(`Looking for action result: ${baseActionId}`);
-                                    console.log(`Available action results:`, Object.keys(actionResults));
-                                }
+            const functionRegistry = getFunctionRegistry();
+            const actionResults: Record<string, any> = {};
+            const errors: Array<{ actionId: string, error: string }> = [];
 
-                                if (!baseActionId || !actionResults[baseActionId]) {
-                                    throw new Error(`Action result not found: ${baseActionId}`);
-                                }
+            try {
+                for (let i = 0; i < workflow.actions.length; i++) {
+                    const action = workflow.actions[i];
+                    const actionId = action?.id || `action_${i}`;
+                    const toolName = action?.tool.replace(/^functions\./, '') || '';
+                    const { parameters } = action || {};
+                    const registeredFunction = functionRegistry.get(toolName);
 
-                                const arrayResult = actionResults[baseActionId] as unknown[];
+                    if (!registeredFunction) {
+                        throw new Error(`Function ${toolName} not found in registry for action "${actionId}"`);
+                    }
 
-                                if (!Array.isArray(arrayResult)) {
-                                    throw new Error(`Expected array from ${baseActionId} but got: ${typeof arrayResult}`);
-                                }
+                    // Debug logging
+                    if (debug) {
+                        console.log(`\n[Workflow Step ${i + 1}] Processing action "${actionId}" using tool "${toolName}"`);
+                        console.log(`Original parameters:`, parameters);
+                        console.log(`Current actionResults:`, actionResults);
+                    }
 
-                                // Map over the array and access the specified properties
-                                const mappedValues = arrayResult.map(item => {
-                                    let currentValue = item as Record<string, unknown>;
-                                    for (const part of pathParts) {
-                                        if (debug) {
-                                            console.log(`Accessing property "${part}" from:`, currentValue);
-                                        }
-                                        if (currentValue === undefined || currentValue === null) {
-                                            throw new Error(`Cannot access property ${part} of undefined in ${value}`);
-                                        }
-                                        currentValue = currentValue[part] as Record<string, unknown>;
+                    const processedParameters: Record<string, any> = { ...parameters };
+                    const actionErrors: Array<{ actionId: string, error: string }> = [];
+
+                    // Process parameter references
+                    for (const [key, value] of Object.entries(parameters || {})) {
+                        if (typeof value === 'string' && value.includes('.')) {
+                            try {
+                                // Check for array notation
+                                if (value.includes('[*]')) {
+                                    const parts = value.split('.');
+                                    if (parts.length < 2) {
+                                        throw new Error(`Invalid array reference format: ${value}`);
                                     }
-                                    return currentValue;
-                                });
+                                    const refActionId = parts[0];
+                                    if (!refActionId) {
+                                        throw new Error(`Missing action ID in array reference: ${value}`);
+                                    }
+                                    const baseActionId = refActionId.split('[')[0];
+                                    const pathParts = parts.slice(1);
+                                    if (debug) {
+                                        console.log(`Looking for action result: ${baseActionId}`);
+                                        console.log(`Available action results:`, Object.keys(actionResults));
+                                    }
 
-                                processedParameters[key] = mappedValues;
+                                    if (!baseActionId || !actionResults[baseActionId]) {
+                                        throw new Error(`Action result not found: ${baseActionId}`);
+                                    }
 
+                                    const arrayResult = actionResults[baseActionId] as unknown[];
+
+                                    if (!Array.isArray(arrayResult)) {
+                                        throw new Error(`Expected array from ${baseActionId} but got: ${typeof arrayResult}`);
+                                    }
+
+                                    // Map over the array and access the specified properties
+                                    const mappedValues = arrayResult.map(item => {
+                                        let currentValue = item as Record<string, unknown>;
+                                        for (const part of pathParts) {
+                                            if (debug) {
+                                                console.log(`Accessing property "${part}" from:`, currentValue);
+                                            }
+                                            if (currentValue === undefined || currentValue === null) {
+                                                throw new Error(`Cannot access property ${part} of undefined in ${value}`);
+                                            }
+                                            currentValue = currentValue[part] as Record<string, unknown>;
+                                        }
+                                        return currentValue;
+                                    });
+
+                                    processedParameters[key] = mappedValues;
+
+                                    if (debug) {
+                                        console.log(`Resolved array parameter "${key}" from "${value}" to:`, mappedValues);
+                                        console.log(`Available properties in first array item:`,
+                                            arrayResult.length > 0 ? Object.keys(arrayResult[0] as object) : 'empty array');
+                                    }
+                                } else {
+                                    // Standard parameter reference
+                                    const parts = value.split('.');
+                                    if (parts.length >= 2) {
+                                        const refActionId = parts[0];
+                                        if (refActionId) {
+                                            const refResult = actionResults[refActionId];
+
+                                            if (!refResult) {
+                                                throw new Error(`Referenced action "${refActionId}" not found or didn't produce a result`);
+                                            }
+
+                                            // For deeply nested properties, traverse the object
+                                            let currentValue = refResult;
+
+                                            // Start from 1 to skip the action ID
+                                            for (let j = 1; j < parts.length; j++) {
+                                                const field = parts[j];
+                                                if (field && typeof currentValue === 'object' && currentValue !== null && field in currentValue) {
+                                                    currentValue = currentValue[field];
+                                                } else {
+                                                    throw new Error(`Field "${parts.slice(1).join('.')}" not found in the result of action "${refActionId}"`);
+                                                }
+                                            }
+
+                                            // Handle type conversions based on the expected parameter type
+                                            let expectedType = null;
+                                            try {
+                                                if (typeof registeredFunction.getParams === 'function') {
+                                                    const functionParam = registeredFunction.getParams().find(param => {
+                                                        if (param instanceof AIObject) {
+                                                            return param.getName() === key;
+                                                        } else if (param instanceof AIArray) {
+                                                            return param.getName() === key;
+                                                        } else if (param instanceof AIFieldEnum) {
+                                                            return param.getName() === key;
+                                                        } else if ('name' in param) {
+                                                            return param.name === key;
+                                                        }
+                                                        return false;
+                                                    });
+
+                                                    if (functionParam) {
+                                                        // Only apply type conversion if we found a matching parameter
+                                                        if (functionParam instanceof AIObject) {
+                                                            // Ensure object is actually an object
+                                                            if (typeof currentValue !== 'object' || currentValue === null) {
+                                                                throw new Error(`Expected object for parameter "${key}" but got ${typeof currentValue}`);
+                                                            }
+                                                        } else if (functionParam instanceof AIArray) {
+                                                            // Ensure array is actually an array
+                                                            if (!Array.isArray(currentValue)) {
+                                                                throw new Error(`Expected array for parameter "${key}" but got ${typeof currentValue}`);
+                                                            }
+                                                        } else if ('type' in functionParam) {
+                                                            // Basic type conversions for primitive types
+                                                            expectedType = functionParam.type;
+                                                        }
+                                                    }
+                                                }
+
+                                                // Apply type conversions based on expected type if found
+                                                if (expectedType) {
+                                                    if (expectedType === 'string' && typeof currentValue !== 'string') {
+                                                        currentValue = String(currentValue);
+                                                    } else if (expectedType === 'number' && typeof currentValue !== 'number') {
+                                                        const num = Number(currentValue);
+                                                        if (isNaN(num)) {
+                                                            throw new Error(`Cannot convert "${currentValue}" to number for parameter "${key}"`);
+                                                        }
+                                                        currentValue = num;
+                                                    } else if (expectedType === 'boolean' && typeof currentValue !== 'boolean') {
+                                                        if (currentValue === 'true') currentValue = true;
+                                                        else if (currentValue === 'false') currentValue = false;
+                                                        else if (currentValue === 1) currentValue = true;
+                                                        else if (currentValue === 0) currentValue = false;
+                                                        else {
+                                                            throw new Error(`Cannot convert "${currentValue}" to boolean for parameter "${key}"`);
+                                                        }
+                                                    }
+                                                }
+
+                                                processedParameters[key] = currentValue;
+
+                                                if (debug) {
+                                                    console.log(`Resolved parameter "${key}" from "${value}" to:`, currentValue);
+                                                }
+                                            } catch (typeError: unknown) {
+                                                // If we can't validate the type, just use the value as is
+                                                processedParameters[key] = currentValue;
+                                                if (debug) {
+                                                    console.warn(`Skipping type validation for parameter "${key}" (using as-is):`,
+                                                        typeError instanceof Error ? typeError.message : String(typeError));
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (paramError) {
+                                // Collect errors but continue with other parameters if possible
+                                const errorMessage = paramError instanceof Error ? paramError.message : String(paramError);
+                                actionErrors.push({ actionId, error: `Parameter error for "${key}": ${errorMessage}` });
                                 if (debug) {
-                                    console.log(`Resolved array parameter "${key}" from "${value}" to:`, mappedValues);
-                                    console.log(`Available properties in first array item:`,
-                                        arrayResult.length > 0 ? Object.keys(arrayResult[0] as object) : 'empty array');
+                                    console.error(`Error resolving parameter "${key}":`, errorMessage);
+                                }
+                            }
+                        }
+                    }
+
+                    // If we have any parameter errors, throw now before executing the function
+                    if (actionErrors.length > 0) {
+                        errors.push(...actionErrors);
+                        throw new Error(`Failed to resolve parameters for action "${actionId}": ${actionErrors.map(e => e.error).join(', ')}`);
+                    }
+
+                    if (debug) {
+                        console.log(`Processed parameters for "${actionId}":`, processedParameters);
+                    }
+
+                    // Enhanced function execution with AI-powered error recovery
+                    let functionResult: any = null;
+                    let recoveryAttempted = false;
+
+                    try {
+                        if ((action?.map ?? false) === true) {
+                            const arrayParams = Object.entries(processedParameters).find(
+                                ([_, value]) => Array.isArray(value)
+                            );
+
+                            if (!arrayParams) {
+                                throw new Error(`Action ${actionId} has map:true but no array parameters were found`);
+                            }
+
+                            const [arrayParamName, arrayValues] = arrayParams;
+
+                            if (debug) {
+                                console.log(`Mapping over ${arrayValues.length} items for parameter "${arrayParamName}"`);
+                            }
+
+                            const results = await Promise.all(arrayValues.map(async (item: unknown) => {
+                                const itemParams = { ...processedParameters };
+                                itemParams[arrayParamName] = item;
+                                return await callFunctionFromRegistryFromObject(toolName, itemParams);
+                            }));
+
+                            functionResult = results;
+                        } else {
+                            if (debug) {
+                                console.log(`Executing function ${toolName} with parameters:`, processedParameters);
+                            }
+                            functionResult = await callFunctionFromRegistryFromObject(toolName, processedParameters);
+                        }
+
+                        actionResults[actionId] = functionResult;
+
+                        if (debug) {
+                            console.log(`Result from "${actionId}":`, functionResult);
+                        }
+
+                    } catch (functionError: unknown) {
+                        if (debug) {
+                            console.log(`❌ Function ${toolName} failed:`, functionError instanceof Error ? functionError.message : String(functionError));
+                            console.log(`🤖 Attempting AI-powered error recovery...`);
+                        }
+
+                        // AI-powered error recovery
+                        try {
+                            const errorRecovery = createWorkflowErrorRecovery();
+                            const workflowGoal = workflow.description || "Process and analyze data";
+
+                            const recovery = await errorRecovery.analyzeAndRecover(
+                                functionError instanceof Error ? functionError : new Error(String(functionError)),
+                                {
+                                    id: actionId,
+                                    tool: toolName,
+                                    parameters: processedParameters,
+                                    description: action?.description
+                                },
+                                actionResults,
+                                workflowGoal
+                            );
+
+                            if (recovery.canContinue && recovery.suggestions.length > 0) {
+                                recoveryAttempted = true;
+
+                                // Try recovery suggestions in order of confidence
+                                for (const suggestion of recovery.suggestions.sort((a: any, b: any) => b.confidence - a.confidence)) {
+                                    if (suggestion.confidence < 0.5) continue;
+
+                                    try {
+                                        if (debug) {
+                                            console.log(`🔄 Trying recovery: ${suggestion.reasoning} (confidence: ${suggestion.confidence})`);
+                                        }
+
+                                        const recoveryFunction = suggestion.newFunction || toolName;
+                                        const recoveryParams = suggestion.newParameters || processedParameters;
+
+                                        const firstKey = Object.keys(recoveryParams)[0];
+                                        if ((action?.map ?? false) === true && firstKey && Array.isArray(recoveryParams[firstKey])) {
+                                            // Handle mapped recovery
+                                            const arrayParam = Object.entries(recoveryParams).find(([_, value]) => Array.isArray(value));
+                                            if (arrayParam) {
+                                                const [arrayParamName, arrayValues] = arrayParam;
+                                                const results = await Promise.all((arrayValues as unknown[]).map(async (item: unknown) => {
+                                                    const itemParams = { ...recoveryParams };
+                                                    itemParams[arrayParamName] = item;
+                                                    return await callFunctionFromRegistryFromObject(recoveryFunction, itemParams);
+                                                }));
+                                                functionResult = results;
+                                            }
+                                        } else {
+                                            functionResult = await callFunctionFromRegistryFromObject(recoveryFunction, recoveryParams);
+                                        }
+
+                                        actionResults[actionId] = functionResult;
+
+                                        if (debug) {
+                                            console.log(`✅ Recovery successful with ${recoveryFunction}:`, functionResult);
+                                        }
+
+                                        break; // Success, stop trying other suggestions
+
+                                    } catch (recoveryError: unknown) {
+                                        if (debug) {
+                                            console.log(`❌ Recovery attempt failed: ${recoveryError instanceof Error ? recoveryError.message : String(recoveryError)}`);
+                                        }
+                                        continue; // Try next suggestion
+                                    }
+                                }
+
+                                // If no recovery worked, create a meaningful error result
+                                if (!actionResults[actionId]) {
+                                    actionResults[actionId] = {
+                                        error: `Function ${toolName} failed and all recovery attempts unsuccessful`,
+                                        originalError: functionError instanceof Error ? functionError.message : String(functionError),
+                                        recoveryAttempted: true,
+                                        suggestions: recovery.suggestions.map((s: any) => s.reasoning)
+                                    };
+
+                                    if (debug) {
+                                        console.log(`⚠️ All recovery attempts failed for ${actionId}`);
+                                    }
                                 }
                             } else {
-                                // Standard parameter reference
-                                const parts = value.split('.');
-                                if (parts.length >= 2) {
-                                    const refActionId = parts[0];
-                                    if (refActionId) {
-                                        const refResult = actionResults[refActionId];
-
-                                        if (!refResult) {
-                                            throw new Error(`Referenced action "${refActionId}" not found or didn't produce a result`);
-                                        }
-
-                                        // For deeply nested properties, traverse the object
-                                        let currentValue = refResult;
-
-                                        // Start from 1 to skip the action ID
-                                        for (let j = 1; j < parts.length; j++) {
-                                            const field = parts[j];
-                                            if (field && typeof currentValue === 'object' && currentValue !== null && field in currentValue) {
-                                                currentValue = currentValue[field];
-                                            } else {
-                                                throw new Error(`Field "${parts.slice(1).join('.')}" not found in the result of action "${refActionId}"`);
-                                            }
-                                        }
-
-                                        // Handle type conversions based on the expected parameter type
-                                        let expectedType = null;
-                                        try {
-                                            if (typeof registeredFunction.getParams === 'function') {
-                                                const functionParam = registeredFunction.getParams().find(param => {
-                                                    if (param instanceof AIObject) {
-                                                        return param.getName() === key;
-                                                    } else if (param instanceof AIArray) {
-                                                        return param.getName() === key;
-                                                    } else if (param instanceof AIFieldEnum) {
-                                                        return param.getName() === key;
-                                                    } else if ('name' in param) {
-                                                        return param.name === key;
-                                                    }
-                                                    return false;
-                                                });
-
-                                                if (functionParam) {
-                                                    // Only apply type conversion if we found a matching parameter
-                                                    if (functionParam instanceof AIObject) {
-                                                        // Ensure object is actually an object
-                                                        if (typeof currentValue !== 'object' || currentValue === null) {
-                                                            throw new Error(`Expected object for parameter "${key}" but got ${typeof currentValue}`);
-                                                        }
-                                                    } else if (functionParam instanceof AIArray) {
-                                                        // Ensure array is actually an array
-                                                        if (!Array.isArray(currentValue)) {
-                                                            throw new Error(`Expected array for parameter "${key}" but got ${typeof currentValue}`);
-                                                        }
-                                                    } else if ('type' in functionParam) {
-                                                        // Basic type conversions for primitive types
-                                                        expectedType = functionParam.type;
-                                                    }
-                                                }
-                                            }
-
-                                            // Apply type conversions based on expected type if found
-                                            if (expectedType) {
-                                                if (expectedType === 'string' && typeof currentValue !== 'string') {
-                                                    currentValue = String(currentValue);
-                                                } else if (expectedType === 'number' && typeof currentValue !== 'number') {
-                                                    const num = Number(currentValue);
-                                                    if (isNaN(num)) {
-                                                        throw new Error(`Cannot convert "${currentValue}" to number for parameter "${key}"`);
-                                                    }
-                                                    currentValue = num;
-                                                } else if (expectedType === 'boolean' && typeof currentValue !== 'boolean') {
-                                                    if (currentValue === 'true') currentValue = true;
-                                                    else if (currentValue === 'false') currentValue = false;
-                                                    else if (currentValue === 1) currentValue = true;
-                                                    else if (currentValue === 0) currentValue = false;
-                                                    else {
-                                                        throw new Error(`Cannot convert "${currentValue}" to boolean for parameter "${key}"`);
-                                                    }
-                                                }
-                                            }
-
-                                            processedParameters[key] = currentValue;
-
-                                            if (debug) {
-                                                console.log(`Resolved parameter "${key}" from "${value}" to:`, currentValue);
-                                            }
-                                        } catch (typeError: unknown) {
-                                            // If we can't validate the type, just use the value as is
-                                            processedParameters[key] = currentValue;
-                                            if (debug) {
-                                                console.warn(`Skipping type validation for parameter "${key}" (using as-is):`,
-                                                    typeError instanceof Error ? typeError.message : String(typeError));
-                                            }
-                                        }
-                                    }
-                                }
+                                // AI determined recovery isn't possible
+                                actionResults[actionId] = {
+                                    error: `Function ${toolName} failed: ${functionError instanceof Error ? functionError.message : String(functionError)}`,
+                                    recoveryNotPossible: true
+                                };
                             }
-                        } catch (paramError) {
-                            // Collect errors but continue with other parameters if possible
-                            const errorMessage = paramError instanceof Error ? paramError.message : String(paramError);
-                            actionErrors.push({ actionId, error: `Parameter error for "${key}": ${errorMessage}` });
+
+                        } catch (recoverySystemError: unknown) {
                             if (debug) {
-                                console.error(`Error resolving parameter "${key}":`, errorMessage);
+                                console.log(`❌ Error recovery system failed:`, recoverySystemError instanceof Error ? recoverySystemError.message : String(recoverySystemError));
                             }
+
+                            // Fallback to simple error result
+                            actionResults[actionId] = {
+                                error: `Function ${toolName} failed: ${functionError instanceof Error ? functionError.message : String(functionError)}`,
+                                recoverySystemError: recoverySystemError instanceof Error ? recoverySystemError.message : String(recoverySystemError)
+                            };
                         }
                     }
                 }
 
-                // If we have any parameter errors, throw now before executing the function
-                if (actionErrors.length > 0) {
-                    errors.push(...actionErrors);
-                    throw new Error(`Failed to resolve parameters for action "${actionId}": ${actionErrors.map(e => e.error).join(', ')}`);
-                }
+                const finalAction = workflow.actions[workflow.actions.length - 1];
+                const finalResult: Record<string, any> = actionResults[finalAction?.id || ''] as Record<string, any>;
+                const initialUIType = guessUIType(finalResult);
 
-                if (debug) {
-                    console.log(`Processed parameters for "${actionId}":`, processedParameters);
-                }
+                let uiType = initialUIType;
+                let uiConfig = {};
 
                 try {
-                    if ((action?.map ?? false) === true) {
-                        const arrayParams = Object.entries(processedParameters).find(
-                            ([_, value]) => Array.isArray(value)
-                        );
+                    const aibot = getAIBot();
+                    const enhancedUI = await enhanceOutputUIWithLLM(finalResult, initialUIType, aibot);
+                    console.log("enhancedUI", enhancedUI)
+                    uiType = enhancedUI.type;
+                    uiConfig = enhancedUI.config || {};
 
-                        if (!arrayParams) {
-                            throw new Error(`Action ${actionId} has map:true but no array parameters were found`);
-                        }
-
-                        const [arrayParamName, arrayValues] = arrayParams;
-
-                        if (debug) {
-                            console.log(`Mapping over ${arrayValues.length} items for parameter "${arrayParamName}"`);
-                        }
-
-                        const results = await Promise.all(arrayValues.map(async (item: unknown) => {
-                            const itemParams = { ...processedParameters };
-                            itemParams[arrayParamName] = item;
-                            return await callFunctionFromRegistryFromObject(toolName, itemParams);
-                        }));
-
-                        actionResults[actionId] = results;
-
-                        if (debug) {
-                            console.log(`Mapped results from "${actionId}":`, results);
-                        }
-                    } else {
-                        if (debug) {
-                            console.log(`Executing function ${toolName} with parameters:`, processedParameters);
-                        }
-                        const result = await callFunctionFromRegistryFromObject(toolName, processedParameters);
-                        actionResults[actionId] = result;
-
-                        if (debug) {
-                            console.log(`Result from "${actionId}":`, result);
-                        }
+                    if (debug) {
+                        console.log(`Enhanced UI type: ${uiType} (was: ${initialUIType})`);
+                        console.log('UI config:', JSON.stringify(uiConfig, null, 2));
                     }
-                } catch (functionError) {
-                    const errorMessage = functionError instanceof Error ? functionError.message : String(functionError);
-                    throw new Error(`Error executing function "${toolName}" for action "${actionId}": ${errorMessage}`);
+                } catch (error) {
+                    // Silently fall back to initial UI type
+                    console.log("ui choosing error", error)
                 }
-            }
 
-            const finalAction = workflow.actions[workflow.actions.length - 1];
-            const finalResult: Record<string, any> = actionResults[finalAction?.id || ''] as Record<string, any>;
-            const initialUIType = guessUIType(finalResult);
-
-            let uiType = initialUIType;
-            let uiConfig = {};
-
-            try {
-                const aibot = getAIBot();
-                const enhancedUI = await enhanceOutputUIWithLLM(finalResult, initialUIType, aibot);
-                console.log("enhancedUI", enhancedUI)
-                uiType = enhancedUI.type;
-                uiConfig = enhancedUI.config || {};
-
-                if (debug) {
-                    console.log(`Enhanced UI type: ${uiType} (was: ${initialUIType})`);
-                    console.log('UI config:', JSON.stringify(uiConfig, null, 2));
-                }
-            } catch (error) {
-                // Silently fall back to initial UI type
-                console.log("ui choosing error", error)
-            }
-
-            const finalWorkflowResult: NewWorkflowResult = {
-                actionId: finalAction?.id || '',
-                result: typeof finalResult === 'object' ? finalResult : { value: finalResult },
-                uiElement: {
-                    type: 'result',
+                const finalWorkflowResult: NewWorkflowResult = {
                     actionId: finalAction?.id || '',
-                    tool: finalAction?.tool || '',
-                    content: {
-                        type: uiType,
-                        title: finalAction?.tool || '',
-                        content: typeof finalResult === 'object' ? JSON.stringify(finalResult, null, 2) : String(finalResult),
-                        timestamp: new Date().toISOString(),
-                        config: uiConfig
+                    result: typeof finalResult === 'object' ? finalResult : { value: finalResult },
+                    uiElement: {
+                        type: 'result',
+                        actionId: finalAction?.id || '',
+                        tool: finalAction?.tool || '',
+                        content: {
+                            type: uiType,
+                            title: finalAction?.tool || '',
+                            content: typeof finalResult === 'object' ? JSON.stringify(finalResult, null, 2) : String(finalResult),
+                            timestamp: new Date().toISOString(),
+                            config: uiConfig
+                        }
                     }
+                };
+
+                // Update audit log with success
+                auditLog.status = 'success';
+                auditLog.result = finalWorkflowResult;
+                auditLog.endTime = new Date();
+                auditLog.duration = auditLog.endTime.getTime() - startTime.getTime();
+
+                // Try to send audit log to hub
+                try {
+                    await fetch(`${process.env.HUB_URL}/audit/workflow`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            [HEADER_API_TOKEN]: apiSecretKey ? apiSecretKey : ''
+                        },
+                        body: JSON.stringify(auditLog)
+                    });
+                } catch (hubError) {
+                    console.error('Failed to send audit log to hub:', hubError);
                 }
-            };
 
-            // Update audit log with success
-            auditLog.status = 'success';
-            auditLog.result = finalWorkflowResult;
-            auditLog.endTime = new Date();
-            auditLog.duration = auditLog.endTime.getTime() - startTime.getTime();
+                res.json(createWorkflowExecutionSuccess([finalWorkflowResult]));
 
-            // Try to send audit log to hub
-            try {
-                await fetch(`${process.env.HUB_URL}/audit/workflow`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        [HEADER_API_TOKEN]: apiSecretKey ? apiSecretKey : ''
-                    },
-                    body: JSON.stringify(auditLog)
-                });
-            } catch (hubError) {
-                console.error('Failed to send audit log to hub:', hubError);
+            } catch (error: unknown) {
+                const errorMessage = 'Failed to execute workflow';
+                const details = error instanceof Error ? error.message : 'Unknown error';
+
+                // Update audit log with error
+                auditLog.status = 'error';
+                auditLog.error = {
+                    message: errorMessage,
+                    details,
+                    errors: errors.length > 0 ? errors : undefined
+                };
+                auditLog.endTime = new Date();
+                auditLog.duration = auditLog.endTime.getTime() - startTime.getTime();
+
+                // Try to send audit log to hub
+                try {
+                    await fetch(`${process.env.HUB_URL}/audit/workflow`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            [HEADER_API_TOKEN]: apiSecretKey ? apiSecretKey : ''
+                        },
+                        body: JSON.stringify(auditLog)
+                    });
+                } catch (hubError) {
+                    console.error('Failed to send audit log to hub:', hubError);
+                }
+
+                res.status(400).json(
+                    createWorkflowExecutionError(errorMessage, details, errors.length > 0 ? errors : undefined)
+                );
             }
-
-            res.json(createWorkflowExecutionSuccess([finalWorkflowResult]));
-
-        } catch (error: unknown) {
-            const errorMessage = 'Failed to execute workflow';
-            const details = error instanceof Error ? error.message : 'Unknown error';
-
-            // Update audit log with error
-            auditLog.status = 'error';
-            auditLog.error = {
-                message: errorMessage,
-                details,
-                errors: errors.length > 0 ? errors : undefined
-            };
-            auditLog.endTime = new Date();
-            auditLog.duration = auditLog.endTime.getTime() - startTime.getTime();
-
-            // Try to send audit log to hub
-            try {
-                await fetch(`${process.env.HUB_URL}/audit/workflow`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        [HEADER_API_TOKEN]: apiSecretKey ? apiSecretKey : ''
-                    },
-                    body: JSON.stringify(auditLog)
-                });
-            } catch (hubError) {
-                console.error('Failed to send audit log to hub:', hubError);
-            }
-
-            res.status(500).json(
-                createWorkflowExecutionError(errorMessage, details, errors.length > 0 ? errors : undefined)
+        } catch (error) {
+            console.error('Failed to execute workflow:', error);
+            res.status(400).json(
+                createWorkflowExecutionError('Failed to execute workflow', 'Unknown error', [])
             );
         }
     });
