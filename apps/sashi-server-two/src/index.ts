@@ -3,6 +3,7 @@ import express from "express"
 import { Express } from "express-serve-static-core"
 import "./services/file_service"
 import "./services/user_service"
+import "./services/workflow_service"
 
 require("dotenv").config()
 
@@ -73,9 +74,7 @@ app.use(
     "/sashi",
     createMiddleware({
         openAIKey: process.env.OPENAI_API_KEY || '',
-        hubUrl: process.env.HUB_URL || 'http://localhost:3050',
-        repos: ["usertwo-sub-to-userone"],
-        apiSecretKey: process.env.API_SECRET_KEY || '',
+        apiSecretKey: process.env.API_SECRET_KEY || ''
     })
 )
 

@@ -234,6 +234,7 @@ export const WorkflowResultViewer = ({ results }: WorkflowResultViewerProps) => 
     }
 
     // Render according to content type
+    console.log('outputui.content.type', ui);
     switch (ui.content.type) {
       case 'graph':
         // If we have a graph type, render the simplified chart view
@@ -420,6 +421,55 @@ export const WorkflowResultViewer = ({ results }: WorkflowResultViewerProps) => 
           );
         }
         break;
+
+      case 'text':
+        // Handle text content with proper expand/collapse for large content
+        const textContent = ui.content.content;
+        const isLargeText = textContent.length > 300;
+
+        return (
+          <div className="relative">
+            <div className="flex justify-end gap-2 mb-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => copyToClipboard(textContent)}
+                className="h-7 px-2 text-xs"
+              >
+                <CopyIcon className="h-3.5 w-3.5 mr-1" />
+                Copy
+              </Button>
+              {isLargeText && (
+                <Button variant="outline" size="sm" onClick={() => toggleExpand(resultId)} className="h-7 px-2 text-xs">
+                  {isExpanded ? (
+                    <MinusIcon className="h-3.5 w-3.5 mr-1" />
+                  ) : (
+                    <ExpandIcon className="h-3.5 w-3.5 mr-1" />
+                  )}
+                  {isExpanded ? 'Collapse' : 'Expand'}
+                </Button>
+              )}
+            </div>
+
+            {isLargeText ? (
+              isExpanded ? (
+                <Textarea
+                  value={textContent}
+                  readOnly
+                  className="min-h-[400px] max-h-[600px] w-full font-mono text-sm"
+                />
+              ) : (
+                <ScrollArea className="h-[200px] w-full rounded-md border p-4">
+                  <pre className="whitespace-pre-wrap text-sm font-mono">{textContent}</pre>
+                </ScrollArea>
+              )
+            ) : (
+              <div className="bg-muted p-3 rounded-md">
+                <pre className="whitespace-pre-wrap text-sm font-mono">{textContent}</pre>
+              </div>
+            )}
+          </div>
+        );
 
       default:
         // Default to showing the content as preformatted text

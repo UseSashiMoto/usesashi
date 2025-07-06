@@ -75,7 +75,29 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
 
     return formPayload.fields.every((field) => {
       if (field.required) {
-        return formData[field.key] !== undefined && formData[field.key] !== '';
+        const value = formData[field.key];
+        const fieldAny = field as any;
+
+        // Handle CSV fields specifically
+        if (fieldAny.type === 'csv') {
+          // For CSV fields, the value should always be a string (raw CSV text)
+          if (!value || typeof value !== 'string') return false;
+
+          // Try to parse the CSV and validate
+          const parsedData = parseCSV(value);
+          if (parsedData.length === 0) return false;
+
+          // Check if expected columns are present
+          if (fieldAny.expectedColumns && fieldAny.expectedColumns.length > 0) {
+            const validation = validateCSVColumns(parsedData, fieldAny.expectedColumns);
+            return validation.isValid;
+          }
+
+          return true;
+        }
+
+        // Handle other field types
+        return value !== undefined && value !== '';
       }
       return true;
     });
@@ -84,6 +106,169 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
   // Handle different input types
   const handleInputChange = (key: string, value: any) => {
     setFormData((prev) => ({ ...prev, [key]: value }));
+  };
+
+  // CSV parsing function
+  const parseCSV = (csvText: string): Array<Record<string, any>> => {
+    if (!csvText.trim()) return [];
+
+    const lines = csvText.trim().split('\n');
+    if (lines.length < 2) return []; // Need at least header + 1 data row
+
+    const headers = lines[0].split(',').map((h) => h.trim().replace(/^["']|["']$/g, ''));
+    const data = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const values = lines[i].split(',').map((v) => v.trim().replace(/^["']|["']$/g, ''));
+      if (values.length === headers.length) {
+        const row: Record<string, any> = {};
+        headers.forEach((header, index) => {
+          row[header] = values[index];
+        });
+        data.push(row);
+      }
+    }
+
+    return data;
+  };
+
+  // CSV field validation
+  const validateCSVColumns = (
+    csvData: Array<Record<string, any>>,
+    expectedColumns: string[]
+  ): {
+    isValid: boolean;
+    missingColumns: string[];
+    extraColumns: string[];
+  } => {
+    if (csvData.length === 0) return { isValid: false, missingColumns: expectedColumns, extraColumns: [] };
+
+    const actualColumns = Object.keys(csvData[0]);
+    const missingColumns = expectedColumns.filter((col) => !actualColumns.includes(col));
+    const extraColumns = actualColumns.filter((col) => !expectedColumns.includes(col));
+
+    return {
+      isValid: missingColumns.length === 0,
+      missingColumns,
+      extraColumns,
+    };
+  };
+
+  // Render CSV field with validation and preview
+  const renderCSVField = (field: any) => {
+    // Ensure csvText is always a string - if it's an array, convert back to empty string for display
+    const rawValue = formData[field.key];
+    const csvText = typeof rawValue === 'string' ? rawValue : '';
+    const expectedColumns = field.expectedColumns || [];
+    const parsedData = parseCSV(csvText);
+    const validation = validateCSVColumns(parsedData, expectedColumns);
+
+    return (
+      <div className="space-y-3">
+        {/* Expected columns display */}
+        {expectedColumns.length > 0 && (
+          <div className="bg-blue-50 dark:bg-blue-950 p-3 rounded-md">
+            <div className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">Expected columns:</div>
+            <div className="flex flex-wrap gap-1">
+              {expectedColumns.map((col: string) => (
+                <Badge key={col} variant="outline" className="text-xs">
+                  {col}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* CSV input textarea */}
+        <Textarea
+          placeholder={`Paste CSV data here...\nExample:\n${expectedColumns.join(',')}\nvalue1,value2,value3`}
+          value={csvText}
+          onChange={(e) => {
+            // Always store the raw CSV text as a string
+            handleInputChange(field.key, e.target.value);
+          }}
+          required={field.required}
+          className="min-h-[120px] font-mono text-sm"
+        />
+
+        {/* Validation messages */}
+        {csvText && (
+          <div className="space-y-2">
+            {validation.missingColumns.length > 0 && (
+              <div className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 p-3 rounded-md">
+                <div className="text-sm font-medium text-red-800 dark:text-red-200">Missing required columns:</div>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {validation.missingColumns.map((col) => (
+                    <Badge key={col} variant="destructive" className="text-xs">
+                      {col}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {validation.extraColumns.length > 0 && (
+              <div className="bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 p-3 rounded-md">
+                <div className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                  Extra columns (will be ignored):
+                </div>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {validation.extraColumns.map((col) => (
+                    <Badge key={col} variant="secondary" className="text-xs">
+                      {col}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {validation.isValid && parsedData.length > 0 && (
+              <div className="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 p-3 rounded-md">
+                <div className="text-sm font-medium text-green-800 dark:text-green-200">
+                  ✅ CSV data is valid ({parsedData.length} row{parsedData.length !== 1 ? 's' : ''})
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Data preview */}
+        {parsedData.length > 0 && (
+          <div className="bg-gray-50 dark:bg-gray-900 p-3 rounded-md">
+            <div className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-2">Preview (first 3 rows):</div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-gray-200 dark:border-gray-700">
+                    {Object.keys(parsedData[0]).map((header) => (
+                      <th key={header} className="text-left py-1 px-2 font-medium">
+                        {header}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {parsedData.slice(0, 3).map((row, index) => (
+                    <tr key={index} className="border-b border-gray-100 dark:border-gray-800">
+                      {Object.values(row).map((value, colIndex) => (
+                        <td key={colIndex} className="py-1 px-2 text-gray-600 dark:text-gray-400">
+                          {String(value).length > 20 ? String(value).substring(0, 20) + '...' : String(value)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {parsedData.length > 3 && (
+              <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                ... and {parsedData.length - 3} more row{parsedData.length - 3 !== 1 ? 's' : ''}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
   };
 
   // Execute workflow with form data
@@ -105,7 +290,15 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
           for (const key in updatedParams) {
             // Check if field exists in our form data
             if (formData[key] !== undefined) {
-              updatedParams[key] = formData[key];
+              // Check if this is a CSV field that needs to be parsed
+              const paramMetadata = (action as any).parameterMetadata?.[key];
+              if (paramMetadata?.type === 'csv' && typeof formData[key] === 'string') {
+                // Parse CSV text into array of objects for execution
+                const parsedData = parseCSV(formData[key]);
+                updatedParams[key] = parsedData;
+              } else {
+                updatedParams[key] = formData[key];
+              }
             }
           }
 
@@ -424,6 +617,8 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
             required={field.required}
           />
         );
+      case 'csv':
+        return renderCSVField(field);
       default:
         return (
           <Input
