@@ -915,36 +915,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                             try {
                                 const parsedResult = JSON.parse(result.message.content)
 
-                                // Validate workflow response
-                                if (parsedResult.type === 'workflow') {
-                                    const workflowResult: WorkflowResponse = parsedResult
-
-                                    // Validate workflow structure
-                                    if (!workflowResult.actions || !Array.isArray(workflowResult.actions)) {
-                                        console.error('[Chat] Invalid workflow structure:', workflowResult);
-                                        return res.status(400).json({
-                                            message: 'Error processing request',
-                                            error: 'Invalid workflow format',
-                                            details: 'The AI generated a workflow with invalid structure. Missing or invalid actions array.',
-                                            debug_info: {
-                                                workflow: workflowResult,
-                                                timestamp: new Date().toISOString()
-                                            }
-                                        });
-                                    }
-
-                                    // Clean up function. prefix from tool names before sending to client
-                                    if (workflowResult.type === 'workflow' && workflowResult.actions) {
-                                        workflowResult.actions = workflowResult.actions.map(action => ({
-                                            ...action,
-                                            tool: action.tool.replace(/^functions\./, '')
-                                        }))
-                                    }
-
-                                    console.log(`[Chat] Successfully processed workflow with ${workflowResult.actions.length} actions`);
-                                    return res.json({ output: workflowResult })
-                                }
-
+                                // Process only general responses (workflows are now embedded in content)
                                 if (parsedResult.type === 'general') {
                                     const generalResponse: GeneralResponse = parsedResult
                                     if (!generalResponse.content) {
@@ -965,12 +936,12 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                                     })
                                 }
 
-                                // If we get here, the response type is unknown
-                                console.error('[Chat] Unknown response type:', parsedResult);
+                                // If we get here, the response type is unexpected
+                                console.error('[Chat] Unexpected response type:', parsedResult);
                                 return res.status(500).json({
                                     message: 'Error processing request',
                                     error: 'Invalid response type',
-                                    details: `The AI generated a response with an unknown type: ${parsedResult.type || 'undefined'}. Expected 'workflow' or 'general'.`,
+                                    details: `The AI generated a response with an unexpected type: ${parsedResult.type || 'undefined'}. Expected 'general' with optional embedded workflows.`,
                                     debug_info: {
                                         parsedResult,
                                         timestamp: new Date().toISOString()

@@ -50,7 +50,7 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
   savedWorkflow,
   onWorkflowChange,
 }) => {
-  console.log('workflow inspect: ', workflow);
+  console.log('workflow ui card inspect: ', workflow);
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [results, setResults] = useState<WorkflowResult[]>(() => {
     // Initialize with existing results if available

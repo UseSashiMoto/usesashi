@@ -5,8 +5,11 @@ import {
     detectWorkflowEntryType,
     extractWorkflowFromNested,
     getClassificationExplanation,
+    hasEmbeddedWorkflows,
     isErrorResult,
     isPlaceholderValue,
+    parseEmbeddedWorkflows,
+    removeWorkflowBlocks,
     WorkflowCharacteristics,
     WorkflowClassificationResult
 } from '../utils/workflowClassification';
@@ -781,6 +784,407 @@ describe('Workflow Classification System', () => {
             expect(result.entryType).toBe('form');
             expect(result.payload.fields).toHaveLength(1);
             expect(result.payload.fields[0].key).toBe('value');
+        });
+    });
+});
+
+describe('Embedded Workflow Parsing', () => {
+    describe('parseEmbeddedWorkflows', () => {
+        it('should parse single embedded workflow from content', () => {
+            const content = `Here's a workflow for you:
+
+\`\`\`workflow
+{
+  "type": "workflow",
+  "description": "Get user by ID",
+  "actions": [
+    {
+      "id": "get_user",
+      "tool": "get_user_by_id",
+      "description": "Fetch user information",
+      "parameters": { "userId": 123 },
+      "parameterMetadata": { "userId": { "type": "number", "required": true } },
+      "map": false
+    }
+  ]
+}
+\`\`\`
+
+This will help you retrieve user data.`;
+
+            const workflows = parseEmbeddedWorkflows(content);
+
+            expect(workflows).toHaveLength(1);
+            expect(workflows[0].type).toBe('workflow');
+            expect(workflows[0].description).toBe('Get user by ID');
+            expect(workflows[0].actions).toHaveLength(1);
+            expect(workflows[0].actions[0].id).toBe('get_user');
+            expect(workflows[0].actions[0].tool).toBe('get_user_by_id');
+        });
+
+        it('should parse multiple embedded workflows from content', () => {
+            const content = `First workflow:
+
+\`\`\`workflow
+{
+  "type": "workflow",
+  "description": "Get user",
+  "actions": [{"id": "get_user", "tool": "get_user_by_id", "parameters": {}}]
+}
+\`\`\`
+
+And here's another:
+
+\`\`\`workflow
+{
+  "type": "workflow", 
+  "description": "Delete user",
+  "actions": [{"id": "delete_user", "tool": "delete_user_by_id", "parameters": {}}]
+}
+\`\`\`
+
+Both workflows are ready.`;
+
+            const workflows = parseEmbeddedWorkflows(content);
+
+            expect(workflows).toHaveLength(2);
+            expect(workflows[0].description).toBe('Get user');
+            expect(workflows[1].description).toBe('Delete user');
+        });
+
+        it('should handle case insensitive workflow blocks', () => {
+            const content = `\`\`\`WORKFLOW
+{
+  "type": "workflow",
+  "description": "Case insensitive test",
+  "actions": []
+}
+\`\`\``;
+
+            const workflows = parseEmbeddedWorkflows(content);
+
+            expect(workflows).toHaveLength(1);
+            expect(workflows[0].description).toBe('Case insensitive test');
+        });
+
+        it('should return empty array for content without workflows', () => {
+            const content = `This is just regular text with some code:
+
+\`\`\`json
+{"not": "a workflow"}
+\`\`\`
+
+And some more text.`;
+
+            const workflows = parseEmbeddedWorkflows(content);
+
+            expect(workflows).toHaveLength(0);
+        });
+
+        it('should ignore invalid JSON in workflow blocks', () => {
+            const content = `\`\`\`workflow
+{invalid json here
+\`\`\`
+
+\`\`\`workflow
+{
+  "type": "workflow",
+  "description": "Valid workflow",
+  "actions": []
+}
+\`\`\``;
+
+            const workflows = parseEmbeddedWorkflows(content);
+
+            expect(workflows).toHaveLength(1);
+            expect(workflows[0].description).toBe('Valid workflow');
+        });
+
+        it('should ignore non-workflow objects in workflow blocks', () => {
+            const content = `\`\`\`workflow
+{
+  "type": "not-a-workflow",
+  "description": "This is not a workflow",
+  "actions": []
+}
+\`\`\`
+
+\`\`\`workflow
+{
+  "type": "workflow",
+  "description": "This is a workflow",
+  "actions": []
+}
+\`\`\``;
+
+            const workflows = parseEmbeddedWorkflows(content);
+
+            expect(workflows).toHaveLength(1);
+            expect(workflows[0].description).toBe('This is a workflow');
+        });
+
+        it('should handle workflows with complex nested parameters', () => {
+            const content = `\`\`\`workflow
+{
+  "type": "workflow",
+  "description": "Complex workflow",
+  "actions": [
+    {
+      "id": "complex_action",
+      "tool": "complex_tool",
+      "parameters": {
+        "nested": {
+          "array": [1, 2, 3],
+          "object": {"key": "value"}
+        }
+      },
+      "parameterMetadata": {
+        "nested": {
+          "type": "object",
+          "required": true
+        }
+      },
+      "map": false
+    }
+  ]
+}
+\`\`\``;
+
+            const workflows = parseEmbeddedWorkflows(content);
+
+            expect(workflows).toHaveLength(1);
+            expect(workflows[0].actions[0].parameters.nested.array).toEqual([1, 2, 3]);
+            expect(workflows[0].actions[0].parameters.nested.object.key).toBe('value');
+        });
+    });
+
+    describe('removeWorkflowBlocks', () => {
+        it('should remove single workflow block from content', () => {
+            const content = `Here's a workflow:
+
+\`\`\`workflow
+{
+  "type": "workflow",
+  "description": "Test workflow",
+  "actions": []
+}
+\`\`\`
+
+This text should remain.`;
+
+            const result = removeWorkflowBlocks(content);
+
+            expect(result).toBe(`Here's a workflow:
+
+This text should remain.`);
+        });
+
+        it('should remove multiple workflow blocks from content', () => {
+            const content = `First workflow:
+
+\`\`\`workflow
+{"type": "workflow", "actions": []}
+\`\`\`
+
+Some text between.
+
+\`\`\`workflow
+{"type": "workflow", "actions": []}
+\`\`\`
+
+Final text.`;
+
+            const result = removeWorkflowBlocks(content);
+
+            expect(result).toBe(`First workflow:
+
+Some text between.
+
+Final text.`);
+        });
+
+        it('should preserve other code blocks', () => {
+            const content = `Here's some code:
+
+\`\`\`javascript
+console.log('hello');
+\`\`\`
+
+And a workflow:
+
+\`\`\`workflow
+{"type": "workflow", "actions": []}
+\`\`\`
+
+And more code:
+
+\`\`\`json
+{"data": "value"}
+\`\`\``;
+
+            const result = removeWorkflowBlocks(content);
+
+            expect(result).toContain('```javascript');
+            expect(result).toContain('```json');
+            expect(result).not.toContain('```workflow');
+        });
+
+        it('should handle case insensitive workflow blocks', () => {
+            const content = `\`\`\`WORKFLOW
+{"type": "workflow", "actions": []}
+\`\`\`
+
+\`\`\`Workflow
+{"type": "workflow", "actions": []}
+\`\`\``;
+
+            const result = removeWorkflowBlocks(content);
+
+            expect(result).toBe('');
+        });
+
+        it('should return original content if no workflow blocks', () => {
+            const content = `This is just regular text with some code:
+
+\`\`\`json
+{"not": "a workflow"}
+\`\`\`
+
+And some more text.`;
+
+            const result = removeWorkflowBlocks(content);
+
+            expect(result).toBe(content);
+        });
+    });
+
+    describe('hasEmbeddedWorkflows', () => {
+        it('should return true for content with workflow blocks', () => {
+            const content = `Text with workflow:
+
+\`\`\`workflow
+{"type": "workflow", "actions": []}
+\`\`\``;
+
+            expect(hasEmbeddedWorkflows(content)).toBe(true);
+        });
+
+        it('should return true for case insensitive workflow blocks', () => {
+            const content = `\`\`\`WORKFLOW
+{"type": "workflow", "actions": []}
+\`\`\``;
+
+            expect(hasEmbeddedWorkflows(content)).toBe(true);
+        });
+
+        it('should return false for content without workflow blocks', () => {
+            const content = `Just regular text with code:
+
+\`\`\`json
+{"not": "a workflow"}
+\`\`\``;
+
+            expect(hasEmbeddedWorkflows(content)).toBe(false);
+        });
+
+        it('should return false for empty content', () => {
+            expect(hasEmbeddedWorkflows('')).toBe(false);
+        });
+
+        it('should return true for multiple workflow blocks', () => {
+            const content = `\`\`\`workflow
+{"type": "workflow", "actions": []}
+\`\`\`
+
+\`\`\`workflow
+{"type": "workflow", "actions": []}
+\`\`\``;
+
+            expect(hasEmbeddedWorkflows(content)).toBe(true);
+        });
+    });
+
+    describe('Embedded Workflow Integration', () => {
+        it('should correctly identify and parse a real-world embedded workflow example', () => {
+            const content = `I'll help you change a user's type. Here's a workflow that will handle this:
+
+\`\`\`workflow
+{
+  "type": "workflow",
+  "description": "Change user type",
+  "actions": [
+    {
+      "id": "change_user_type",
+      "tool": "change_user_type",
+      "description": "Update the user's type",
+      "parameters": {
+        "userId": "userInput.userId",
+        "type": "userInput.type"
+      },
+      "parameterMetadata": {
+        "userId": {
+          "type": "string",
+          "description": "The user's ID",
+          "required": true
+        },
+        "type": {
+          "type": "string",
+          "description": "The new user type",
+          "enum": ["CASE_MANAGER", "COMMUNITY_ENGAGEMENT"],
+          "required": true
+        }
+      },
+      "map": false
+    }
+  ]
+}
+\`\`\`
+
+Just fill in the user ID and select the new type from the dropdown, and the system will update the user's role.`;
+
+            // Test parsing
+            const workflows = parseEmbeddedWorkflows(content);
+            expect(workflows).toHaveLength(1);
+            expect(workflows[0].description).toBe('Change user type');
+            expect(workflows[0].actions[0].parameterMetadata.type.enum).toEqual(['CASE_MANAGER', 'COMMUNITY_ENGAGEMENT']);
+
+            // Test detection
+            expect(hasEmbeddedWorkflows(content)).toBe(true);
+
+            // Test removal
+            const textOnly = removeWorkflowBlocks(content);
+            expect(textOnly).toContain("I'll help you change a user's type");
+            expect(textOnly).toContain("Just fill in the user ID");
+            expect(textOnly).not.toContain('```workflow');
+        });
+
+        it('should handle edge cases in embedded workflow parsing', () => {
+            const edgeCases = [
+                // Empty workflow block
+                `\`\`\`workflow
+\`\`\``,
+                // Workflow block with only whitespace
+                `\`\`\`workflow
+   
+\`\`\``,
+                // Malformed JSON
+                `\`\`\`workflow
+{type: "workflow", missing quotes}
+\`\`\``,
+                // Missing required fields
+                `\`\`\`workflow
+{
+  "type": "workflow"
+}
+\`\`\``,
+            ];
+
+            edgeCases.forEach((content, index) => {
+                const workflows = parseEmbeddedWorkflows(content);
+                expect(workflows).toHaveLength(0);
+                expect(hasEmbeddedWorkflows(content)).toBe(true); // Should detect the block even if invalid
+                expect(removeWorkflowBlocks(content)).not.toContain('```workflow```');
+            });
         });
     });
 }); 
