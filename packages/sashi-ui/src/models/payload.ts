@@ -101,6 +101,7 @@ export interface WorkflowResponse {
     generate_ui: boolean
   }
   executionResults?: WorkflowResult[]
+  ui?: WorkflowUI // New UI format for SashiAgent
 }
 
 export interface WorkflowUIElement {
@@ -123,6 +124,25 @@ export interface WorkflowUIElement {
   };
 }
 
+// New UI format for SashiAgent
+export interface WorkflowUIComponent {
+  key: string;
+  label: string;
+  type: 'string' | 'number' | 'boolean' | 'enum' | 'text';
+  required: boolean;
+  enumValues?: string[];
+}
+
+export interface WorkflowOutputComponent {
+  actionId: string;
+  component: 'table' | 'dataCard';
+  props?: Record<string, any>;
+}
+
+export interface WorkflowUI {
+  inputComponents: WorkflowUIComponent[];
+  outputComponents: WorkflowOutputComponent[];
+}
 
 
 export type WorkflowEntryType = 'form' | 'button' | 'auto_update' | 'label';

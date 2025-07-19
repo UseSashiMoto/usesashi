@@ -23,6 +23,7 @@ import {
   UIWorkflowDefinition,
   WorkflowResponse,
   WorkflowResult,
+  WorkflowUIComponent,
 } from '../../models/payload';
 import { WorkflowResultViewer } from './WorkflowResultViewer';
 
@@ -70,6 +71,17 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
 
   // Form field validation
   const isFormValid = () => {
+    // Check if we have the new UI format
+    if (workflow.workflow.ui?.inputComponents) {
+      return workflow.workflow.ui.inputComponents.every((field) => {
+        if (field.required) {
+          return formData[field.key] !== undefined && formData[field.key] !== '';
+        }
+        return true;
+      });
+    }
+
+    // Fallback to old format
     const formPayload = workflow.entry.payload as FormPayload;
     if (!formPayload?.fields) return true;
 
@@ -360,44 +372,52 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
   };
 
   // Render form fields based on type
-  const renderFormField = (field: any) => {
-    switch (field.type) {
+  const renderFormField = (field: WorkflowUIComponent | any) => {
+    // Handle both new UI format and old format
+    const fieldType = field.type || field.fieldType;
+    const fieldKey = field.key || field.name;
+    const fieldLabel = field.label || fieldKey;
+    const fieldRequired = field.required || false;
+    const fieldEnumValues = field.enumValues || field.enum || [];
+    const fieldValue = formData[fieldKey] || '';
+
+    switch (fieldType) {
       case 'string':
         return (
           <Input
-            placeholder={field.label || field.key}
-            value={formData[field.key] || ''}
-            onChange={(e) => handleInputChange(field.key, e.target.value)}
-            required={field.required}
+            placeholder={fieldLabel}
+            value={fieldValue}
+            onChange={(e) => handleInputChange(fieldKey, e.target.value)}
+            required={fieldRequired}
           />
         );
       case 'number':
         return (
           <Input
             type="number"
-            placeholder={field.label || field.key}
-            value={formData[field.key] || ''}
-            onChange={(e) => handleInputChange(field.key, parseFloat(e.target.value))}
-            required={field.required}
+            placeholder={fieldLabel}
+            value={fieldValue}
+            onChange={(e) => handleInputChange(fieldKey, parseFloat(e.target.value))}
+            required={fieldRequired}
           />
         );
       case 'boolean':
         return (
           <div className="flex items-center space-x-2">
             <Switch
-              checked={!!formData[field.key]}
-              onCheckedChange={(checked) => handleInputChange(field.key, checked)}
-              id={`switch-${field.key}`}
+              checked={!!fieldValue}
+              onCheckedChange={(checked) => handleInputChange(fieldKey, checked)}
+              id={`switch-${fieldKey}`}
             />
-            <Label htmlFor={`switch-${field.key}`}>{formData[field.key] ? 'Enabled' : 'Disabled'}</Label>
+            <Label htmlFor={`switch-${fieldKey}`}>{fieldValue ? 'Enabled' : 'Disabled'}</Label>
           </div>
         );
       case 'enum':
         return (
           <div className="relative overflow-visible">
-            <Select value={formData[field.key] || ''} onValueChange={(value) => handleInputChange(field.key, value)}>
+            <Select value={fieldValue} onValueChange={(value) => handleInputChange(fieldKey, value)}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder={field.label || field.key} />
+                <SelectValue placeholder={fieldLabel} />
               </SelectTrigger>
               <SelectContent
                 position="popper"
@@ -406,7 +426,7 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
                 sideOffset={4}
                 className="z-[9999] max-h-[200px] overflow-y-auto"
               >
-                {field.enumValues?.map((value: string) => (
+                {fieldEnumValues.map((value: string) => (
                   <SelectItem key={value} value={value}>
                     {value}
                   </SelectItem>
@@ -418,19 +438,19 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
       case 'text':
         return (
           <Textarea
-            placeholder={field.label || field.key}
-            value={formData[field.key] || ''}
-            onChange={(e) => handleInputChange(field.key, e.target.value)}
-            required={field.required}
+            placeholder={fieldLabel}
+            value={fieldValue}
+            onChange={(e) => handleInputChange(fieldKey, e.target.value)}
+            required={fieldRequired}
           />
         );
       default:
         return (
           <Input
-            placeholder={field.label || field.key}
-            value={formData[field.key] || ''}
-            onChange={(e) => handleInputChange(field.key, e.target.value)}
-            required={field.required}
+            placeholder={fieldLabel}
+            value={fieldValue}
+            onChange={(e) => handleInputChange(fieldKey, e.target.value)}
+            required={fieldRequired}
           />
         );
     }
@@ -559,7 +579,8 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
                 }}
                 className="space-y-4 overflow-visible"
               >
-                {(workflow.entry.payload as FormPayload)?.fields?.map((field) => (
+                {/* New UI format */}
+                {workflow.workflow.ui?.inputComponents?.map((field: WorkflowUIComponent) => (
                   <div key={field.key} className="space-y-2 overflow-visible">
                     <Label htmlFor={field.key}>
                       {field.label || field.key}
@@ -568,6 +589,18 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
                     {renderFormField(field)}
                   </div>
                 ))}
+
+                {/* Fallback to old format */}
+                {!workflow.workflow.ui?.inputComponents &&
+                  (workflow.entry.payload as FormPayload)?.fields?.map((field) => (
+                    <div key={field.key} className="space-y-2 overflow-visible">
+                      <Label htmlFor={field.key}>
+                        {field.label || field.key}
+                        {field.required && <span className="text-red-500 ml-1">*</span>}
+                      </Label>
+                      {renderFormField(field)}
+                    </div>
+                  ))}
 
                 <Button type="submit" disabled={isExecuting || !isFormValid()} className="w-full mt-4">
                   {isExecuting ? 'Running...' : 'Execute'}
