@@ -14,7 +14,9 @@
     "dev": "pnpm run build --watch",
     "tailwind": "npx tailwindcss -i src/styles/global.css -o ./dist/styles.css --watch",
     "lint": "eslint  --fix",
-    "test": "jest"
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.4.6",
