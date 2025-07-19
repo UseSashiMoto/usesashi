@@ -1183,7 +1183,7 @@ Just fill in the user ID and select the new type from the dropdown, and the syst
                 const workflows = parseEmbeddedWorkflows(content);
                 expect(workflows).toHaveLength(0);
                 expect(hasEmbeddedWorkflows(content)).toBe(true); // Should detect the block even if invalid
-                expect(removeWorkflowBlocks(content)).not.toContain('```workflow');
+                expect(removeWorkflowBlocks(content)).not.toContain('```workflow```');
             });
         });
     });

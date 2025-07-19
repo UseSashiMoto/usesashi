@@ -293,13 +293,18 @@ export function parseEmbeddedWorkflows(content: string): WorkflowResponse[] {
  */
 export function removeWorkflowBlocks(content: string): string {
     // Remove ```workflow blocks but preserve other content
-    return content.replace(/```workflow\s*\n[\s\S]*?\n```/gi, '').trim();
+    // Handle newlines better to avoid leaving extra blank lines
+    return content
+        .replace(/```workflow\s*\n[\s\S]*?\n```/gi, '')
+        .replace(/\n{3,}/g, '\n\n') // Replace multiple newlines with at most 2
+        .trim();
 }
 
 /**
  * Check if content contains embedded workflows
  */
 export function hasEmbeddedWorkflows(content: string): boolean {
-    const workflowRegex = /```workflow\s*\n[\s\S]*?\n```/gi;
+    // More permissive regex that detects any ```workflow block, even empty ones
+    const workflowRegex = /```workflow/gi;
     return workflowRegex.test(content);
 } 
