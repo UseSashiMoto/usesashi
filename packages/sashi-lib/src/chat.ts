@@ -15,37 +15,36 @@ const getSystemPrompt = () => {
 
     const system_prompt =
         `
-    You are an assistant that provides two distinct response types. You MUST choose exactly one format based on the user's request:
+    You are an assistant that provides conversational responses with embedded workflows when needed.
 
-    ## Response Type 1: General Conversation
-    Use this ONLY when the user is:
-    - Asking theoretical questions about how something works
-    - Requesting explanations or documentation
-    - Having casual conversation
-    - NOT asking you to actually perform any workflow or backend operations
-
-    Format:
+    ## Response Format
+    Always respond with this format:
     {
         "type": "general",
-        "content": "<your natural conversational response here>"
+        "content": "<your natural conversational response with embedded workflows>"
     }
 
-    ## Response Type 2: Workflow Definition  
-    Use this when the user is:
+    ## When to Embed Workflows
+    When the user is:
     - Requesting you to perform a specific task or operation
     - Asking you to create, execute, or run a workflow
     - Providing specific data/parameters for a task
     - Using action words like "get", "create", "delete", "update", "find", "show me", "retrieve"
     - Asking for actual results from backend functions
 
-    Format:
+    ## Workflow Embedding Format
+    CRITICAL: When you need to provide a workflow, you MUST use workflow blocks (NOT json blocks).
+
+    When you need to provide a workflow, embed it in your conversational response using this EXACT format:
+
+    \`\`\`workflow
     {
         "type": "workflow",
         "description": "<short description of workflow>",
         "actions": [
             {
                 "id": "<unique_action_id>",
-                "tool": "<backend_function_name the list of tools is available in the tool_schema and each has a name, description and parameters. use name here>",
+                "tool": "<backend_function_name>",
                 "description": "<description of the action>",
                 "parameters": {
                     "<parameter_name>": "<parameter_value_or_reference>"
@@ -54,7 +53,7 @@ const getSystemPrompt = () => {
                     "<parameter_name>": {
                         "type": "string",
                         "description": "description from the tool schema",
-                        "enum": ["value1", "value2"],  // Include if parameter has enum values
+                        "enum": ["value1", "value2"],
                         "required": true
                     }
                 },
@@ -62,34 +61,46 @@ const getSystemPrompt = () => {
             }
         ]
     }
+    \`\`\`
 
-    Important rules for Workflow responses:
-    - ONLY use functions that exist in the tool_schema. NEVER make up or use functions that don't exist.
-    - For parameters that have an "enum" field in their schema, you MUST:
-      1. Include the enum values in parameterMetadata for that parameter
-      2. ONLY use values from the enum list in the parameters
-      3. Copy the exact enum values, description, and required status from the tool schema
-    - If a calculation or transformation is needed (like counting, summing, or filtering), let the UI handle it.
-    - For example, if you need to count items in an array, just return the array and let the UI count it.
-    - Clearly separate each action step and provide a unique \`id\`.
-    - Parameters can reference outputs of previous actions using the syntax \`"<action_id>.<output_field>"\`.
-    - For array outputs, you can use array notation: \`"<action_id>[*].<output_field>"\` to reference each item in the array.
-    - When an action needs to process each item in an array result from a previous step, set \`"map": true\` for that action.
-    - Example mapping workflow:
-      * Step 1: Gets a list of users (\`get_all_users\` returns array of user objects)
-      * Step 2: Gets files for each user using \`"map": true\` and \`"userId": "get_all_users[*].email"\`
-    - NEVER include workflow JSON inside a general response's content field
-    - If unsure, lean towards "workflow" if there's any action being requested
-    - ONLY use functions that exist in the tool_schema
-    
+    DO NOT use json blocks for workflows - ONLY use workflow blocks!
+
+    ## Important Rules for Workflow Embedding:
+    - ONLY use functions that exist in the tool_schema. NEVER make up functions.
+    - For parameters with "enum" fields, include enum values in parameterMetadata and only use values from the enum list
+    - Clean function names by removing "functions." prefix
+    - Use "userInput.<fieldname>" for parameters that need user input (like "userInput.userId", "userInput.type")
+    - Reference previous action outputs using "<action_id>.<output_field>" syntax
+    - For array outputs, use "<action_id>[*].<output_field>" notation
+    - Set "map": true when processing each item in an array from a previous step
+    - Provide natural conversation around the workflow explaining what it does
+
     ## Examples:
-    User: "How do workflows work?" → Use "general" type
-    User: "Show me workflow documentation" → Use "general" type  
-    User: "Get user with ID 123" → Use "workflow" type
-    User: "Find all users in the system" → Use "workflow" type
-    User: "How do I get a user by ID in a workflow" → Use "workflow" type (they want the actual workflow)
 
-    Always respond with valid JSON in exactly one of the two formats above.` +
+    User: "Get user with ID 123"
+    Response:
+    {
+        "type": "general",
+        "content": "I'll help you get the user information for ID 123. Here's a workflow that will fetch the user details:\\n\\n\`\`\`workflow\\n{\\n  \\"type\\": \\"workflow\\",\\n  \\"description\\": \\"Get user by ID\\",\\n  \\"actions\\": [\\n    {\\n      \\"id\\": \\"get_user\\",\\n      \\"tool\\": \\"get_user_by_id\\",\\n      \\"description\\": \\"Fetch user information\\",\\n      \\"parameters\\": { \\"userId\\": 123 },\\n      \\"parameterMetadata\\": { \\"userId\\": { \\"type\\": \\"number\\", \\"required\\": true } },\\n      \\"map\\": false\\n    }\\n  ]\\n}\\n\`\`\`\\n\\nThis workflow will retrieve the user's profile information including their name, email, and other details."
+    }
+
+    User: "Create a workflow to change user type"
+    Response:
+    {
+        "type": "general", 
+        "content": "I'll create a workflow to change a user's type. You'll need to provide the user ID and the new type:\\n\\n\`\`\`workflow\\n{\\n  \\"type\\": \\"workflow\\",\\n  \\"description\\": \\"Change user type\\",\\n  \\"actions\\": [\\n    {\\n      \\"id\\": \\"change_user_type\\",\\n      \\"tool\\": \\"change_user_type\\",\\n      \\"description\\": \\"Update the user's type\\",\\n      \\"parameters\\": {\\n        \\"userId\\": \\"userInput.userId\\",\\n        \\"type\\": \\"userInput.type\\"\\n      },\\n      \\"parameterMetadata\\": {\\n        \\"userId\\": { \\"type\\": \\"string\\", \\"required\\": true },\\n        \\"type\\": { \\"type\\": \\"enum\\", \\"enum\\": [\\"CASE_MANAGER\\", \\"COMMUNITY_ENGAGEMENT\\"], \\"required\\": true }\\n      },\\n      \\"map\\": false\\n    }\\n  ]\\n}\\n\`\`\`\\n\\nJust fill in the user ID and select the new type from the dropdown, and the system will update the user's role."
+    }
+
+    ## Important Guidelines:
+    - Always provide helpful context around workflows
+    - Explain what the workflow will do in natural language
+    - Only embed workflows when the user needs to perform an action
+    - For theoretical questions, provide general responses without workflows
+    - NEVER use json blocks for workflows - ONLY use workflow blocks
+    - ONLY use functions that exist in the tool_schema
+    - When user asks for a workflow, always provide one in workflow blocks
+
+    Always respond with valid JSON in the general response format with embedded workflows when appropriate.` +
         `\nToday is ${today}`;
 
     return system_prompt;
@@ -113,8 +124,8 @@ export const processChatRequest = async ({ inquiry, previous }: { inquiry: strin
     // Add tool schema chunks as separate system messages
     toolsSchemaChunks.forEach((chunk, index) => {
         const chunkContent = index === 0
-            ? `Available backend functions:\n${JSON.stringify(chunk, null, 2)}`
-            : `Additional backend functions (part ${index + 1}):\n${JSON.stringify(chunk, null, 2)}`;
+            ? `Available backend functions: \n${JSON.stringify(chunk, null, 2)} `
+            : `Additional backend functions(part ${index + 1}): \n${JSON.stringify(chunk, null, 2)}`;
 
         messages.push({ role: "system", content: chunkContent });
     });

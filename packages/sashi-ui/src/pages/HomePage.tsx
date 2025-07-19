@@ -4,7 +4,6 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { WorkflowResultViewer } from '@/components/workflows/WorkflowResultViewer';
 import { WorkflowSaveForm } from '@/components/workflows/WorkflowSaveForm';
-import { WorkflowUICard } from '@/components/workflows/WorkflowUICard';
 import { WorkflowVisualizer } from '@/components/WorkflowVisualizer';
 import { sendExecuteWorkflow } from '@/services/workflow.service';
 import { Label } from '@radix-ui/react-dropdown-menu';
@@ -14,7 +13,7 @@ import { motion } from 'framer-motion';
 import { X } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { MasonryIcon, VercelIcon } from 'src/components/message-icons';
-import { Message } from 'src/components/MessageComponent';
+import { MessageComponent } from 'src/components/MessageComponent';
 import { useScrollToBottom } from 'src/components/use-scroll-to-bottom';
 import useAppStore from 'src/store/chat-store';
 import { MessageItem } from 'src/store/models';
@@ -275,6 +274,33 @@ interface DynamicWorkflowUIProps {
   onComplete?: () => void;
 }
 
+// Custom hook to debug dependency changes
+const useWhyDidYouUpdate = (name: string, props: Record<string, any>) => {
+  const previous = React.useRef<Record<string, any>>();
+
+  React.useEffect(() => {
+    if (previous.current) {
+      const allKeys = Object.keys({ ...previous.current, ...props });
+      const changedKeys: Record<string, { from: any; to: any }> = {};
+
+      allKeys.forEach((key) => {
+        if (previous.current![key] !== props[key]) {
+          changedKeys[key] = {
+            from: previous.current![key],
+            to: props[key],
+          };
+        }
+      });
+
+      if (Object.keys(changedKeys).length) {
+        console.log(`[${name}] Dependencies changed:`, changedKeys);
+      }
+    }
+
+    previous.current = props;
+  });
+};
+
 export const HomePage = () => {
   const storedMessages = useAppStore((state: { messages: any }) => state.messages);
 
@@ -294,9 +320,7 @@ export const HomePage = () => {
 
   const [messagesContainerRef, messagesEndRef] = useScrollToBottom<HTMLDivElement>();
 
-  const [confirmationData, setConfirmationData] = useState<ConfirmationData>();
-  const [uiPreviewCard, setUiPreviewCards] = useState<WorkflowResponse>();
-  const [uiWorkflowCard, setUiWorkflowCard] = useState<UIWorkflowDefinition>();
+  // Remove old workflow states and add embedded workflow tracking
   const connectedToHub: boolean = useAppStore((state: { connectedToHub: any }) => state.connectedToHub);
   const apiUrl = useAppStore((state) => state.apiUrl);
   const [debug] = useState(process.env.NODE_ENV === 'development');
@@ -416,31 +440,6 @@ export const HomePage = () => {
       messageRef.current.scrollTop = (messageRef.current?.scrollHeight ?? 0) + 24;
     }, 100);
   };
-  const handleConfirm = () => {
-    if (!confirmationData) return;
-    const tools =
-      confirmationData.payload!.tools?.map((tool) => {
-        if (tool.function.name === confirmationData!.name) {
-          tool.confirmed = true;
-        }
-        return tool;
-      }) ?? [];
-
-    processChat({ continuation: { ...confirmationData!.payload, tools } });
-    setConfirmationData(undefined);
-  };
-
-  const handleCancel = () => {
-    if (!confirmationData) return;
-    const tools = confirmationData.payload!.tools?.filter((tool) => {
-      if (tool.function.name === confirmationData!.name) {
-        return false;
-      }
-      return true;
-    });
-    processChat({ continuation: { ...confirmationData!.payload, tools } });
-    setConfirmationData(undefined);
-  };
 
   async function processChat({ text, continuation }: { text?: string; continuation?: PayloadObject }) {
     console.log('🎯 [DEBUG] processChat called with:', { text, continuation });
@@ -485,17 +484,17 @@ export const HomePage = () => {
 
       console.log('🎉 [DEBUG] sendMessage completed successfully:', result);
 
-      // Handle different response formats
-      let processedResult: GeneralResponse | WorkflowResponse;
+      // Handle only general responses now (all responses should be general with embedded workflows)
+      let processedResult: GeneralResponse;
 
       // Check if we have the expected wrapped format
-      if (result && typeof result === 'object' && 'type' in result) {
-        console.log('📋 [DEBUG] Response is in expected wrapped format');
-        processedResult = result;
+      if (result && typeof result === 'object' && 'type' in result && result.type === 'general') {
+        console.log('📋 [DEBUG] Response is in expected general format');
+        processedResult = result as GeneralResponse;
       }
       // Handle raw OpenAI response format
       else if (result && typeof result === 'object' && 'content' in result) {
-        console.log('🔄 [DEBUG] Converting raw OpenAI response to expected format');
+        console.log('🔄 [DEBUG] Converting raw OpenAI response to general format');
         processedResult = {
           type: 'general',
           content: (result as any).content,
@@ -503,7 +502,7 @@ export const HomePage = () => {
       }
       // Handle string responses
       else if (typeof result === 'string') {
-        console.log('📝 [DEBUG] Converting string response to expected format');
+        console.log('📝 [DEBUG] Converting string response to general format');
         processedResult = {
           type: 'general',
           content: result,
@@ -513,30 +512,22 @@ export const HomePage = () => {
         throw new Error('Unexpected response format from server');
       }
 
-      if (processedResult.type === 'general') {
-        console.log('📝 [DEBUG] Processing general response');
-        const generalResult: GeneralResponse = processedResult;
-        // Only add text content if there were no visualizations
-        const newAssistantMessage: MessageItem = {
-          id: getUniqueId(),
-          created_at: new Date().toISOString(),
-          role: 'assistant',
-          content: generalResult.content,
-        };
-        setMessageItems((prev) => [...prev, newAssistantMessage]);
-        addMessage(newAssistantMessage);
+      // Process the general response
+      console.log('📝 [DEBUG] Processing general response');
+      const generalResult: GeneralResponse = processedResult;
 
-        resetScroll();
-      }
+      // Don't parse embedded workflows here anymore - let MessageComponent handle it
+      // Just add the full message content including workflow blocks
+      const newAssistantMessage: MessageItem = {
+        id: getUniqueId(),
+        created_at: new Date().toISOString(),
+        role: 'assistant',
+        content: generalResult.content, // Keep full content including workflow blocks
+      };
+      setMessageItems((prev) => [...prev, newAssistantMessage]);
+      addMessage(newAssistantMessage);
 
-      if (processedResult.type === 'workflow') {
-        console.log('⚙️ [DEBUG] Processing workflow response');
-        const workflowResult: WorkflowResponse = processedResult;
-        // automatically generate UI instead of showing confirmation card
-        await generateUIFromWorkflow(workflowResult);
-
-        resetScroll();
-      }
+      resetScroll();
     } catch (error: any) {
       // Clear timeout warning since we got an error response
       clearTimeout(timeoutWarning);
@@ -818,7 +809,7 @@ export const HomePage = () => {
         };
 
         console.log('📝 Generated form UI definition:', uiWorkflowDefinition);
-        setUiWorkflowCard(uiWorkflowDefinition);
+        // Workflow UI is now handled inline by MessageComponent
         return;
       }
 
@@ -877,8 +868,6 @@ export const HomePage = () => {
 
         console.log('Generated UI workflow definition:', uiWorkflowDefinition);
 
-        setUiWorkflowCard(uiWorkflowDefinition);
-
         // Add feedback message about the classification
         if (debug) {
           const classificationMessage =
@@ -919,7 +908,7 @@ export const HomePage = () => {
               },
             };
 
-            setUiWorkflowCard(fallbackUIDefinition);
+            // setLastEmbeddedWorkflow(fallbackUIDefinition); // This line is removed
           }
         }
       }
@@ -942,7 +931,7 @@ export const HomePage = () => {
             },
           };
 
-          setUiWorkflowCard(fallbackUIDefinition);
+          // setLastEmbeddedWorkflow(fallbackUIDefinition); // This line is removed
         }
       }
     } finally {
@@ -950,9 +939,8 @@ export const HomePage = () => {
     }
   }
 
-  async function generateUI() {
-    console.error('❌ generateUI() is deprecated. Use generateUIFromWorkflow() directly with a workflow response.');
-  }
+  // Remove old workflow processing code that's no longer needed
+  // generateUI, handleConfirm, handleCancel are not needed anymore since we only use embedded workflows
 
   // Helper function to explain why a workflow was classified a certain way
   const getClassificationExplanation = (classification: any, characteristics: any): string => {
@@ -993,19 +981,22 @@ export const HomePage = () => {
     addMessage(saveResultMessage);
 
     // If save was successful, dismiss the workflow card
-    if (success) {
-      setUiWorkflowCard(undefined);
-    }
+    // if (success) {
+    //   setLastEmbeddedWorkflow(undefined); // This line is removed
+    // }
 
     // Scroll to show the message
     resetScroll();
   };
 
-  const handleRetry = (originalText?: string) => {
-    if (originalText) {
-      processChat({ text: originalText });
-    }
-  };
+  const handleRetry = React.useCallback(
+    (originalText?: string) => {
+      if (originalText) {
+        processChat({ text: originalText });
+      }
+    },
+    [processChat]
+  ); // Add processChat as dependency
 
   // Debug function to test API connection
   const testConnection = async () => {
@@ -1041,8 +1032,6 @@ export const HomePage = () => {
         analyzeWorkflowCharacteristics,
         getClassificationExplanation,
         testConnection,
-        getCurrentWorkflow: () => null, // workflowConfirmationCard no longer used
-        getCurrentUIWorkflow: () => uiWorkflowCard,
         // Helper to create test workflows
         createTestWorkflow: (type: 'form' | 'query' | 'mutation') => {
           const testWorkflows = {
@@ -1152,12 +1141,53 @@ export const HomePage = () => {
       console.log('  sashiDebug.testWorkflowClassification(workflow) - Test workflow classification');
       console.log('  sashiDebug.createTestWorkflow("form"|"query"|"mutation") - Create test workflows');
       console.log('  sashiDebug.testUserWorkflow() - Test your specific workflow structure');
-      console.log('  sashiDebug.getCurrentWorkflow() - Get current workflow being processed');
       console.log('  sashiDebug.testConnection() - Test API connection');
       console.log('Example: sashiDebug.testWorkflowClassification(sashiDebug.createTestWorkflow("form"))');
       console.log('Your issue: sashiDebug.testUserWorkflow()');
     }
-  }, [debug, uiWorkflowCard]);
+  }, [debug]);
+
+  // Additional debugging to track message changes
+  const prevMessageItems = React.useRef(messageItems);
+  const messageItemsChanged = React.useMemo(() => {
+    const changed = prevMessageItems.current !== messageItems;
+    const lengthChanged = prevMessageItems.current.length !== messageItems.length;
+    const contentChanged = JSON.stringify(prevMessageItems.current) !== JSON.stringify(messageItems);
+
+    console.log('📊 Message Items Analysis:', {
+      referenceChanged: changed,
+      lengthChanged: lengthChanged,
+      contentChanged: contentChanged,
+      prevLength: prevMessageItems.current.length,
+      currentLength: messageItems.length,
+    });
+
+    prevMessageItems.current = messageItems;
+    return changed;
+  }, [messageItems]);
+
+  // Debug which dependencies are changing for the message list useMemo
+  useWhyDidYouUpdate('MessageList useMemo', {
+    messageItems: messageItems.length, // Track array length changes
+    messageItemsRef: messageItems, // Track actual array reference changes
+    handleRetry: handleRetry,
+  });
+
+  // Memoize the message list to prevent re-renders on input changes
+  const messageList = React.useMemo(() => {
+    console.log('messageList rerender', messageItems);
+    return messageItems.map((item) => (
+      <MessageComponent
+        key={item.id}
+        role={item.role}
+        content={item.content}
+        isError={item.isError}
+        retryData={item.retryData}
+        onRetry={handleRetry}
+        isLatestMessage={messageItems.length - 1 === messageItems.findIndex((msg) => msg.id === item.id)}
+      />
+    ));
+  }, [messageItems]);
 
   return (
     <Layout>
@@ -1191,19 +1221,10 @@ export const HomePage = () => {
                 </div>
               </motion.div>
             )}
-            {messageItems.map((item) => (
-              <Message
-                key={item.id}
-                role={item.role}
-                content={item.content}
-                isError={item.isError}
-                retryData={item.retryData}
-                onRetry={handleRetry}
-              />
-            ))}
+            {messageList}
 
             {loading && (
-              <Message
+              <MessageComponent
                 role="assistant"
                 isThinking={true}
                 content={
@@ -1212,25 +1233,7 @@ export const HomePage = () => {
               />
             )}
 
-            {!!confirmationData && (
-              <ConfirmationCard
-                confirmationData={confirmationData!}
-                onConfirm={handleConfirm}
-                onCancel={handleCancel}
-              />
-            )}
-
-            {uiWorkflowCard && apiUrl && (
-              <WorkflowUICard
-                workflow={uiWorkflowCard}
-                apiUrl={apiUrl}
-                onClose={() => setUiWorkflowCard(undefined)}
-                onSaveComplete={handleWorkflowSaveComplete}
-                isInChat={true}
-              />
-            )}
-
-            {uiPreviewCard && apiUrl && <WorkflowForm workflow={uiPreviewCard} apiUrl={apiUrl} />}
+            {/* Removed WorkflowUICard as it's no longer needed for standalone workflows */}
 
             <div ref={messagesEndRef} />
           </div>
@@ -1260,11 +1263,11 @@ export const HomePage = () => {
               event.preventDefault();
               handleSubmit(event);
               setInputText('');
-              setUiWorkflowCard(undefined);
+              // setLastEmbeddedWorkflow(undefined); // This line is removed
             }}
           >
             <input
-              disabled={!!uiPreviewCard}
+              disabled={false} // Always allow input now - embedded workflows don't block input
               ref={inputRef}
               className="bg-zinc-100 rounded-md px-2 py-1.5 w-full outline-none dark:bg-zinc-700 text-zinc-800 dark:text-zinc-300 md:max-w-[500px] max-w-[calc(100dvw-32px)]"
               placeholder="Send a message..."

@@ -256,4 +256,50 @@ export const extractWorkflowFromNested = (workflowData: any): WorkflowResponse |
     }
 
     return null;
-}; 
+};
+
+/**
+ * Parse embedded workflows from text content
+ * Extracts ```workflow blocks and returns parsed workflow objects
+ */
+export function parseEmbeddedWorkflows(content: string): WorkflowResponse[] {
+    const workflows: WorkflowResponse[] = [];
+
+    // Regex to match ```workflow blocks (case insensitive)
+    const workflowRegex = /```workflow\s*\n([\s\S]*?)\n```/gi;
+    let match;
+
+    while ((match = workflowRegex.exec(content)) !== null) {
+        const workflowJson = match[1].trim();
+
+        try {
+            const parsed = JSON.parse(workflowJson);
+
+            // Validate that it's a workflow
+            if (parsed && parsed.type === 'workflow' && Array.isArray(parsed.actions)) {
+                workflows.push(parsed as WorkflowResponse);
+            }
+        } catch (error) {
+            console.warn('Failed to parse embedded workflow JSON:', error);
+            // Continue parsing other workflows even if one fails
+        }
+    }
+
+    return workflows;
+}
+
+/**
+ * Remove workflow blocks from text content, leaving only the conversational text
+ */
+export function removeWorkflowBlocks(content: string): string {
+    // Remove ```workflow blocks but preserve other content
+    return content.replace(/```workflow\s*\n[\s\S]*?\n```/gi, '').trim();
+}
+
+/**
+ * Check if content contains embedded workflows
+ */
+export function hasEmbeddedWorkflows(content: string): boolean {
+    const workflowRegex = /```workflow\s*\n[\s\S]*?\n```/gi;
+    return workflowRegex.test(content);
+} 

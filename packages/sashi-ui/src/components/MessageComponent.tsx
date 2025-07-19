@@ -1,9 +1,14 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import React from 'react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
+import React, { useState } from 'react';
+import useAppStore from '../store/chat-store';
+import { detectWorkflowEntryType } from '../utils/workflowClassification';
 import { Button } from './Button';
 import { DataCardComponent } from './DataCardComponent';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import { WorkflowUICard } from './workflows/WorkflowUICard';
 
 import { BotIcon, UserIcon } from './message-icons';
 import { TableComponent } from './TableComponent';
@@ -26,74 +31,313 @@ interface MessageProps {
   isError?: boolean;
   retryData?: RetryData;
   onRetry?: (originalText?: string) => void;
+  isLatestMessage?: boolean; // New prop to identify if this is the latest message
 }
 
-export const Message = ({ role, content, isThinking, isError, retryData, onRetry }: MessageProps) => {
-  let visualizationComponent: React.ReactNode | string | undefined;
+interface WorkflowData {
+  type: string;
+  description: string;
+  actions: any[];
+}
 
-  // Handle different visualization types dynamically
-  if (typeof content === 'object' && content.type) {
-    switch (content.type) {
-      case 'table':
-        visualizationComponent = <TableComponent data={content.data} />;
-        break;
-      case 'dataCard':
-        visualizationComponent = <DataCardComponent {...content.data} />;
-        break;
-      default:
-        visualizationComponent = <p>Unsupported visualization type.</p>;
+interface MessagePart {
+  type: 'text' | 'workflow';
+  content: string;
+  workflow?: WorkflowData;
+}
+
+// Global state for managing which workflow is expanded
+let expandedWorkflowId: string | null = null;
+
+const parseMessageContent = (content: string): MessagePart[] => {
+  const parts: MessagePart[] = [];
+  const workflowRegex = /```workflow\s*\n([\s\S]*?)\n```/gi;
+
+  let lastIndex = 0;
+  let match;
+
+  while ((match = workflowRegex.exec(content)) !== null) {
+    // Add text before workflow
+    if (match.index > lastIndex) {
+      const textContent = content.slice(lastIndex, match.index).trim();
+      if (textContent) {
+        parts.push({
+          type: 'text',
+          content: textContent,
+        });
+      }
     }
-  } else if (typeof content === 'string') {
-    // Enhanced markdown-style rendering for error messages
-    const processedContent = content
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold text
-      .replace(
-        /```json\n([\s\S]*?)\n```/g,
-        '<pre class="bg-gray-100 dark:bg-gray-800 p-2 rounded text-xs overflow-x-auto"><code>$1</code></pre>'
-      ) // JSON code blocks
-      .replace(
-        /```([\s\S]*?)```/g,
-        '<pre class="bg-gray-100 dark:bg-gray-800 p-2 rounded text-xs overflow-x-auto"><code>$1</code></pre>'
-      ) // Regular code blocks
-      .replace(/\n/g, '<br>'); // Line breaks
 
-    visualizationComponent = (
-      <div
-        className={`${isError ? 'text-red-600 dark:text-red-400' : ''}`}
-        dangerouslySetInnerHTML={{ __html: processedContent }}
-      />
-    );
-  } else {
-    visualizationComponent = <p>Invalid content type</p>;
+    // Add workflow
+    try {
+      const workflowJson = match[1].trim();
+      const workflow = JSON.parse(workflowJson);
+
+      if (workflow && workflow.type === 'workflow' && Array.isArray(workflow.actions)) {
+        parts.push({
+          type: 'workflow',
+          content: match[0],
+          workflow: workflow,
+        });
+      }
+    } catch (error) {
+      console.warn('Failed to parse embedded workflow JSON:', error);
+      // If parsing fails, treat it as text
+      parts.push({
+        type: 'text',
+        content: match[0],
+      });
+    }
+
+    lastIndex = match.index + match[0].length;
   }
 
+  // Add remaining text after last workflow
+  if (lastIndex < content.length) {
+    const remainingContent = content.slice(lastIndex).trim();
+    if (remainingContent) {
+      parts.push({
+        type: 'text',
+        content: remainingContent,
+      });
+    }
+  }
+
+  // If no workflows found, return the original content as text
+  if (parts.length === 0) {
+    parts.push({
+      type: 'text',
+      content: content,
+    });
+  }
+
+  return parts;
+};
+
+const WorkflowCard: React.FC<{
+  workflow: WorkflowData;
+  isLatest: boolean;
+  messageId: string;
+  workflowIndex: number;
+}> = ({ workflow, isLatest, messageId, workflowIndex }) => {
+  const apiUrl = useAppStore((state) => state.apiUrl);
+  const workflowId = `${messageId}_${workflowIndex}`;
+  const isExpanded = expandedWorkflowId === workflowId;
+
+  const toggleExpanded = () => {
+    if (isExpanded) {
+      expandedWorkflowId = null;
+    } else {
+      expandedWorkflowId = workflowId;
+    }
+    // Force re-render by updating a dummy state in the parent
+    window.dispatchEvent(new CustomEvent('workflowToggle'));
+  };
+
+  if (isLatest) {
+    // Show full interactive workflow for the latest message
+    if (!apiUrl) return null;
+
+    const workflowResponse = {
+      type: 'workflow' as const,
+      actions: workflow.actions.map((action) => ({
+        id: action.id || `action_${Math.random().toString(36).substr(2, 9)}`,
+        tool: action.tool,
+        description: action.description || '',
+        parameters: action.parameters || {},
+      })),
+      options: {
+        execute_immediately: false,
+        generate_ui: true,
+      },
+    };
+
+    const entryType = detectWorkflowEntryType(workflowResponse);
+
+    const uiWorkflowDefinition = {
+      workflow: workflowResponse,
+      entry: {
+        entryType: entryType.entryType,
+        description: workflow.description,
+        payload: entryType.payload,
+      },
+    };
+
+    return (
+      <div className="my-4">
+        <WorkflowUICard workflow={uiWorkflowDefinition} apiUrl={apiUrl} isInChat={true} isDraggable={false} />
+      </div>
+    );
+  }
+
+  // Show collapsed/expandable card for previous workflows
   return (
-    <motion.div
-      className="flex flex-row gap-4 px-4 w-full md:w-[500px] md:px-0 first-of-type:pt-20"
-      initial={{ y: 5, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-    >
-      <div className="size-[24px] flex flex-col justify-center items-center flex-shrink-0 text-zinc-400">
-        {role === 'assistant' ? <BotIcon /> : <UserIcon />}
-      </div>
-
-      <div className="flex flex-col gap-1 w-full">
-        <div className="text-zinc-800 dark:text-zinc-300 flex flex-col gap-4">
-          {isThinking ? <ThinkingIndicator /> : visualizationComponent}
-
-          {/* Retry button for error messages */}
-          {isError && retryData?.canRetry && onRetry && (
-            <div className="flex gap-2 mt-2">
-              <Button onClick={() => onRetry(retryData.originalText)} variant="outline" size="sm" className="text-sm">
-                🔄 {retryData.retryText}
-              </Button>
+    <div className="my-4">
+      <Card className="border-l-4 border-blue-500">
+        <CardHeader
+          className="pb-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+          onClick={toggleExpanded}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <CardTitle className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                📋 Previous Workflow
+              </CardTitle>
+              <CardDescription className="text-xs">
+                {workflow.description || 'Workflow'} • {workflow.actions?.length || 0} action
+                {workflow.actions?.length === 1 ? '' : 's'}
+              </CardDescription>
             </div>
-          )}
-        </div>
-      </div>
-    </motion.div>
+            <div className="flex items-center text-gray-400">
+              {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+            </div>
+          </div>
+        </CardHeader>
+
+        {isExpanded && apiUrl && (
+          <CardContent className="pt-0">
+            <div className="border-t pt-4">
+              <WorkflowUICard
+                workflow={{
+                  workflow: {
+                    type: 'workflow' as const,
+                    actions: workflow.actions.map((action) => ({
+                      id: action.id || `action_${Math.random().toString(36).substr(2, 9)}`,
+                      tool: action.tool,
+                      description: action.description || '',
+                      parameters: action.parameters || {},
+                    })),
+                    options: {
+                      execute_immediately: false,
+                      generate_ui: false,
+                    },
+                  },
+                  entry: {
+                    entryType: 'label',
+                    description: workflow.description,
+                    payload: {},
+                  },
+                }}
+                apiUrl={apiUrl}
+                isInChat={true}
+                isDraggable={false}
+              />
+            </div>
+          </CardContent>
+        )}
+      </Card>
+    </div>
   );
 };
+
+// Memoized MessageComponent to prevent unnecessary re-renders
+const MessageComponent = React.memo<MessageProps>(
+  ({ role, content, isThinking, isError, retryData, onRetry, isLatestMessage = false }) => {
+    const [, forceUpdate] = useState(0);
+
+    // Listen for workflow toggle events to force re-render
+    React.useEffect(() => {
+      const handleWorkflowToggle = () => {
+        forceUpdate((prev) => prev + 1);
+      };
+
+      window.addEventListener('workflowToggle', handleWorkflowToggle);
+      return () => window.removeEventListener('workflowToggle', handleWorkflowToggle);
+    }, []);
+
+    let visualizationComponent: React.ReactNode | string | undefined;
+
+    // Handle different visualization types dynamically
+    if (typeof content === 'object' && content.type) {
+      switch (content.type) {
+        case 'table':
+          visualizationComponent = <TableComponent data={content.data} />;
+          break;
+        case 'dataCard':
+          visualizationComponent = <DataCardComponent {...content.data} />;
+          break;
+        default:
+          visualizationComponent = <p>Unsupported visualization type.</p>;
+      }
+    } else if (typeof content === 'string') {
+      // Parse message content for embedded workflows
+      const messageParts = parseMessageContent(content);
+      const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      visualizationComponent = (
+        <div>
+          {messageParts.map((part, index) => {
+            if (part.type === 'workflow' && part.workflow) {
+              return (
+                <WorkflowCard
+                  key={`${messageId}_workflow_${index}`}
+                  workflow={part.workflow}
+                  isLatest={isLatestMessage}
+                  messageId={messageId}
+                  workflowIndex={index}
+                />
+              );
+            } else {
+              // Render text content with existing markdown processing
+              const processedContent = part.content
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold text
+                .replace(
+                  /```json\n([\s\S]*?)\n```/g,
+                  '<pre class="bg-gray-100 dark:bg-gray-800 p-2 rounded text-xs overflow-x-auto"><code>$1</code></pre>'
+                ) // JSON code blocks
+                .replace(
+                  /```([\s\S]*?)```/g,
+                  '<pre class="bg-gray-100 dark:bg-gray-800 p-2 rounded text-xs overflow-x-auto"><code>$1</code></pre>'
+                ) // Regular code blocks
+                .replace(/\n/g, '<br>'); // Line breaks
+
+              return (
+                <div
+                  key={`${messageId}_text_${index}`}
+                  className={`${isError ? 'text-red-600 dark:text-red-400' : ''}`}
+                  dangerouslySetInnerHTML={{ __html: processedContent }}
+                />
+              );
+            }
+          })}
+        </div>
+      );
+    } else {
+      visualizationComponent = <p>Invalid content type</p>;
+    }
+
+    return (
+      <motion.div
+        className="flex flex-row gap-4 px-4 w-full md:w-[500px] md:px-0 first-of-type:pt-20"
+        initial={{ y: 5, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+      >
+        <div className="size-[24px] flex flex-col justify-center items-center flex-shrink-0 text-zinc-400">
+          {role === 'assistant' ? <BotIcon /> : <UserIcon />}
+        </div>
+
+        <div className="flex flex-col gap-1 w-full">
+          <div className="text-zinc-800 dark:text-zinc-300 flex flex-col gap-4">
+            {isThinking ? <ThinkingIndicator /> : visualizationComponent}
+
+            {/* Retry button for error messages */}
+            {isError && retryData?.canRetry && onRetry && (
+              <div className="flex gap-2 mt-2">
+                <Button onClick={() => onRetry(retryData.originalText)} variant="outline" size="sm" className="text-sm">
+                  🔄 {retryData.retryText}
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
+);
+
+MessageComponent.displayName = 'MessageComponent';
+
+export { MessageComponent };
 
 function ThinkingIndicator() {
   return (
