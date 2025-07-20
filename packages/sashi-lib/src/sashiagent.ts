@@ -1,7 +1,6 @@
-import { Agent, handoff, run, tool } from '@openai/agents';
+import { Agent, handoff, run } from '@openai/agents';
 import { z } from 'zod';
 import { generateSplitToolSchemas } from './ai-function-loader';
-import { verifyWorkflow } from './utils/verifyWorkflow';
 
 // Schema for basic workflow (without UI)
 const WorkflowSchema = z.object({
@@ -25,22 +24,7 @@ const WorkflowWithUISchema = z.object({
         id: z.string(),
         tool: z.string(),
         description: z.string(),
-        parameters: z.object({}).catchall(z.any())
-    })),
-    ui: z.object({
-        inputComponents: z.array(z.object({
-            //key: z.string(),
-            label: z.string(),
-            type: z.enum(['string', 'number', 'boolean', 'enum', 'text']),
-            required: z.boolean(),
-            enumValues: z.array(z.string()).nullable().optional()
-        })),
-        outputComponents: z.array(z.object({
-            actionId: z.string(),
-            component: z.enum(['table', 'dataCard']),
-            props: z.object({}).catchall(z.any()).nullable().optional()
-        }))
-    })
+    }))
 });
 
 // Response schema
@@ -61,22 +45,6 @@ const createWorkflowPlannerAgent = () => {
             : `Additional backend functions (part ${index + 1}):\n${JSON.stringify(chunk, null, 2)}`;
     }).join('\n\n');
 
-    const createWorkflowTool = tool({
-        name: 'create_workflow',
-        description: 'Create a workflow JSON object based on user request',
-        parameters: z.object({
-            userRequest: z.string(),
-            workflow: WorkflowSchema
-        }),
-        execute: async ({ userRequest, workflow }) => {
-            // Validate the workflow
-            const verification = verifyWorkflow(workflow);
-            if (!verification.valid) {
-                throw new Error(`Workflow validation failed: ${verification.errors.join(', ')}`);
-            }
-            return { userRequest, workflow };
-        }
-    });
 
     return new Agent({
         name: 'Workflow Planner',
@@ -88,13 +56,46 @@ ${toolSchemaString}
 ## Your Task
 When handed off a user request, analyze it and create a JSON workflow object that accomplishes the user's goal.
 
-## Workflow Structure
-Create workflows with this structure:
+
+## Workflow Embedding Format
+CRITICAL: When you need to provide a workflow, you MUST use workflow blocks (NOT json blocks).
+
+When you need to provide a workflow, embed it in your conversational response using this EXACT format:
+
+\`\`\`workflow
 {
-  "type": "workflow",
-  "description": "Short description",
-  "actions": [...]
+    "type": "workflow",
+    "description": "<short description of workflow>",
+    "actions": [
+        {
+            "id": "<unique_action_id>",
+            "tool": "<backend_function_name>",
+            "description": "<description of the action>",
+            "parameters": {
+                "<parameter_name>": "<parameter_value_or_reference>"
+            },
+            "parameterMetadata": {
+                "<parameter_name>": {
+                    "type": "string",
+                    "description": "description from the tool schema",
+                    "enum": ["value1", "value2"],
+                    "required": true
+                }
+            },
+            "map": false
+        }
+    ]
 }
+\`\`\`
+
+## Important Rules for Workflow Embedding:
+- ONLY use functions that exist in the tool_schema. NEVER make up functions.
+- For parameters with "enum" fields, include enum values in parameterMetadata and only use values from the enum list
+- Clean function names by removing "functions." prefix
+- Use "userInput.<fieldname>" for parameters that need user input (like "userInput.userId", "userInput.type")
+- Reference previous action outputs using "<action_id>.<output_field>" syntax
+- For array outputs, use "<action_id>[*].<output_field>" notation
+- Set "map": true when processing each item in an array from a previous step
 
 ## Action Guidelines
 1. ONLY use functions that exist in the provided schema
@@ -112,8 +113,8 @@ Create workflows with this structure:
 - The UI Agent will handle creating the interface components
 - Don't worry about UI - just create the workflow logic
 
-Always call the create_workflow tool with both the user request and the workflow object.`,
-        tools: [createWorkflowTool]
+`,
+        tools: []
     });
 };
 
@@ -126,17 +127,6 @@ const createUIAgent = () => {
             : `Additional backend functions (part ${index + 1}):\n${JSON.stringify(chunk, null, 2)}`;
     }).join('\n\n');
 
-    const enhanceWorkflowWithUITool = tool({
-        name: 'enhance_workflow_with_ui',
-        description: 'Enhance a workflow with UI components',
-        parameters: z.object({
-            workflow: WorkflowSchema,
-            enhancedWorkflow: WorkflowWithUISchema
-        }),
-        execute: async ({ workflow, enhancedWorkflow }) => {
-            return enhancedWorkflow;
-        }
-    });
 
     return new Agent({
         name: 'UI Agent',
@@ -200,35 +190,11 @@ For a workflow with get_user_by_id and send_email actions:
 2. Output: dataCard for each action
 
 Always call the enhance_workflow_with_ui tool with both the original workflow and the enhanced version.`,
-        tools: [enhanceWorkflowWithUITool]
     });
 };
 
 // Response Agent - Generates conversational responses with embedded workflows
 const createResponseAgent = () => {
-    const generateResponseTool = tool({
-        name: 'generate_response',
-        description: 'Generate a conversational response with optional embedded workflow',
-        parameters: z.object({
-            userRequest: z.string(),
-            responseType: z.enum(['simple', 'workflow']),
-            content: z.string(),
-            workflow: z.any().optional()
-        }),
-        execute: async ({ userRequest, responseType, content, workflow }) => {
-            if (responseType === 'workflow' && workflow) {
-                const workflowBlock = `\n\n\`\`\`workflow\n${JSON.stringify(workflow, null, 2)}\n\`\`\``;
-                return {
-                    type: 'general',
-                    content: content + workflowBlock
-                };
-            }
-            return {
-                type: 'general',
-                content
-            };
-        }
-    });
 
     return new Agent({
         name: 'Response Agent',
@@ -257,7 +223,7 @@ Create responses that match the user's intent:
 - For workflows, explain the value and next steps
 
 Determine the appropriate response type based on whether workflow data is provided and generate content accordingly.`,
-        tools: [generateResponseTool]
+        tools: []
     });
 };
 
@@ -304,8 +270,7 @@ Focus on the user's underlying goal, not specific words:
 
 **For Actionable Requests:**
 1. Hand off to Workflow Planner to create the workflow logic
-2. Hand off to UI Agent to enhance with UI components
-3. Hand off to Response Agent to generate final response with embedded workflow
+2. Hand off to Response Agent to generate final response with embedded workflow
 
 **For Informational Requests:**
 1. Hand off directly to Response Agent for conversational response
@@ -322,9 +287,7 @@ Analyze the user's request to understand their true intent and route accordingly
             handoff(workflowPlannerAgent, {
                 toolDescriptionOverride: 'Hand off to Workflow Planner when user wants to accomplish a specific task that requires backend operations or system interaction'
             }),
-            handoff(uiAgent, {
-                toolDescriptionOverride: 'Hand off to UI Agent to enhance a workflow with UI components after workflow creation'
-            }),
+
             handoff(responseAgent, {
                 toolDescriptionOverride: 'Hand off to Response Agent for informational responses, explanations, or when user wants to understand concepts'
             })
