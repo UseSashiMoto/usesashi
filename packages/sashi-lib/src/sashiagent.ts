@@ -1,6 +1,7 @@
-import { Agent, handoff, run } from '@openai/agents';
+import { Agent, handoff, run, tool } from '@openai/agents';
 import { z } from 'zod';
 import { generateSplitToolSchemas } from './ai-function-loader';
+import { verifyWorkflow } from './utils/verifyWorkflow';
 
 // Schema for basic workflow (without UI)
 const WorkflowSchema = z.object({
@@ -45,6 +46,40 @@ const createWorkflowPlannerAgent = () => {
             : `Additional backend functions (part ${index + 1}):\n${JSON.stringify(chunk, null, 2)}`;
     }).join('\n\n');
 
+    const validateWorkflowTool = tool({
+        name: 'validate_workflow',
+        description: 'Validate a workflow JSON object to ensure it uses valid functions and parameters',
+        strict: false,
+
+        parameters: {
+            type: "object" as const,
+            properties: {
+                workflow: {
+                    type: "object" as const,
+                    properties: {
+                        type: {
+                            type: "string" as const,
+                            enum: ["workflow"] as const
+                        },
+                        description: {
+                            type: "string" as const
+                        }
+                    }
+                }
+            },
+            required: ["workflow"],
+            additionalProperties: true as const
+        } as any,
+        execute: async ({ workflow }) => {
+            const verification = verifyWorkflow(workflow);
+            console.log('verification', verification);
+            return {
+                valid: verification.valid,
+                errors: verification.errors,
+                workflow: workflow
+            };
+        }
+    });
 
     return new Agent({
         name: 'Workflow Planner',
@@ -56,6 +91,14 @@ ${toolSchemaString}
 ## Your Task
 When handed off a user request, analyze it and create a JSON workflow object that accomplishes the user's goal.
 
+## Workflow Validation
+IMPORTANT: Before finalizing any workflow, you MUST use the validate_workflow tool to verify that:
+- All functions exist in the available backend functions
+- All required parameters are provided
+- Parameter types match the function schemas
+- The workflow structure is correct
+
+If validation fails, fix the errors and validate again until the workflow is valid.
 
 ## Workflow Embedding Format
 CRITICAL: When you need to provide a workflow, you MUST use workflow blocks (NOT json blocks).
@@ -112,9 +155,10 @@ When you need to provide a workflow, embed it in your conversational response us
 - Use userInput.* placeholders for any data the user needs to provide
 - The UI Agent will handle creating the interface components
 - Don't worry about UI - just create the workflow logic
+- ALWAYS validate workflows using the validate_workflow tool before providing them and as you make changes validate the workflow to make sure it is valid
 
 `,
-        tools: []
+        tools: [validateWorkflowTool]
     });
 };
 
