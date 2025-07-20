@@ -180,7 +180,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         debug = false,
         sashiServerUrl: rawSashiServerUrl,
         apiSecretKey,
-        repos = [],
         hubUrl: rawHubUrl = 'https://hub.usesashi.com',
         getSession,
         validateSession,
@@ -294,7 +293,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
 
 
-    router.get('/metadata', validateRepoRequest({ sashiServerUrl, sashiHubUrl: hubUrl }), asyncHandler(async (_req, res, next) => {
+    router.get('/metadata', validateRepoRequest({ sashiServerUrl, sashiHubUrl: hubUrl }), asyncHandler(async (_req, res) => {
         const metadata: MetaData = {
             hubUrl: hubUrl,
             functions: Array.from(getFunctionRegistry().values())
@@ -660,94 +659,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         return 'text';
     }
 
-    // Function to enhance UI type determination with LLM
-    async function enhanceOutputUIWithLLM(result: any, initialType: string, aibot: any): Promise<{
-        type: 'card' | 'table' | 'badge' | 'text' | 'textarea' | 'graph';
-        config?: Record<string, any>;
-    }> {
-        try {
-            const stringifiedResult = typeof result === 'string'
-                ? result
-                : JSON.stringify(result, null, 2);
-
-            const prompt = `
-            You are an AI that specializes in data visualization and UI design.
-            
-            Analyze this data and determine the best way to display it in a UI:
-            \`\`\`
-            ${stringifiedResult}
-            \`\`\`
-            
-            The system's initial guess is that this should be displayed as: ${initialType}
-            
-            Please provide a JSON response with:
-            1. The best UI component type to use ('table', 'card', 'badge', 'text', 'textarea', or 'graph')
-               - 'table' for tabular data with rows and columns
-               - 'card' for object display with key-value pairs in a card format
-               - 'badge' for simple key-value pairs
-               - 'text' for plain text display
-               - 'textarea' for complex JSON structures or large text blocks that need a scrollable area
-               - 'graph' for data that should be visualized as a chart
-            2. If 'graph' is selected, specify what type of chart would be best (line, bar, pie, etc.)
-            3. Any configuration parameters that would help render this data effectively
-            
-            Your response should be valid JSON in this format:
-            {
-              "type": "card" | "table" | "badge" | "text" | "textarea" | "graph",
-              "chartType": "line" | "bar" | "pie" | "scatter" | "area" | null, // Only if type is graph
-              "config": {
-                // Any relevant configuration like titles, labels, colors, etc.
-              }
-            }
-            `;
-
-            const response = await aibot.chatCompletion({
-                model: "gpt-4o-mini",
-                messages: [
-                    { role: "system", content: "You are a helpful assistant." },
-                    { role: "user", content: prompt }
-                ],
-                temperature: 0.3
-            });
-
-            let jsonResponse;
-            const content = response.message?.content || '';
-
-            // Try to extract JSON from the response
-            try {
-                // First try direct parsing
-                jsonResponse = JSON.parse(content);
-            } catch (e) {
-                // If that fails, try to extract JSON from markdown
-                const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-                if (jsonMatch && jsonMatch[1]) {
-                    try {
-                        jsonResponse = JSON.parse(jsonMatch[1]);
-                    } catch (jsonErr) {
-                        // If extraction fails, fall back to the initial guess
-                        return { type: initialType as any };
-                    }
-                } else {
-                    // No JSON found, fall back to initial guess
-                    return { type: initialType as any };
-                }
-            }
-
-            // Validate the response has a valid type
-            if (jsonResponse &&
-                ['card', 'table', 'badge', 'text', 'textarea', 'graph'].includes(jsonResponse.type)) {
-                return {
-                    type: jsonResponse.type,
-                    config: jsonResponse.config || {}
-                };
-            } else {
-                return { type: initialType as any };
-            }
-
-        } catch (error) {
-            return { type: initialType as any };
-        }
-    }
 
     router.get('/functions/:function_id/toggle_active', sessionValidation, async (req, res) => {
         const function_id = req.params.function_id;
@@ -768,7 +679,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
 
     router.post('/chat', sessionValidation, async (req, res) => {
-        const { tools, previous, type } = req.body;
+        const { type } = req.body;
 
         // Add request timeout - ensure we always respond within 60 seconds
         const requestTimeout = setTimeout(() => {
@@ -1498,7 +1409,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
 
 
-    router.use('/bot', async (req, res, next) => {
+    router.use('/bot', async (req, res) => {
         const sessionToken = await createSessionToken(req, res, getSession);
         // Build API base URL (strip /bot from baseUrl since we need the API root for frontend calls)
         const baseUrlWithoutBot = req.baseUrl.replace(/\/bot$/, '');

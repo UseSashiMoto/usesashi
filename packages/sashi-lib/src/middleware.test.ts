@@ -29,6 +29,7 @@ jest.mock('@openai/agents', () => ({
 fetchMock.enableMocks(); // Enable fetch mocks
 
 jest.mock('axios');
+jest.mock('openai')
 
 const mockedAxios = axios as jest.Mocked<typeof axios>;
 
