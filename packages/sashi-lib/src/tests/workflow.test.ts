@@ -2,6 +2,16 @@ import express from 'express';
 import supertest from 'supertest';
 import { createMiddleware } from '../middleware';
 
+// Mock all external dependencies
+jest.mock('@openai/agents', () => ({
+    Agent: jest.fn(),
+    run: jest.fn(),
+    tool: jest.fn(),
+    handoff: jest.fn()
+}));
+
+jest.mock('../sashiagent');
+
 // Define mock function type
 type MockFunction = jest.Mock<Promise<any>, [string, Record<string, any>]>;
 

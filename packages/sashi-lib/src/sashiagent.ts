@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { generateSplitToolSchemas } from './ai-function-loader';
 import { verifyWorkflow } from './utils/verifyWorkflow';
 
-// Schema for workflow creation
+// Schema for basic workflow (without UI)
 const WorkflowSchema = z.object({
     type: z.literal('workflow'),
     description: z.string(),
@@ -11,11 +11,13 @@ const WorkflowSchema = z.object({
         id: z.string(),
         tool: z.string(),
         description: z.string(),
-        parameters: z.record(z.any())
+        parameters: z.object({}).catchall(z.any())
     }))
 });
 
-// Schema for UI enhancement
+
+
+// Schema for complete workflow with UI
 const WorkflowWithUISchema = z.object({
     type: z.literal('workflow'),
     description: z.string(),
@@ -23,11 +25,11 @@ const WorkflowWithUISchema = z.object({
         id: z.string(),
         tool: z.string(),
         description: z.string(),
-        parameters: z.record(z.any())
+        parameters: z.object({}).catchall(z.any())
     })),
     ui: z.object({
         inputComponents: z.array(z.object({
-            key: z.string(),
+            //key: z.string(),
             label: z.string(),
             type: z.enum(['string', 'number', 'boolean', 'enum', 'text']),
             required: z.boolean(),
@@ -36,7 +38,7 @@ const WorkflowWithUISchema = z.object({
         outputComponents: z.array(z.object({
             actionId: z.string(),
             component: z.enum(['table', 'dataCard']),
-            props: z.record(z.any()).nullable().optional()
+            props: z.object({}).catchall(z.any()).nullable().optional()
         }))
     })
 });
@@ -50,7 +52,7 @@ const SashiAgentResponseSchema = z.object({
 export type SashiAgentResponse = z.infer<typeof SashiAgentResponseSchema>;
 export type WorkflowWithUI = z.infer<typeof WorkflowWithUISchema>;
 
-// Workflow Planner Agent - Creates workflows from user requests
+// Workflow Planner Agent - Creates workflows (business logic only)
 const createWorkflowPlannerAgent = () => {
     const toolSchemas = generateSplitToolSchemas(8000);
     const toolSchemaString = toolSchemas.map((chunk, index) => {
@@ -86,7 +88,15 @@ ${toolSchemaString}
 ## Your Task
 When handed off a user request, analyze it and create a JSON workflow object that accomplishes the user's goal.
 
-## Important Guidelines
+## Workflow Structure
+Create workflows with this structure:
+{
+  "type": "workflow",
+  "description": "Short description",
+  "actions": [...]
+}
+
+## Action Guidelines
 1. ONLY use functions that exist in the provided schema
 2. Ensure all required parameters are provided
 3. Use descriptive action IDs that relate to the function name
@@ -96,13 +106,19 @@ When handed off a user request, analyze it and create a JSON workflow object tha
 7. Reference previous action outputs: "userId": "get_user.id"
 8. For arrays, use: "items": "get_files[*].id"
 
-Always call the create_workflow tool with both the user request and the complete workflow object.`,
+## Important Notes
+- Focus ONLY on the business logic and workflow actions
+- Use userInput.* placeholders for any data the user needs to provide
+- The UI Agent will handle creating the interface components
+- Don't worry about UI - just create the workflow logic
+
+Always call the create_workflow tool with both the user request and the workflow object.`,
         tools: [createWorkflowTool]
     });
 };
 
-// UI Composer Agent - Enhances workflows with UI components
-const createUIComposerAgent = () => {
+// UI Agent - Specializes in generating UI components from workflows
+const createUIAgent = () => {
     const toolSchemas = generateSplitToolSchemas(8000);
     const toolSchemaString = toolSchemas.map((chunk, index) => {
         return index === 0
@@ -110,49 +126,81 @@ const createUIComposerAgent = () => {
             : `Additional backend functions (part ${index + 1}):\n${JSON.stringify(chunk, null, 2)}`;
     }).join('\n\n');
 
-    const enhanceWorkflowTool = tool({
+    const enhanceWorkflowWithUITool = tool({
         name: 'enhance_workflow_with_ui',
         description: 'Enhance a workflow with UI components',
         parameters: z.object({
-            originalWorkflow: WorkflowSchema,
+            workflow: WorkflowSchema,
             enhancedWorkflow: WorkflowWithUISchema
         }),
-        execute: async ({ originalWorkflow, enhancedWorkflow }) => {
+        execute: async ({ workflow, enhancedWorkflow }) => {
             return enhancedWorkflow;
         }
     });
 
     return new Agent({
-        name: 'UI Composer',
-        instructions: `You are the UI Composer agent. Your job is to enhance verified workflows with UI component definitions.
+        name: 'UI Agent',
+        instructions: `You are the UI Agent. Your job is to analyze workflows and generate appropriate UI components.
 
 ## Available Functions
 ${toolSchemaString}
 
 ## Your Task
-When given a workflow, add a ui property that defines:
-1. Input components needed for user data entry
-2. Output components for displaying results
+When given a workflow, analyze it and add a ui property with input and output components.
 
-## Input Component Rules
-- Scan all action parameters for userInput.* placeholders
-- Map parameter types to UI components:
-  - string -> "type": "string" (single-line input)
-  - text -> "type": "text" (multi-line textarea)
-  - number -> "type": "number"
-  - boolean -> "type": "boolean"
-  - enum -> "type": "enum" with enumValues array
-- Use parameter metadata for labels and required status
-- Default label to the field key if no description available
+## UI Component Generation Rules
 
-## Output Component Rules
-- For each action, determine the best display component:
-  - If return type suggests array data -> "component": "table"
-  - Otherwise -> "component": "dataCard"
+### Step 1: Analyze Workflow Intent
+Understand what the workflow is trying to accomplish:
+- Is it sending emails? → Need email composition UI
+- Is it creating records? → Need form fields for record data
+- Is it searching/filtering? → Need search/filter inputs
+- Is it displaying data? → Need output components
+
+### Step 2: Generate Input Components
+For each action, analyze its parameters and the function schema:
+
+**For userInput.* parameters:**
+- Look up the parameter in the function schema
+- Use the schema's type, description, and enum values
+- Create appropriate UI components:
+
+**Common Patterns:**
+- userInput.userId → text input for user ID
+- userInput.email → email input field
+- userInput.subject → text input for email subject
+- userInput.message → textarea for email body
+- userInput.content → textarea for long content
+- userInput.type → select dropdown with enum values
+- userInput.enabled → boolean switch
+- userInput.count → number input
+
+**UI Component Mapping:**
+- string → "type": "string" (single-line input)
+- text → "type": "text" (multi-line textarea)
+- number → "type": "number"
+- boolean → "type": "boolean"
+- enum → "type": "enum" with enumValues array
+
+**Special Cases:**
+- Email workflows: Always include subject (text) and message (textarea)
+- User selection: Include userId (text) or user search
+- File operations: Include file path or upload fields
+- Data creation: Include all required fields from schema
+
+### Step 3: Generate Output Components
+- Create one output component per action
+- Use "component": "dataCard" for most cases
+- Use "component": "table" if the action returns array data
 - Use the action's id as the actionId
 
+## Example: Email Workflow
+For a workflow with get_user_by_id and send_email actions:
+1. Input: userId (text), subject (text), message (textarea)
+2. Output: dataCard for each action
+
 Always call the enhance_workflow_with_ui tool with both the original workflow and the enhanced version.`,
-        tools: [enhanceWorkflowTool]
+        tools: [enhanceWorkflowWithUITool]
     });
 };
 
@@ -165,7 +213,7 @@ const createResponseAgent = () => {
             userRequest: z.string(),
             responseType: z.enum(['simple', 'workflow']),
             content: z.string(),
-            workflow: WorkflowWithUISchema.nullable().optional()
+            workflow: z.any().optional()
         }),
         execute: async ({ userRequest, responseType, content, workflow }) => {
             if (responseType === 'workflow' && workflow) {
@@ -214,7 +262,7 @@ Determine the appropriate response type based on whether workflow data is provid
 };
 
 // Main SashiAgent - Router that decides which agents to use
-const createSashiAgent = (workflowPlannerAgent: Agent, uiComposerAgent: Agent, responseAgent: Agent) => {
+const createSashiAgent = (workflowPlannerAgent: Agent, uiAgent: Agent, responseAgent: Agent) => {
     return new Agent({
         name: 'SashiAgent',
         instructions: `You are SashiAgent, the main conversational AI assistant that intelligently routes requests to specialized agents.
@@ -255,8 +303,8 @@ Focus on the user's underlying goal, not specific words:
 ## Routing Strategy
 
 **For Actionable Requests:**
-1. Hand off to Workflow Planner to create the workflow
-2. Hand off to UI Composer to enhance with UI components  
+1. Hand off to Workflow Planner to create the workflow logic
+2. Hand off to UI Agent to enhance with UI components
 3. Hand off to Response Agent to generate final response with embedded workflow
 
 **For Informational Requests:**
@@ -274,8 +322,8 @@ Analyze the user's request to understand their true intent and route accordingly
             handoff(workflowPlannerAgent, {
                 toolDescriptionOverride: 'Hand off to Workflow Planner when user wants to accomplish a specific task that requires backend operations or system interaction'
             }),
-            handoff(uiComposerAgent, {
-                toolDescriptionOverride: 'Hand off to UI Composer to enhance a workflow with UI components after workflow creation'
+            handoff(uiAgent, {
+                toolDescriptionOverride: 'Hand off to UI Agent to enhance a workflow with UI components after workflow creation'
             }),
             handoff(responseAgent, {
                 toolDescriptionOverride: 'Hand off to Response Agent for informational responses, explanations, or when user wants to understand concepts'
@@ -286,17 +334,17 @@ Analyze the user's request to understand their true intent and route accordingly
 
 export class SashiAgent {
     private workflowPlannerAgent: Agent;
-    private uiComposerAgent: Agent;
+    private uiAgent: Agent;
     private responseAgent: Agent;
     private mainAgent: Agent;
 
     constructor() {
         this.workflowPlannerAgent = createWorkflowPlannerAgent();
-        this.uiComposerAgent = createUIComposerAgent();
+        this.uiAgent = createUIAgent();
         this.responseAgent = createResponseAgent();
         this.mainAgent = createSashiAgent(
             this.workflowPlannerAgent,
-            this.uiComposerAgent,
+            this.uiAgent,
             this.responseAgent
         );
     }
@@ -320,6 +368,13 @@ export class SashiAgent {
                     if (parsed.type === 'general' && typeof parsed.content === 'string') {
                         return parsed as SashiAgentResponse;
                     }
+                }
+
+                if (typeof finalOutput === 'string') {
+                    return {
+                        type: 'general',
+                        content: finalOutput
+                    };
                 }
             } catch (e) {
                 // Fall through to default handling

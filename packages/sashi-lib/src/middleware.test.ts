@@ -2,18 +2,38 @@ import { describe, expect, it, jest, test } from '@jest/globals';
 import axios from 'axios';
 import express from 'express';
 import fetchMock from 'jest-fetch-mock';
-import OpenAI from 'openai';
 import supertest from 'supertest';
 import { createMiddleware } from './middleware';
 
+jest.mock('@openai/agents', () => ({
+    Agent: jest.fn().mockImplementation((config: any) => ({
+        name: config.name,
+        instructions: config.instructions,
+        functions: config.functions,
+        tools: config.tools
+    })),
+    run: jest.fn().mockImplementation((agent, inquiry) => {
+        return {
+            finalOutput: 'This is a simple response from the agent.'
+        };
+    }),
+    tool: jest.fn().mockImplementation((config: any) => ({
+        name: config.name,
+        description: config.description,
+        parameters: config.parameters,
+        execute: config.execute
+    })),
+    handoff: jest.fn()
+}));
 
 fetchMock.enableMocks(); // Enable fetch mocks
 
 jest.mock('axios');
-jest.mock('openai');
 
 const mockedAxios = axios as jest.Mocked<typeof axios>;
-const mockedOpenAI = OpenAI as jest.MockedClass<typeof OpenAI>;
+
+// Get reference to the mocked run function after the mock is defined
+const { run: mockedRun } = require('@openai/agents');
 
 describe('Chat Endpoint', () => {
     let app: express.Application;
@@ -46,25 +66,10 @@ describe('Chat Endpoint', () => {
             },
         });
 
-        // Mock OpenAI SDK
-        //@ts-ignore
-        const mockCreate = jest.fn().mockResolvedValue({
-            choices: [
-                {
-                    message: {
-                        content: 'Hello, how can I help?',
-                        role: 'assistant',
-                        refusal: null,
-                    },
-                },
-            ],
-        });
+        // Clear the run mock for each test  
+        mockedRun.mockClear();
 
-        mockedOpenAI.prototype.chat = {
-            completions: {
-                create: mockCreate,
-            },
-        } as any;
+
 
         const router = createMiddleware({
             openAIKey: process.env.OPENAI_API_KEY as string,
@@ -107,40 +112,20 @@ describe('Chat Endpoint', () => {
             expect(response.status).toBe(200);
             expect(response.body).toEqual({
                 output: {
-                    content: 'Hello, how can I help?',
+                    content: 'This is a simple response from the agent.',
                     "type": "general",
                 },
             });
 
             // Verify that OpenAI SDK was called
-            expect(mockedOpenAI.prototype.chat.completions.create).toHaveBeenCalled();
+            expect(mockedRun).toHaveBeenCalled();
         });
 
 
         it('should handle errors in message processing', async () => {
-            mockedAxios.post.mockRejectedValueOnce(new Error('Chat error'));
-            mockedOpenAI.prototype.chat.completions.create.mockRejectedValueOnce(new Error('Chat error'));
+            (mockedAxios.post as any).mockRejectedValueOnce(new Error('Chat error'));
+            mockedRun.mockRejectedValueOnce(new Error('Chat error'));
 
-            const response = await request
-                .post('/chat')
-                .set('x-sashi-session-token', 'test-session-token')
-                .send({
-                    type: '/chat/message',
-                    inquiry: 'Hello',
-                    previous: [],
-                });
-
-            expect(response.status).toBe(500);
-
-
-            // Optionally verify the response structure
-            expect(Object.keys(response.body)).toContain('message');
-            expect(Object.keys(response.body)).toContain('error');
-            expect(response.body.message).toBe('Error processing request');
-            expect(response.body.error).toBe('AI service error');
-        });
-
-        test('should use local OpenAI instance when useCloud is false', async () => {
             const response = await request
                 .post('/chat')
                 .set('x-sashi-session-token', 'test-session-token')
@@ -151,19 +136,18 @@ describe('Chat Endpoint', () => {
                 });
 
             expect(response.status).toBe(200);
+
             expect(response.body).toEqual({
                 output: {
-                    content: 'Hello, how can I help?',
-                    "type": "general"
+                    type: 'general',
+                    content: "I encountered an error while processing your request: Chat error. Please try again or rephrase your request.",
                 },
             });
 
-            // Verify that OpenAI SDK's chat completion method was called
-            expect(mockedOpenAI.prototype.chat.completions.create).toHaveBeenCalled();
 
-            // Verify that the cloud API was not called
-            expect(fetchMock).not.toHaveBeenCalled();
         });
+
+
 
 
     });

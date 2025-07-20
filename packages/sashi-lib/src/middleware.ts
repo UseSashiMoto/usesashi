@@ -889,13 +889,15 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
                     const aiCallPromise = processChatRequest({ inquiry, previous });
 
-                    const result: any = await Promise.race([aiCallPromise, aiCallTimeout]);
+                    const result = await Promise.race([aiCallPromise, aiCallTimeout]);
+
+                    console.log('Chat result:', result);
 
                     // Clear the main timeout since we got a response
                     clearTimeout(requestTimeout);
 
                     // Check for empty or invalid result
-                    if (!result?.message) {
+                    if (!result?.content) {
                         console.error('[Chat] Empty result from processChatRequest:', result);
                         return res.status(500).json({
                             message: 'Error processing request',
@@ -911,9 +913,9 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
                     try {
                         // Check if the result content is JSON
-                        if (result.message.content) {
+                        if (result.content) {
                             try {
-                                const parsedResult = JSON.parse(result.message.content)
+                                const parsedResult = JSON.parse(result.content)
 
                                 // Process only general responses (workflows are now embedded in content)
                                 if (parsedResult.type === 'general') {
@@ -950,11 +952,11 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
                             } catch (parseError: any) {
                                 // Not JSON, wrap the response in the expected format
-                                if (result.message.content && result.message.content.trim()) {
+                                if (result.content && result.content.trim()) {
                                     console.log(`[Chat] Wrapping non-JSON response in general format`);
                                     const generalResponse: GeneralResponse = {
                                         type: 'general',
-                                        content: result.message.content
+                                        content: result.content
                                     };
                                     return res.json({
                                         output: generalResponse,
@@ -966,7 +968,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                                         error: 'Empty response',
                                         details: 'The AI response could not be parsed and contained no usable content.',
                                         debug_info: {
-                                            result: result.message,
+                                            result: result.content,
                                             parseError: parseError.message,
                                             timestamp: new Date().toISOString()
                                         }
