@@ -517,8 +517,6 @@ export class AIFunction {
                 return this.coerceToType(arg, this.validateAIField(expectedType));
             });
 
-            console.log('coercedArgs', coercedArgs, this._params);
-
             const parsedArgs = z
                 .tuple(
                     this._params.map(this.validateAIField) as [

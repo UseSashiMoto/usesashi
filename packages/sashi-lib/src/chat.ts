@@ -1,8 +1,4 @@
-import { AgentInputItem } from "@openai/agents";
-import { generateSplitToolSchemas } from "./ai-function-loader";
-import { getAIBot } from "./aibot";
 import { getSashiAgent } from "./sashiagent";
-import { trim_array } from "./utils";
 
 
 export function getUniqueId() {
@@ -109,7 +105,7 @@ const getSystemPrompt = () => {
 };
 
 
-export const processChatRequest = async ({ inquiry, previous }: { inquiry: string, previous: AgentInputItem[] }) => {
+export const processChatRequest = async ({ inquiry, previous }: { inquiry: string, previous: any[] }) => {
     try {
         // Use the new SashiAgent orchestration
         const sashiAgent = getSashiAgent();
