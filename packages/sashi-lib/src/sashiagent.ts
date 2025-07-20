@@ -25,7 +25,21 @@ const WorkflowWithUISchema = z.object({
         id: z.string(),
         tool: z.string(),
         description: z.string(),
-    }))
+    })),
+    ui: z.object({
+        inputComponents: z.array(z.object({
+            key: z.string(),
+            label: z.string(),
+            type: z.enum(['string', 'number', 'boolean', 'enum', 'text']),
+            required: z.boolean(),
+            enumValues: z.array(z.string()).nullable().optional()
+        })),
+        outputComponents: z.array(z.object({
+            actionId: z.string(),
+            component: z.enum(['table', 'dataCard']),
+            props: z.object({}).catchall(z.any()).nullable().optional()
+        }))
+    })
 });
 
 // Response schema
@@ -48,9 +62,8 @@ const createWorkflowPlannerAgent = () => {
 
     const validateWorkflowTool = tool({
         name: 'validate_workflow',
-        description: 'Validate a workflow JSON object to ensure it uses valid functions and parameters',
+        description: 'Validate a workflow JSON object to ensure it uses valid functions and parameters, and that UI components exist for userInput parameters',
         strict: false,
-
         parameters: {
             type: "object" as const,
             properties: {
@@ -73,9 +86,46 @@ const createWorkflowPlannerAgent = () => {
         execute: async ({ workflow }) => {
             const verification = verifyWorkflow(workflow);
             console.log('verification', verification);
+
+            // Additional validation for UI components
+            const uiValidation = {
+                valid: true,
+                errors: [] as string[]
+            };
+
+            // Collect all userInput.* parameters from actions
+            const userInputParams = new Set<string>();
+            if (workflow.actions) {
+                for (const action of workflow.actions) {
+                    if (action.parameters) {
+                        for (const [key, value] of Object.entries(action.parameters)) {
+                            if (typeof value === 'string' && value.startsWith('userInput.')) {
+                                userInputParams.add(value);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Check if UI components exist for each userInput parameter
+            if (userInputParams.size > 0) {
+                if (!workflow.ui || !workflow.ui.inputComponents) {
+                    uiValidation.valid = false;
+                    uiValidation.errors.push('Workflow has userInput parameters but no UI inputComponents defined');
+                } else {
+                    const componentIds = new Set(workflow.ui.inputComponents.map((c: any) => c.key));
+                    for (const param of userInputParams) {
+                        if (!componentIds.has(param)) {
+                            uiValidation.valid = false;
+                            uiValidation.errors.push(`Missing UI component for parameter: ${param}`);
+                        }
+                    }
+                }
+            }
+
             return {
-                valid: verification.valid,
-                errors: verification.errors,
+                valid: verification.valid && uiValidation.valid,
+                errors: [...verification.errors, ...uiValidation.errors],
                 workflow: workflow
             };
         }
@@ -83,27 +133,44 @@ const createWorkflowPlannerAgent = () => {
 
     return new Agent({
         name: 'Workflow Planner',
-        instructions: `You are the Workflow Planner agent. Your job is to create workflow JSON objects that call backend functions.
+        instructions: `You are the Workflow Planner agent. Your job is to create complete workflow JSON objects that include both backend function calls AND UI components.
 
 ## Available Functions
 ${toolSchemaString}
 
 ## Your Task
-When handed off a user request, analyze it and create a JSON workflow object that accomplishes the user's goal.
+When handed off a user request, analyze it and create a complete JSON workflow object that accomplishes the user's goal, including both the workflow actions and UI components.
+
+## User Input Parameter Strategy
+When creating workflows, you need to determine what information the user must provide:
+
+**Use userInput.* for:**
+- Information that cannot be derived from function calls
+- Data that must come from the user (IDs, text content, preferences, etc.)
+- Parameters that are the "starting point" of the workflow
+
+**Use function outputs for:**
+- Data that can be retrieved from previous function calls
+- Information that exists in the system and can be fetched
+
+**Examples:**
+- "Send email to user 123" → Use literal "123", not userInput
+- "Send email to a user" → Use "userInput.userId" because we don't know which user
+- "Send custom message" → Use "userInput.message" for the message content
+- "Get user email then send email" → Use "userInput.userId" for first function, then "get_user.email" for second
 
 ## Workflow Validation
 IMPORTANT: Before finalizing any workflow, you MUST use the validate_workflow tool to verify that:
 - All functions exist in the available backend functions
 - All required parameters are provided
 - Parameter types match the function schemas
+- UI components exist for all userInput.* parameters
 - The workflow structure is correct
 
 If validation fails, fix the errors and validate again until the workflow is valid.
 
-## Workflow Embedding Format
-CRITICAL: When you need to provide a workflow, you MUST use workflow blocks (NOT json blocks).
-
-When you need to provide a workflow, embed it in your conversational response using this EXACT format:
+## Complete Workflow Format
+You must create workflows with BOTH actions and UI components:
 
 \`\`\`workflow
 {
@@ -127,113 +194,58 @@ When you need to provide a workflow, embed it in your conversational response us
             },
             "map": false
         }
-    ]
+    ],
+    "ui": {
+        "inputComponents": [
+            {
+                "key": "userInput.<fieldname>",
+                "label": "Human-readable label",
+                "type": "string|number|boolean|enum|text",
+                "required": true|false,
+                "enumValues": ["option1", "option2"] // only for enum type
+            }
+        ],
+        "outputComponents": [
+            {
+                "actionId": "<action_id>",
+                "component": "dataCard|table",
+                "props": {}
+            }
+        ]
+    }
 }
 \`\`\`
 
-## Important Rules for Workflow Embedding:
-- ONLY use functions that exist in the tool_schema. NEVER make up functions.
-- For parameters with "enum" fields, include enum values in parameterMetadata and only use values from the enum list
-- Clean function names by removing "functions." prefix
-- Use "userInput.<fieldname>" for parameters that need user input (like "userInput.userId", "userInput.type")
-- Reference previous action outputs using "<action_id>.<output_field>" syntax
-- For array outputs, use "<action_id>[*].<output_field>" notation
-- Set "map": true when processing each item in an array from a previous step
+## UI Component Generation Rules
 
-## Action Guidelines
-1. ONLY use functions that exist in the provided schema
-2. Ensure all required parameters are provided
-3. Use descriptive action IDs that relate to the function name
-4. Make workflows as simple as possible - avoid unnecessary steps
-5. Use literal values when you know them: "userId": 123
-6. Use placeholders for user input: "name": "userInput.name"
-7. Reference previous action outputs: "userId": "get_user.id"
-8. For arrays, use: "items": "get_files[*].id"
+### Input Components
+For each userInput.* parameter in your workflow actions:
+1. Create a matching inputComponent with key="userInput.<fieldname>"
+2. Look up the parameter in the function schema to determine type and validation
+3. Use appropriate UI component types:
+   - string → single-line text input
+   - text → multi-line textarea (for longer content like messages)
+   - number → number input
+   - boolean → switch/checkbox
+   - enum → dropdown select with enumValues
 
-## Important Notes
-- Focus ONLY on the business logic and workflow actions
-- Use userInput.* placeholders for any data the user needs to provide
-- The UI Agent will handle creating the interface components
-- Don't worry about UI - just create the workflow logic
-- ALWAYS validate workflows using the validate_workflow tool before providing them and as you make changes validate the workflow to make sure it is valid
+### Output Components
+1. Create one output component per action
+2. Use "dataCard" for single object results
+3. Use "table" for array results
+4. Set actionId to match the action's id
+
+## Important Rules:
+- ONLY use functions that exist in the tool_schema
+- userInput.* is a special namespace ONLY for form inputs
+- Reference previous action outputs using "<action_id>.<output_field>"
+- For array outputs, use "<action_id>[*].<output_field>"
+- Every userInput.* parameter MUST have a matching UI inputComponent
+- Input component IDs must exactly match the userInput.* parameter names
+- ALWAYS validate workflows using the validate_workflow tool before providing them
 
 `,
         tools: [validateWorkflowTool]
-    });
-};
-
-// UI Agent - Specializes in generating UI components from workflows
-const createUIAgent = () => {
-    const toolSchemas = generateSplitToolSchemas(8000);
-    const toolSchemaString = toolSchemas.map((chunk, index) => {
-        return index === 0
-            ? `Available backend functions:\n${JSON.stringify(chunk, null, 2)}`
-            : `Additional backend functions (part ${index + 1}):\n${JSON.stringify(chunk, null, 2)}`;
-    }).join('\n\n');
-
-
-    return new Agent({
-        name: 'UI Agent',
-        instructions: `You are the UI Agent. Your job is to analyze workflows and generate appropriate UI components.
-
-## Available Functions
-${toolSchemaString}
-
-## Your Task
-When given a workflow, analyze it and add a ui property with input and output components.
-
-## UI Component Generation Rules
-
-### Step 1: Analyze Workflow Intent
-Understand what the workflow is trying to accomplish:
-- Is it sending emails? → Need email composition UI
-- Is it creating records? → Need form fields for record data
-- Is it searching/filtering? → Need search/filter inputs
-- Is it displaying data? → Need output components
-
-### Step 2: Generate Input Components
-For each action, analyze its parameters and the function schema:
-
-**For userInput.* parameters:**
-- Look up the parameter in the function schema
-- Use the schema's type, description, and enum values
-- Create appropriate UI components:
-
-**Common Patterns:**
-- userInput.userId → text input for user ID
-- userInput.email → email input field
-- userInput.subject → text input for email subject
-- userInput.message → textarea for email body
-- userInput.content → textarea for long content
-- userInput.type → select dropdown with enum values
-- userInput.enabled → boolean switch
-- userInput.count → number input
-
-**UI Component Mapping:**
-- string → "type": "string" (single-line input)
-- text → "type": "text" (multi-line textarea)
-- number → "type": "number"
-- boolean → "type": "boolean"
-- enum → "type": "enum" with enumValues array
-
-**Special Cases:**
-- Email workflows: Always include subject (text) and message (textarea)
-- User selection: Include userId (text) or user search
-- File operations: Include file path or upload fields
-- Data creation: Include all required fields from schema
-
-### Step 3: Generate Output Components
-- Create one output component per action
-- Use "component": "dataCard" for most cases
-- Use "component": "table" if the action returns array data
-- Use the action's id as the actionId
-
-## Example: Email Workflow
-For a workflow with get_user_by_id and send_email actions:
-1. Input: userId (text), subject (text), message (textarea)
-2. Output: dataCard for each action
-
-Always call the enhance_workflow_with_ui tool with both the original workflow and the enhanced version.`,
     });
 };
 
@@ -272,7 +284,7 @@ Determine the appropriate response type based on whether workflow data is provid
 };
 
 // Main SashiAgent - Router that decides which agents to use
-const createSashiAgent = (workflowPlannerAgent: Agent, uiAgent: Agent, responseAgent: Agent) => {
+const createSashiAgent = (workflowPlannerAgent: Agent, responseAgent: Agent) => {
     return new Agent({
         name: 'SashiAgent',
         instructions: `You are SashiAgent, the main conversational AI assistant that intelligently routes requests to specialized agents.
@@ -313,8 +325,7 @@ Focus on the user's underlying goal, not specific words:
 ## Routing Strategy
 
 **For Actionable Requests:**
-1. Hand off to Workflow Planner to create the workflow logic
-2. Hand off to Response Agent to generate final response with embedded workflow
+1. Hand off to Workflow Planner to create complete workflow with actions and UI components
 
 **For Informational Requests:**
 1. Hand off directly to Response Agent for conversational response
@@ -331,7 +342,6 @@ Analyze the user's request to understand their true intent and route accordingly
             handoff(workflowPlannerAgent, {
                 toolDescriptionOverride: 'Hand off to Workflow Planner when user wants to accomplish a specific task that requires backend operations or system interaction'
             }),
-
             handoff(responseAgent, {
                 toolDescriptionOverride: 'Hand off to Response Agent for informational responses, explanations, or when user wants to understand concepts'
             })
@@ -341,17 +351,14 @@ Analyze the user's request to understand their true intent and route accordingly
 
 export class SashiAgent {
     private workflowPlannerAgent: Agent;
-    private uiAgent: Agent;
     private responseAgent: Agent;
     private mainAgent: Agent;
 
     constructor() {
         this.workflowPlannerAgent = createWorkflowPlannerAgent();
-        this.uiAgent = createUIAgent();
         this.responseAgent = createResponseAgent();
         this.mainAgent = createSashiAgent(
             this.workflowPlannerAgent,
-            this.uiAgent,
             this.responseAgent
         );
     }

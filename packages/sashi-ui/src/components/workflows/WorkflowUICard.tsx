@@ -71,11 +71,13 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
 
   // Form field validation
   const isFormValid = () => {
-    // Check if we have the new UI format
+    // Check if we have the new UI format with inputComponents
     if (workflow.workflow.ui?.inputComponents) {
       return workflow.workflow.ui.inputComponents.every((field) => {
         if (field.required) {
-          return formData[field.key] !== undefined && formData[field.key] !== '';
+          // Extract the key from userInput.* format (e.g., "userInput.userId" -> "userId")
+          const fieldKey = field.key.startsWith('userInput.') ? field.key.substring('userInput.'.length) : field.key;
+          return formData[fieldKey] !== undefined && formData[fieldKey] !== '';
         }
         return true;
       });
@@ -113,11 +115,15 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
         workflowWithFormData.actions = workflowWithFormData.actions.map((action) => {
           const updatedParams = { ...action.parameters };
 
-          // Replace parameter values with form data where appropriate
+          // Replace userInput.* parameters with form data
           for (const key in updatedParams) {
-            // Check if field exists in our form data
-            if (formData[key] !== undefined) {
-              updatedParams[key] = formData[key];
+            const value = updatedParams[key];
+            if (typeof value === 'string' && value.startsWith('userInput.')) {
+              // Extract the form field key (e.g., "userInput.userId" -> "userId")
+              const formFieldKey = value.substring('userInput.'.length);
+              if (formData[formFieldKey] !== undefined) {
+                updatedParams[key] = formData[formFieldKey];
+              }
             }
           }
 
@@ -373,13 +379,16 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
 
   // Render form fields based on type
   const renderFormField = (field: WorkflowUIComponent | any) => {
-    // Handle both new UI format and old format
-    const fieldType = field.type || field.fieldType;
-    const fieldKey = field.key || field.name;
-    const fieldLabel = field.label || fieldKey;
+    // Handle new UI format with inputComponents
+    const fieldType = field.type;
+    const fieldKey = field.key;
+    const fieldLabel = field.label;
     const fieldRequired = field.required || false;
-    const fieldEnumValues = field.enumValues || field.enum || [];
-    const fieldValue = formData[fieldKey] || '';
+    const fieldEnumValues = field.enumValues || [];
+
+    // Extract the form data key from userInput.* format
+    const formDataKey = fieldKey.startsWith('userInput.') ? fieldKey.substring('userInput.'.length) : fieldKey;
+    const fieldValue = formData[formDataKey] || '';
 
     switch (fieldType) {
       case 'string':
@@ -387,7 +396,7 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
           <Input
             placeholder={fieldLabel}
             value={fieldValue}
-            onChange={(e) => handleInputChange(fieldKey, e.target.value)}
+            onChange={(e) => handleInputChange(formDataKey, e.target.value)}
             required={fieldRequired}
           />
         );
@@ -397,7 +406,7 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
             type="number"
             placeholder={fieldLabel}
             value={fieldValue}
-            onChange={(e) => handleInputChange(fieldKey, parseFloat(e.target.value))}
+            onChange={(e) => handleInputChange(formDataKey, parseFloat(e.target.value))}
             required={fieldRequired}
           />
         );
@@ -406,16 +415,16 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
           <div className="flex items-center space-x-2">
             <Switch
               checked={!!fieldValue}
-              onCheckedChange={(checked) => handleInputChange(fieldKey, checked)}
-              id={`switch-${fieldKey}`}
+              onCheckedChange={(checked) => handleInputChange(formDataKey, checked)}
+              id={`switch-${formDataKey}`}
             />
-            <Label htmlFor={`switch-${fieldKey}`}>{fieldValue ? 'Enabled' : 'Disabled'}</Label>
+            <Label htmlFor={`switch-${formDataKey}`}>{fieldValue ? 'Enabled' : 'Disabled'}</Label>
           </div>
         );
       case 'enum':
         return (
           <div className="relative overflow-visible">
-            <Select value={fieldValue} onValueChange={(value) => handleInputChange(fieldKey, value)}>
+            <Select value={fieldValue} onValueChange={(value) => handleInputChange(formDataKey, value)}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder={fieldLabel} />
               </SelectTrigger>
@@ -440,7 +449,7 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
           <Textarea
             placeholder={fieldLabel}
             value={fieldValue}
-            onChange={(e) => handleInputChange(fieldKey, e.target.value)}
+            onChange={(e) => handleInputChange(formDataKey, e.target.value)}
             required={fieldRequired}
           />
         );
@@ -449,7 +458,7 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
           <Input
             placeholder={fieldLabel}
             value={fieldValue}
-            onChange={(e) => handleInputChange(fieldKey, e.target.value)}
+            onChange={(e) => handleInputChange(formDataKey, e.target.value)}
             required={fieldRequired}
           />
         );

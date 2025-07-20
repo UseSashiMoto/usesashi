@@ -38,6 +38,10 @@ interface WorkflowData {
   type: string;
   description: string;
   actions: any[];
+  ui: {
+    inputComponents: any[];
+    outputComponents: any[];
+  };
 }
 
 interface MessagePart {
@@ -207,9 +211,9 @@ const WorkflowCard: React.FC<{
                       description: action.description || '',
                       parameters: action.parameters || {},
                     })),
-                    options: {
-                      execute_immediately: false,
-                      generate_ui: false,
+                    ui: {
+                      inputComponents: workflow.ui.inputComponents,
+                      outputComponents: workflow.ui.outputComponents,
                     },
                   },
                   entry: {

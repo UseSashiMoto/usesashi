@@ -96,10 +96,7 @@ export interface WorkflowResponse {
     description: string
     parameters: Record<string, any>
   }[]
-  options: {
-    execute_immediately: boolean
-    generate_ui: boolean
-  }
+
   executionResults?: WorkflowResult[]
   ui?: WorkflowUI // New UI format for SashiAgent
 }
