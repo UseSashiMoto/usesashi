@@ -318,65 +318,6 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
     }
   };
 
-  // Rerun workflow (only for dashboard workflows)
-  const rerunWorkflow = async () => {
-    console.log('rerunWorkflow');
-    if (!savedWorkflow) return;
-
-    const apiToken = useAppStore.getState().apiToken;
-
-    try {
-      const response = await sendExecuteWorkflow(apiUrl, savedWorkflow.workflow.workflow);
-
-      if (response.data.success && response.data.results) {
-        // Update the saved workflow with new results
-        const updatedWorkflow: SavedWorkflow = {
-          ...savedWorkflow,
-          results: response.data.results, // Keep the full WorkflowResult objects
-          timestamp: Date.now(), // Use number timestamp
-        };
-
-        // Try to save to API first
-        try {
-          if (apiUrl && apiToken) {
-            await axios.put(`${apiUrl}/workflows/${savedWorkflow.id}`, updatedWorkflow, {
-              headers: {
-                [HEADER_API_TOKEN]: apiToken,
-              },
-            });
-            console.log('Workflow results saved to API');
-          }
-        } catch (saveError: any) {
-          console.error('Error saving results to API:', saveError);
-          const errorMessage = saveError.response?.data?.error || saveError.message || 'Failed to save results';
-          setSaveError(`Save Results Error: ${errorMessage}`);
-          // Don't throw - let the execution complete but show save error
-        }
-
-        // Update local results state
-        setResults(response.data.results || []);
-        setActiveTab('results');
-
-        // Notify dashboard to refresh
-        if (onWorkflowChange) {
-          onWorkflowChange();
-        }
-
-        console.log(`Workflow "${savedWorkflow.name}" executed successfully:`, response.data.results);
-      } else {
-        console.warn('Workflow executed but returned no results:', response.data);
-        setExecutionError('Workflow executed but returned no results');
-        setActiveTab('results');
-      }
-    } catch (error: any) {
-      const errorMessage =
-        error.response?.data?.details || error.response?.data?.error || error.message || 'Unknown error';
-      console.error('Error re-running workflow:', errorMessage, error);
-      setExecutionError(errorMessage);
-      setActiveTab('results');
-    }
-  };
-
   // Render form fields based on type
   const renderFormField = (field: WorkflowUIComponent | any) => {
     // Handle new UI format with inputComponents

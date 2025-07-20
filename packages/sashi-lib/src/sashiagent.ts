@@ -3,44 +3,6 @@ import { z } from 'zod';
 import { generateSplitToolSchemas } from './ai-function-loader';
 import { verifyWorkflow } from './utils/verifyWorkflow';
 
-// Schema for basic workflow (without UI)
-const WorkflowSchema = z.object({
-    type: z.literal('workflow'),
-    description: z.string(),
-    actions: z.array(z.object({
-        id: z.string(),
-        tool: z.string(),
-        description: z.string(),
-        parameters: z.object({}).catchall(z.any())
-    }))
-});
-
-
-
-// Schema for complete workflow with UI
-const WorkflowWithUISchema = z.object({
-    type: z.literal('workflow'),
-    description: z.string(),
-    actions: z.array(z.object({
-        id: z.string(),
-        tool: z.string(),
-        description: z.string(),
-    })),
-    ui: z.object({
-        inputComponents: z.array(z.object({
-            key: z.string(),
-            label: z.string(),
-            type: z.enum(['string', 'number', 'boolean', 'enum', 'text']),
-            required: z.boolean(),
-            enumValues: z.array(z.string()).nullable().optional()
-        })),
-        outputComponents: z.array(z.object({
-            actionId: z.string(),
-            component: z.enum(['table', 'dataCard']),
-            props: z.object({}).catchall(z.any()).nullable().optional()
-        }))
-    })
-});
 
 // Response schema
 const SashiAgentResponseSchema = z.object({
@@ -49,7 +11,6 @@ const SashiAgentResponseSchema = z.object({
 });
 
 export type SashiAgentResponse = z.infer<typeof SashiAgentResponseSchema>;
-export type WorkflowWithUI = z.infer<typeof WorkflowWithUISchema>;
 
 // Workflow Planner Agent - Creates workflows (business logic only)
 const createWorkflowPlannerAgent = () => {
@@ -85,7 +46,6 @@ const createWorkflowPlannerAgent = () => {
         } as any,
         execute: async ({ workflow }) => {
             const verification = verifyWorkflow(workflow);
-            console.log('verification', verification);
 
             // Additional validation for UI components
             const uiValidation = {
@@ -236,6 +196,7 @@ For each userInput.* parameter in your workflow actions:
 4. Set actionId to match the action's id
 
 ## Important Rules:
+- NEVER put comments in the workflow JSON
 - ONLY use functions that exist in the tool_schema
 - userInput.* is a special namespace ONLY for form inputs
 - Reference previous action outputs using "<action_id>.<output_field>"

@@ -12,6 +12,7 @@ import { WorkflowUICard } from './workflows/WorkflowUICard';
 
 import { BotIcon, UserIcon } from './message-icons';
 import { TableComponent } from './TableComponent';
+import { WorkflowResponse } from '@/models/payload';
 
 interface VisualizationContent {
   type: string;
@@ -34,26 +35,18 @@ interface MessageProps {
   isLatestMessage?: boolean; // New prop to identify if this is the latest message
 }
 
-interface WorkflowData {
-  type: string;
-  description: string;
-  actions: any[];
-  ui: {
-    inputComponents: any[];
-    outputComponents: any[];
-  };
-}
+
 
 interface MessagePart {
   type: 'text' | 'workflow';
   content: string;
-  workflow?: WorkflowData;
+  workflow?: WorkflowResponse;
 }
 
 // Global state for managing which workflow is expanded
 let expandedWorkflowId: string | null = null;
 
-const parseMessageContent = (content: string): MessagePart[] => {
+export const parseMessageContent = (content: string): MessagePart[] => {
   const parts: MessagePart[] = [];
   const workflowRegex = /```workflow\s*\n([\s\S]*?)\n```/gi;
 
@@ -74,19 +67,36 @@ const parseMessageContent = (content: string): MessagePart[] => {
 
     // Add workflow
     try {
-      const workflowJson = match[1].trim();
-      const workflow = JSON.parse(workflowJson);
+      const workflowJson = match[1]?.trim();
+      if (!workflowJson) {
+        throw new Error('Empty workflow block');
+      }
 
+      // Remove single-line comments before parsing
+      const jsonWithoutComments = workflowJson
+        .split('\n')
+        .map((line) => {
+          const commentIndex = line.indexOf('//');
+          return commentIndex >= 0 ? line.slice(0, commentIndex) : line;
+        })
+        .join('\n');
+
+      const workflow = JSON.parse(jsonWithoutComments);
+
+      // Final validation of the parsed object structure
       if (workflow && workflow.type === 'workflow' && Array.isArray(workflow.actions)) {
         parts.push({
           type: 'workflow',
           content: match[0],
           workflow: workflow,
         });
+      } else {
+        // If the structure is not what we expect, treat it as text
+        throw new Error('Parsed JSON is not a valid workflow object');
       }
     } catch (error) {
-      console.warn('Failed to parse embedded workflow JSON:', error);
-      // If parsing fails, treat it as text
+      console.warn('Failed to parse embedded workflow JSON:', (error as Error).message);
+      // If parsing or validation fails, treat it as text
       parts.push({
         type: 'text',
         content: match[0],
@@ -119,7 +129,7 @@ const parseMessageContent = (content: string): MessagePart[] => {
 };
 
 const WorkflowCard: React.FC<{
-  workflow: WorkflowData;
+  workflow: WorkflowResponse;
   isLatest: boolean;
   messageId: string;
   workflowIndex: number;
@@ -142,19 +152,7 @@ const WorkflowCard: React.FC<{
     // Show full interactive workflow for the latest message
     if (!apiUrl) return null;
 
-    const workflowResponse = {
-      type: 'workflow' as const,
-      actions: workflow.actions.map((action) => ({
-        id: action.id || `action_${Math.random().toString(36).substr(2, 9)}`,
-        tool: action.tool,
-        description: action.description || '',
-        parameters: action.parameters || {},
-      })),
-      options: {
-        execute_immediately: false,
-        generate_ui: true,
-      },
-    };
+    const workflowResponse = workflow;
 
     const entryType = detectWorkflowEntryType(workflowResponse);
 
@@ -203,19 +201,7 @@ const WorkflowCard: React.FC<{
             <div className="border-t pt-4">
               <WorkflowUICard
                 workflow={{
-                  workflow: {
-                    type: 'workflow' as const,
-                    actions: workflow.actions.map((action) => ({
-                      id: action.id || `action_${Math.random().toString(36).substr(2, 9)}`,
-                      tool: action.tool,
-                      description: action.description || '',
-                      parameters: action.parameters || {},
-                    })),
-                    ui: {
-                      inputComponents: workflow.ui.inputComponents,
-                      outputComponents: workflow.ui.outputComponents,
-                    },
-                  },
+                  workflow: workflow,
                   entry: {
                     entryType: 'label',
                     description: workflow.description,

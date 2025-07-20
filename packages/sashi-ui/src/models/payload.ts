@@ -18,6 +18,7 @@ export interface WorkflowResult {
 export interface WorkflowExecutionSuccess {
   success: true;
   results: WorkflowResult[];
+  errors?: WorkflowStepError[];
 }
 
 export interface WorkflowExecutionError {
@@ -43,10 +44,14 @@ export function isWorkflowExecutionError(response: WorkflowExecutionResponse): r
 /**
 * Helper function to create a successful workflow execution response
 */
-export function createWorkflowExecutionSuccess(results: WorkflowResult[]): WorkflowExecutionSuccess {
+export function createWorkflowExecutionSuccess(
+  results: WorkflowResult[],
+  errors?: WorkflowStepError[]
+): WorkflowExecutionSuccess {
   return {
     success: true,
-    results
+    results,
+    errors
   };
 }
 
@@ -90,6 +95,7 @@ export interface GeneralResponse {
 
 export interface WorkflowResponse {
   type: 'workflow'
+  description: string
   actions: {
     id: string
     tool: string
