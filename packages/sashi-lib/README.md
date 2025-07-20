@@ -77,6 +77,8 @@ Functions are registered with:
 npm install @usesashi/sashi-lib
 ```
 
+> **Important**: This library requires `zod` version 3.25.67 or lower. Installing with a higher version may cause compatibility issues.
+
 ## 🔧 Basic Usage
 
 ```typescript
