@@ -18,6 +18,7 @@ export interface WorkflowResult {
 export interface WorkflowExecutionSuccess {
   success: true;
   results: WorkflowResult[];
+  errors?: WorkflowStepError[];
 }
 
 export interface WorkflowExecutionError {
@@ -43,10 +44,14 @@ export function isWorkflowExecutionError(response: WorkflowExecutionResponse): r
 /**
 * Helper function to create a successful workflow execution response
 */
-export function createWorkflowExecutionSuccess(results: WorkflowResult[]): WorkflowExecutionSuccess {
+export function createWorkflowExecutionSuccess(
+  results: WorkflowResult[],
+  errors?: WorkflowStepError[]
+): WorkflowExecutionSuccess {
   return {
     success: true,
-    results
+    results,
+    errors
   };
 }
 
@@ -90,17 +95,16 @@ export interface GeneralResponse {
 
 export interface WorkflowResponse {
   type: 'workflow'
+  description: string
   actions: {
     id: string
     tool: string
     description: string
     parameters: Record<string, any>
   }[]
-  options: {
-    execute_immediately: boolean
-    generate_ui: boolean
-  }
+
   executionResults?: WorkflowResult[]
+  ui?: WorkflowUI // New UI format for SashiAgent
 }
 
 export interface WorkflowUIElement {
@@ -123,6 +127,25 @@ export interface WorkflowUIElement {
   };
 }
 
+// New UI format for SashiAgent
+export interface WorkflowUIComponent {
+  key: string;
+  label: string;
+  type: 'string' | 'number' | 'boolean' | 'enum' | 'text';
+  required: boolean;
+  enumValues?: string[];
+}
+
+export interface WorkflowOutputComponent {
+  actionId: string;
+  component: 'table' | 'dataCard';
+  props?: Record<string, any>;
+}
+
+export interface WorkflowUI {
+  inputComponents: WorkflowUIComponent[];
+  outputComponents: WorkflowOutputComponent[];
+}
 
 
 export type WorkflowEntryType = 'form' | 'button' | 'auto_update' | 'label';

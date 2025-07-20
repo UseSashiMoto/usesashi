@@ -23,6 +23,7 @@ import {
   UIWorkflowDefinition,
   WorkflowResponse,
   WorkflowResult,
+  WorkflowUIComponent,
 } from '../../models/payload';
 import { WorkflowResultViewer } from './WorkflowResultViewer';
 
@@ -70,6 +71,19 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
 
   // Form field validation
   const isFormValid = () => {
+    // Check if we have the new UI format with inputComponents
+    if (workflow.workflow.ui?.inputComponents) {
+      return workflow.workflow.ui.inputComponents.every((field) => {
+        if (field.required) {
+          // Extract the key from userInput.* format (e.g., "userInput.userId" -> "userId")
+          const fieldKey = field.key.startsWith('userInput.') ? field.key.substring('userInput.'.length) : field.key;
+          return formData[fieldKey] !== undefined && formData[fieldKey] !== '';
+        }
+        return true;
+      });
+    }
+
+    // Fallback to old format
     const formPayload = workflow.entry.payload as FormPayload;
     if (!formPayload?.fields) return true;
 
@@ -101,11 +115,15 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
         workflowWithFormData.actions = workflowWithFormData.actions.map((action) => {
           const updatedParams = { ...action.parameters };
 
-          // Replace parameter values with form data where appropriate
+          // Replace userInput.* parameters with form data
           for (const key in updatedParams) {
-            // Check if field exists in our form data
-            if (formData[key] !== undefined) {
-              updatedParams[key] = formData[key];
+            const value = updatedParams[key];
+            if (typeof value === 'string' && value.startsWith('userInput.')) {
+              // Extract the form field key (e.g., "userInput.userId" -> "userId")
+              const formFieldKey = value.substring('userInput.'.length);
+              if (formData[formFieldKey] !== undefined) {
+                updatedParams[key] = formData[formFieldKey];
+              }
             }
           }
 
@@ -300,104 +318,56 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
     }
   };
 
-  // Rerun workflow (only for dashboard workflows)
-  const rerunWorkflow = async () => {
-    console.log('rerunWorkflow');
-    if (!savedWorkflow) return;
-
-    const apiToken = useAppStore.getState().apiToken;
-
-    try {
-      const response = await sendExecuteWorkflow(apiUrl, savedWorkflow.workflow.workflow);
-
-      if (response.data.success && response.data.results) {
-        // Update the saved workflow with new results
-        const updatedWorkflow: SavedWorkflow = {
-          ...savedWorkflow,
-          results: response.data.results, // Keep the full WorkflowResult objects
-          timestamp: Date.now(), // Use number timestamp
-        };
-
-        // Try to save to API first
-        try {
-          if (apiUrl && apiToken) {
-            await axios.put(`${apiUrl}/workflows/${savedWorkflow.id}`, updatedWorkflow, {
-              headers: {
-                [HEADER_API_TOKEN]: apiToken,
-              },
-            });
-            console.log('Workflow results saved to API');
-          }
-        } catch (saveError: any) {
-          console.error('Error saving results to API:', saveError);
-          const errorMessage = saveError.response?.data?.error || saveError.message || 'Failed to save results';
-          setSaveError(`Save Results Error: ${errorMessage}`);
-          // Don't throw - let the execution complete but show save error
-        }
-
-        // Update local results state
-        setResults(response.data.results || []);
-        setActiveTab('results');
-
-        // Notify dashboard to refresh
-        if (onWorkflowChange) {
-          onWorkflowChange();
-        }
-
-        console.log(`Workflow "${savedWorkflow.name}" executed successfully:`, response.data.results);
-      } else {
-        console.warn('Workflow executed but returned no results:', response.data);
-        setExecutionError('Workflow executed but returned no results');
-        setActiveTab('results');
-      }
-    } catch (error: any) {
-      const errorMessage =
-        error.response?.data?.details || error.response?.data?.error || error.message || 'Unknown error';
-      console.error('Error re-running workflow:', errorMessage, error);
-      setExecutionError(errorMessage);
-      setActiveTab('results');
-    }
-  };
-
   // Render form fields based on type
-  const renderFormField = (field: any) => {
-    switch (field.type) {
+  const renderFormField = (field: WorkflowUIComponent | any) => {
+    // Handle new UI format with inputComponents
+    const fieldType = field.type;
+    const fieldKey = field.key;
+    const fieldLabel = field.label;
+    const fieldRequired = field.required || false;
+    const fieldEnumValues = field.enumValues || [];
+
+    // Extract the form data key from userInput.* format
+    const formDataKey = fieldKey.startsWith('userInput.') ? fieldKey.substring('userInput.'.length) : fieldKey;
+    const fieldValue = formData[formDataKey] || '';
+
+    switch (fieldType) {
       case 'string':
         return (
           <Input
-            placeholder={field.label || field.key}
-            value={formData[field.key] || ''}
-            onChange={(e) => handleInputChange(field.key, e.target.value)}
-            required={field.required}
+            placeholder={fieldLabel}
+            value={fieldValue}
+            onChange={(e) => handleInputChange(formDataKey, e.target.value)}
+            required={fieldRequired}
           />
         );
       case 'number':
         return (
           <Input
             type="number"
-            placeholder={field.label || field.key}
-            value={formData[field.key] || ''}
-            onChange={(e) => handleInputChange(field.key, parseFloat(e.target.value))}
-            required={field.required}
+            placeholder={fieldLabel}
+            value={fieldValue}
+            onChange={(e) => handleInputChange(formDataKey, parseFloat(e.target.value))}
+            required={fieldRequired}
           />
         );
       case 'boolean':
         return (
           <div className="flex items-center space-x-2">
             <Switch
-              checked={!!formData[field.key]}
-              onCheckedChange={(checked) => handleInputChange(field.key, checked)}
-              id={`switch-${field.key}`}
+              checked={!!fieldValue}
+              onCheckedChange={(checked) => handleInputChange(formDataKey, checked)}
+              id={`switch-${formDataKey}`}
             />
-            <Label htmlFor={`switch-${field.key}`}>{formData[field.key] ? 'Enabled' : 'Disabled'}</Label>
+            <Label htmlFor={`switch-${formDataKey}`}>{fieldValue ? 'Enabled' : 'Disabled'}</Label>
           </div>
         );
       case 'enum':
         return (
           <div className="relative overflow-visible">
-            <Select value={formData[field.key] || ''} onValueChange={(value) => handleInputChange(field.key, value)}>
+            <Select value={fieldValue} onValueChange={(value) => handleInputChange(formDataKey, value)}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder={field.label || field.key} />
+                <SelectValue placeholder={fieldLabel} />
               </SelectTrigger>
               <SelectContent
                 position="popper"
@@ -406,7 +376,7 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
                 sideOffset={4}
                 className="z-[9999] max-h-[200px] overflow-y-auto"
               >
-                {field.enumValues?.map((value: string) => (
+                {fieldEnumValues.map((value: string) => (
                   <SelectItem key={value} value={value}>
                     {value}
                   </SelectItem>
@@ -418,19 +388,19 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
       case 'text':
         return (
           <Textarea
-            placeholder={field.label || field.key}
-            value={formData[field.key] || ''}
-            onChange={(e) => handleInputChange(field.key, e.target.value)}
-            required={field.required}
+            placeholder={fieldLabel}
+            value={fieldValue}
+            onChange={(e) => handleInputChange(formDataKey, e.target.value)}
+            required={fieldRequired}
           />
         );
       default:
         return (
           <Input
-            placeholder={field.label || field.key}
-            value={formData[field.key] || ''}
-            onChange={(e) => handleInputChange(field.key, e.target.value)}
-            required={field.required}
+            placeholder={fieldLabel}
+            value={fieldValue}
+            onChange={(e) => handleInputChange(formDataKey, e.target.value)}
+            required={fieldRequired}
           />
         );
     }
@@ -559,7 +529,8 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
                 }}
                 className="space-y-4 overflow-visible"
               >
-                {(workflow.entry.payload as FormPayload)?.fields?.map((field) => (
+                {/* New UI format */}
+                {workflow.workflow.ui?.inputComponents?.map((field: WorkflowUIComponent) => (
                   <div key={field.key} className="space-y-2 overflow-visible">
                     <Label htmlFor={field.key}>
                       {field.label || field.key}
@@ -568,6 +539,18 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
                     {renderFormField(field)}
                   </div>
                 ))}
+
+                {/* Fallback to old format */}
+                {!workflow.workflow.ui?.inputComponents &&
+                  (workflow.entry.payload as FormPayload)?.fields?.map((field) => (
+                    <div key={field.key} className="space-y-2 overflow-visible">
+                      <Label htmlFor={field.key}>
+                        {field.label || field.key}
+                        {field.required && <span className="text-red-500 ml-1">*</span>}
+                      </Label>
+                      {renderFormField(field)}
+                    </div>
+                  ))}
 
                 <Button type="submit" disabled={isExecuting || !isFormValid()} className="w-full mt-4">
                   {isExecuting ? 'Running...' : 'Execute'}

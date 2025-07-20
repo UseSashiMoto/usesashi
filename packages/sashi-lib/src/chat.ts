@@ -1,6 +1,4 @@
-import { generateSplitToolSchemas } from "./ai-function-loader";
-import { getAIBot } from "./aibot";
-import { trim_array } from "./utils";
+import { getSashiAgent } from "./sashiagent";
 
 
 export function getUniqueId() {
@@ -108,45 +106,17 @@ const getSystemPrompt = () => {
 
 
 export const processChatRequest = async ({ inquiry, previous }: { inquiry: string, previous: any[] }) => {
+    try {
+        // Use the new SashiAgent orchestration
+        const sashiAgent = getSashiAgent();
+        const result = await sashiAgent.processRequest(inquiry, previous);
 
-    const aiBot = getAIBot()
+        return result;
+    } catch (error) {
+        console.error('Error in processChatRequest:', error);
 
-    const context = trim_array(previous, 20);
-    const system_prompt = getSystemPrompt();
 
-    // Use split tool schemas to handle large schemas
-    const toolsSchemaChunks = generateSplitToolSchemas(8000);
-
-    let messages: any[] = [
-        { role: 'system', content: system_prompt }
-    ];
-
-    // Add tool schema chunks as separate system messages
-    toolsSchemaChunks.forEach((chunk, index) => {
-        const chunkContent = index === 0
-            ? `Available backend functions: \n${JSON.stringify(chunk, null, 2)} `
-            : `Additional backend functions(part ${index + 1}): \n${JSON.stringify(chunk, null, 2)}`;
-
-        messages.push({ role: "system", content: chunkContent });
-    });
-
-    console.log(`toolsSchema split into ${toolsSchemaChunks.length} chunks`);
-
-    if (context.length > 0) {
-        messages = messages.concat(context);
     }
-    messages.push({ role: 'user', content: inquiry });
-
-    const result = await aiBot.chatCompletion({
-        temperature: 0.3,
-        messages: messages.filter(
-            (message) =>
-                typeof message.content !== "object" ||
-                message.content === null
-        )
-    })
-
-    return result
 }
 
 

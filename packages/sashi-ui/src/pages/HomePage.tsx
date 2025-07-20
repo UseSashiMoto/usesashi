@@ -1,9 +1,7 @@
 import { Button } from '@/components/Button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { WorkflowResultViewer } from '@/components/workflows/WorkflowResultViewer';
-import { WorkflowSaveForm } from '@/components/workflows/WorkflowSaveForm';
 import { WorkflowVisualizer } from '@/components/WorkflowVisualizer';
 import { sendExecuteWorkflow } from '@/services/workflow.service';
 import { Label } from '@radix-ui/react-dropdown-menu';
@@ -20,10 +18,8 @@ import { MessageItem } from 'src/store/models';
 import { Layout } from '../components/Layout';
 import {
   GeneralResponse,
-  isWorkflowExecutionSuccess,
   PayloadObject,
   UIWorkflowDefinition,
-  WorkflowExecutionSuccess,
   WorkflowResponse,
   WorkflowResult,
 } from '../models/payload';
@@ -44,56 +40,6 @@ interface WorkflowFormProps {
   workflow: WorkflowResponse;
   apiUrl: string;
 }
-
-const WorkflowForm: React.FC<WorkflowFormProps> = ({ workflow, apiUrl }) => {
-  const [formData, setFormData] = useState<Record<string, string>>({});
-  const [results, setResults] = useState<WorkflowResult[]>([]);
-
-  const handleExecute = async () => {
-    const updatedActions = workflow.actions.map((action) => {
-      const updatedParams = { ...action.parameters };
-      for (const key of Object.keys(updatedParams)) {
-        const val = updatedParams[key];
-        if (typeof val === 'string' && val.startsWith('userInput.')) {
-          const inputKey = val.split('.')[1];
-          updatedParams[key] = formData[inputKey];
-        }
-      }
-      return { ...action, parameters: updatedParams };
-    });
-
-    const finalWorkflow = { ...workflow, actions: updatedActions } as WorkflowResponse;
-    const response = await sendExecuteWorkflow(apiUrl, finalWorkflow);
-    if (isWorkflowExecutionSuccess(response.data)) {
-      setResults((response.data as WorkflowExecutionSuccess).results || []);
-    }
-  };
-
-  const userInputKeys = new Set<string>();
-  workflow.actions.forEach((action) => {
-    for (const val of Object.values(action.parameters)) {
-      if (typeof val === 'string' && val.startsWith('userInput.')) {
-        userInputKeys.add(val.split('.')[1]);
-      }
-    }
-  });
-
-  return (
-    <div className="space-y-6 px-4 w-full md:w-[500px] md:px-0">
-      {Array.from(userInputKeys).map((key) => (
-        <Input
-          key={key}
-          placeholder={key}
-          value={formData[key] ?? ''}
-          onChange={(e) => setFormData((prev) => ({ ...prev, [key]: e.target.value }))}
-        />
-      ))}
-      <Button onClick={handleExecute}>Run Workflow</Button>
-      {results.length > 0 && <WorkflowResultViewer results={results.map((result) => result.uiElement)} />}
-      <WorkflowSaveForm workflow={workflow} onSave={(encoded) => {}} />
-    </div>
-  );
-};
 
 export interface WorkflowConfirmationCardProps {
   workflow: WorkflowResponse;

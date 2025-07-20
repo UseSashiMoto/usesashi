@@ -19,7 +19,19 @@ export interface WorkflowResponse {
                 required?: boolean
             }
         }
-    }[]
+    }[],
+    ui?: {
+        inputComponents?: {
+            key: string;
+            label: string;
+            type: string;
+        }[];
+        outputComponents?: {
+            actionId: string;
+            component: string;
+            props: Record<string, any>;
+        }[];
+    }
 }
 
 export interface WorkflowResult {

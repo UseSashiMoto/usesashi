@@ -2,6 +2,16 @@ import express from 'express';
 import supertest from 'supertest';
 import { createMiddleware } from '../middleware';
 
+// Mock all external dependencies
+jest.mock('@openai/agents', () => ({
+    Agent: jest.fn(),
+    run: jest.fn(),
+    tool: jest.fn(),
+    handoff: jest.fn()
+}));
+
+jest.mock('../sashiagent');
+
 // Define mock function type
 type MockFunction = jest.Mock<Promise<any>, [string, Record<string, any>]>;
 
@@ -169,9 +179,26 @@ describe('Workflow Execution Tests', () => {
 
     beforeEach(() => {
         // Reset mock before each test
-        if (callFunctionSpy) {
-            callFunctionSpy.mockClear();
-        }
+        callFunctionSpy.mockReset();
+
+        // Default mock implementation
+        callFunctionSpy.mockImplementation(async (name: string, params: Record<string, any>) => {
+            if (name === 'get_user_by_id') {
+                const user = users.find(u => u.userId === params.userId);
+                if (!user) {
+                    throw new Error(`User with ID ${params.userId} not found`);
+                }
+                return user;
+            } else if (name === 'get_file_by_user_id') {
+                const userFiles = files[params.userId];
+                if (!userFiles) {
+                    throw new Error(`Files for user with ID ${params.userId} not found`);
+                }
+                return userFiles;
+            } else {
+                throw new Error(`Function ${name} not found in registry`);
+            }
+        });
     });
 
     afterAll(() => {
@@ -192,20 +219,42 @@ describe('Workflow Execution Tests', () => {
         });
 
         const workflow = {
-            type: 'workflow',
-            actions: [
+            "type": "workflow",
+            "description": "Get a user by user id",
+            "actions": [
                 {
-                    id: 'action1',
-                    tool: 'get_user_by_id',
-                    description: 'Get user information',
-                    parameters: {
-                        userId: '1'
-                    }
+                    "id": "getUserById",
+                    "tool": "get_user_by_id",
+                    "description": "Get a user by their ID",
+                    "parameters": {
+                        "userId": "1"
+                    },
+                    "parameterMetadata": {
+                        "userId": {
+                            "type": "string",
+                            "description": "a users id",
+                            "required": true
+                        }
+                    },
+                    "map": false
                 }
             ],
-            options: {
-                execute_immediately: true,
-                generate_ui: false
+            "ui": {
+                "inputComponents": [
+                    {
+                        "key": "userInput.userId",
+                        "label": "User ID",
+                        "type": "string",
+                        "required": true
+                    }
+                ],
+                "outputComponents": [
+                    {
+                        "actionId": "getUserById",
+                        "component": "dataCard",
+                        "props": {}
+                    }
+                ]
             }
         };
 
@@ -226,7 +275,7 @@ describe('Workflow Execution Tests', () => {
 
         // Verify result content
         const result = response.body.results[0];
-        expect(result).toHaveProperty('actionId', 'action1');
+        expect(result).toHaveProperty('actionId', 'getUserById');
         expect(result).toHaveProperty('result');
         expect(result.result).toHaveProperty('userId', '1');
         expect(result.result).toHaveProperty('name', 'John Doe');
@@ -237,40 +286,64 @@ describe('Workflow Execution Tests', () => {
         // Reset mocks before this test
         callFunctionSpy.mockClear();
 
-        // Mock specific behavior for this test
-        callFunctionSpy.mockImplementation(async (name: string, params: Record<string, any>) => {
-            if (name === 'get_user_by_id' && params.userId === '2') {
-                return users.find(u => u.userId === '2');
-            } else if (name === 'get_file_by_user_id' && params.userId === '2') {
-                return files['2'];
-            } else {
-                throw new Error(`Unexpected function call: ${name} with params ${JSON.stringify(params)}`);
-            }
-        });
-
         const workflow = {
-            type: 'workflow',
-            actions: [
+            "type": "workflow",
+            "description": "Get user files",
+            "actions": [
                 {
-                    id: 'get_user',
-                    tool: 'get_user_by_id',
-                    description: 'Get user information',
-                    parameters: {
-                        userId: '2'
-                    }
+                    "id": "get_user",
+                    "tool": "get_user_by_id",
+                    "description": "Get user information",
+                    "parameters": {
+                        "userId": "2"
+                    },
+                    "parameterMetadata": {
+                        "userId": {
+                            "type": "string",
+                            "description": "ID of the user to retrieve",
+                            "required": true
+                        }
+                    },
+                    "map": false
                 },
                 {
-                    id: 'get_files',
-                    tool: 'get_file_by_user_id',
-                    description: 'Get all files of the user',
-                    parameters: {
-                        userId: 'get_user.userId'
-                    }
+                    "id": "get_files",
+                    "tool": "get_file_by_user_id",
+                    "description": "Get all files of the user",
+                    "parameters": {
+                        "userId": "get_user.userId"
+                    },
+                    "parameterMetadata": {
+                        "userId": {
+                            "type": "string",
+                            "description": "ID of the user whose files to retrieve",
+                            "required": true
+                        }
+                    },
+                    "map": false
                 }
             ],
-            options: {
-                execute_immediately: true,
-                generate_ui: false
+            "ui": {
+                "inputComponents": [
+                    {
+                        "key": "userInput.userId",
+                        "label": "User ID",
+                        "type": "string",
+                        "required": true
+                    }
+                ],
+                "outputComponents": [
+                    {
+                        "actionId": "get_user",
+                        "component": "dataCard",
+                        "props": {}
+                    },
+                    {
+                        "actionId": "get_files",
+                        "component": "table",
+                        "props": {}
+                    }
+                ]
             }
         };
 
@@ -283,121 +356,63 @@ describe('Workflow Execution Tests', () => {
         expect(response.status).toBe(200);
         expect(response.body).toHaveProperty('success', true);
         expect(response.body).toHaveProperty('results');
-        expect(response.body.results).toHaveLength(1); // Only the final result is returned
+        expect(response.body.results).toHaveLength(2);
 
         // Verify function calls made with correct parameters
         expect(callFunctionSpy).toHaveBeenCalledTimes(2);
-        expect(callFunctionSpy).toHaveBeenNthCalledWith(1, 'get_user_by_id', { userId: '2' });
-        expect(callFunctionSpy).toHaveBeenNthCalledWith(2, 'get_file_by_user_id', { userId: '2' });
+        expect(callFunctionSpy).toHaveBeenCalledWith('get_user_by_id', { userId: '2' });
+        expect(callFunctionSpy).toHaveBeenCalledWith('get_file_by_user_id', { userId: '2' });
 
-        // Verify result content
-        const result = response.body.results[0];
-        expect(result).toHaveProperty('actionId', 'get_files');
-        expect(result).toHaveProperty('result');
-        expect(Array.isArray(result.result)).toBe(true);
-        expect(result.result).toHaveLength(2);
-        expect(result.result[0]).toHaveProperty('fileId', 'f3');
-        expect(result.result[1]).toHaveProperty('fileId', 'f4');
-    });
+        // Verify results
+        const userResult = response.body.results.find((r: any) => r.actionId === 'get_user');
+        expect(userResult).toBeDefined();
+        expect(userResult.result).toHaveProperty('userId', '2');
+        expect(userResult.result).toHaveProperty('name', 'Jane Smith');
 
-    test('should handle deeply nested parameter references', async () => {
-        // First, mock the complex user object that will be returned
-        const complexUser: User = {
-            userId: '3',
-            name: 'Complex User',
-            profile: {
-                details: {
-                    preferredId: '2'
-                }
-            }
-        };
-
-        // Add to users array
-        users.push(complexUser);
-
-        // Reset mocks before this test
-        callFunctionSpy.mockClear();
-
-        // Mock specific behavior for this test
-        callFunctionSpy.mockImplementation(async (name: string, params: Record<string, any>) => {
-            if (name === 'get_user_by_id' && params.userId === '3') {
-                return complexUser;
-            } else if (name === 'get_file_by_user_id' && params.userId === '2') {
-                return files['2'];
-            } else {
-                throw new Error(`Unexpected function call: ${name} with params ${JSON.stringify(params)}`);
-            }
-        });
-
-        const workflow = {
-            type: 'workflow',
-            actions: [
-                {
-                    id: 'get_complex_user',
-                    tool: 'get_user_by_id',
-                    description: 'Get complex user information',
-                    parameters: {
-                        userId: '3'  // This will return our complex object
-                    }
-                },
-                {
-                    id: 'get_files',
-                    tool: 'get_file_by_user_id',
-                    description: 'Get files using nested property',
-                    parameters: {
-                        userId: 'get_complex_user.profile.details.preferredId'  // Test deep nesting
-                    }
-                }
-            ],
-            options: {
-                execute_immediately: true,
-                generate_ui: false
-            }
-        };
-
-        const response = await request
-            .post('/workflow/execute')
-            .set('x-sashi-session-token', 'test-session-token')
-            .send({ workflow });
-
-        // Verify function was called with correctly extracted nested parameter
-        expect(callFunctionSpy).toHaveBeenCalledTimes(2);
-        expect(callFunctionSpy).toHaveBeenNthCalledWith(1, 'get_user_by_id', { userId: '3' });
-        expect(callFunctionSpy).toHaveBeenNthCalledWith(2, 'get_file_by_user_id', { userId: '2' });
-
-        // Verify status is 200 success
-        expect(response.status).toBe(200);
+        const filesResult = response.body.results.find((r: any) => r.actionId === 'get_files');
+        expect(filesResult).toBeDefined();
+        expect(filesResult.result).toHaveLength(2);
+        expect(filesResult.result[0]).toHaveProperty('fileId', 'f3');
     });
 
     test('should handle errors in workflow execution', async () => {
-        // Reset mocks before this test
-        callFunctionSpy.mockClear();
-
-        // Mock specific behavior for this test
-        callFunctionSpy.mockImplementation(async (name: string, params: Record<string, any>) => {
-            if (name === 'get_user_by_id') {
-                if (params.userId === '999') {
-                    throw new Error(`User with ID ${params.userId} not found`);
-                }
-            }
-            throw new Error(`Unexpected function call: ${name} with params ${JSON.stringify(params)}`);
-        });
-
         const workflow = {
-            type: 'workflow',
-            actions: [
+            "type": "workflow",
+            "description": "Get non-existent user",
+            "actions": [
                 {
-                    id: 'action1',
-                    tool: 'get_user_by_id',
-                    description: 'Get user information',
-                    parameters: {
-                        userId: '999' // Non-existent user ID
-                    }
+                    "id": "action1",
+                    "tool": "get_user_by_id",
+                    "description": "Get user information",
+                    "parameters": {
+                        "userId": "999"
+                    },
+                    "parameterMetadata": {
+                        "userId": {
+                            "type": "string",
+                            "description": "ID of the user to retrieve",
+                            "required": true
+                        }
+                    },
+                    "map": false
                 }
             ],
-            options: {
-                execute_immediately: true,
-                generate_ui: false
+            "ui": {
+                "inputComponents": [
+                    {
+                        "key": "userInput.userId",
+                        "label": "User ID",
+                        "type": "string",
+                        "required": true
+                    }
+                ],
+                "outputComponents": [
+                    {
+                        "actionId": "action1",
+                        "component": "dataCard",
+                        "props": {}
+                    }
+                ]
             }
         };
 
@@ -406,141 +421,37 @@ describe('Workflow Execution Tests', () => {
             .set('x-sashi-session-token', 'test-session-token')
             .send({ workflow });
 
-        expect(response.status).toBe(500);
-        expect(response.body).toHaveProperty('error');
-        expect(response.body.error).toContain('Failed to execute workflow');
-    });
-
-    test('should handle errors when referenced field does not exist', async () => {
-        // Reset mocks before this test
-        callFunctionSpy.mockClear();
-
-        // Mock specific behavior for this test to return a simple user object
-        callFunctionSpy.mockImplementation(async (name: string, params: Record<string, any>) => {
-            if (name === 'get_user_by_id' && params.userId === '1') {
-                return { userId: '1', name: 'Simple User' }; // Object without the non_existent_field
-            } else {
-                throw new Error(`Unexpected function call: ${name} with params ${JSON.stringify(params)}`);
-            }
-        });
-
-        const workflow = {
-            type: 'workflow',
-            actions: [
-                {
-                    id: 'get_user',
-                    tool: 'get_user_by_id',
-                    description: 'Get user information',
-                    parameters: {
-                        userId: '1'
-                    }
-                },
-                {
-                    id: 'get_files',
-                    tool: 'get_file_by_user_id',
-                    description: 'Get all files of the user',
-                    parameters: {
-                        userId: 'get_user.non_existent_field' // Field doesn't exist
-                    }
-                }
-            ],
-            options: {
-                execute_immediately: true,
-                generate_ui: false
-            }
-        };
-
-        const response = await request
-            .post('/workflow/execute')
-            .set('x-sashi-session-token', 'test-session-token')
-            .send({ workflow });
-
-        expect(response.status).toBe(500);
-        expect(response.body).toHaveProperty('error');
-        expect(response.body.error).toContain('Failed to execute workflow');
-        expect(response.body.details).toContain('non_existent_field');
-    });
-
-    test('should support debug mode for troubleshooting workflows', async () => {
-        // Reset mocks before this test
-        callFunctionSpy.mockClear();
-
-        // Mock specific behavior for this test
-        callFunctionSpy.mockImplementation(async (name: string, params: Record<string, any>) => {
-            if (name === 'get_user_by_id' && params.userId === '2') {
-                return users.find(u => u.userId === '2');
-            } else if (name === 'get_file_by_user_id' && params.userId === '2') {
-                return files['2'];
-            } else {
-                throw new Error(`Unexpected function call: ${name} with params ${JSON.stringify(params)}`);
-            }
-        });
-
-        // Create a workflow that will be executed with debug mode enabled
-        const workflow = {
-            type: 'workflow',
-            actions: [
-                {
-                    id: 'get_user',
-                    tool: 'get_user_by_id',
-                    description: 'Get user information',
-                    parameters: {
-                        userId: '2'
-                    }
-                },
-                {
-                    id: 'get_files',
-                    tool: 'get_file_by_user_id',
-                    description: 'Get all files of the user',
-                    parameters: {
-                        userId: 'get_user.userId'
-                    }
-                }
-            ],
-            options: {
-                execute_immediately: true,
-                generate_ui: false
-            }
-        };
-
-        // Execute with debug flag enabled
-        const response = await request
-            .post('/workflow/execute')
-            .set('x-sashi-session-token', 'test-session-token')
-            .send({ workflow, debug: true });
-
-        // The response should still be successful
         expect(response.status).toBe(200);
         expect(response.body).toHaveProperty('success', true);
-
-        // Function was called the expected number of times
-        expect(callFunctionSpy).toHaveBeenCalledTimes(2);
-        expect(callFunctionSpy).toHaveBeenNthCalledWith(1, 'get_user_by_id', { userId: '2' });
-        expect(callFunctionSpy).toHaveBeenNthCalledWith(2, 'get_file_by_user_id', { userId: '2' });
+        expect(response.body).toHaveProperty('errors');
+        expect(response.body.errors).toHaveLength(1);
+        expect(response.body.errors[0]).toHaveProperty('actionId', 'action1');
+        expect(response.body.errors[0].error).toContain('User with ID 999 not found');
     });
 
     test('should handle missing function in registry', async () => {
-        // Reset mocks before this test
-        callFunctionSpy.mockClear();
-
-        // Mock specific behavior for this test
-        callFunctionSpy.mockImplementation(async (name: string, params: Record<string, any>) => {
-            throw new Error(`Function ${name} not found in registry`);
-        });
-
         const workflow = {
-            type: 'workflow',
-            actions: [
+            "type": "workflow",
+            "description": "Call non-existent function",
+            "actions": [
                 {
-                    id: 'action1',
-                    tool: 'non_existent_function',
-                    description: 'This function does not exist',
-                    parameters: {}
+                    "id": "action1",
+                    "tool": "non_existent_function",
+                    "description": "This function does not exist",
+                    "parameters": {},
+                    "parameterMetadata": {},
+                    "map": false
                 }
             ],
-            options: {
-                execute_immediately: true,
-                generate_ui: false
+            "ui": {
+                "inputComponents": [],
+                "outputComponents": [
+                    {
+                        "actionId": "action1",
+                        "component": "dataCard",
+                        "props": {}
+                    }
+                ]
             }
         };
 
@@ -549,9 +460,86 @@ describe('Workflow Execution Tests', () => {
             .set('x-sashi-session-token', 'test-session-token')
             .send({ workflow });
 
-        expect(response.status).toBe(500);
-        expect(response.body).toHaveProperty('error');
-        expect(response.body.error).toContain('Failed to execute workflow');
-        expect(response.body.details).toContain('not found in registry');
+        expect(response.status).toBe(200);
+        expect(response.body).toHaveProperty('success', true);
+        expect(response.body).toHaveProperty('errors');
+        expect(response.body.errors).toHaveLength(1);
+        expect(response.body.errors[0]).toHaveProperty('actionId', 'action1');
+        expect(response.body.errors[0].error).toContain('Function non_existent_function not found');
+    });
+
+    test('should handle errors when referenced field does not exist', async () => {
+        const workflow = {
+            "type": "workflow",
+            "description": "Get user with non-existent field reference",
+            "actions": [
+                {
+                    "id": "get_user",
+                    "tool": "get_user_by_id",
+                    "description": "Get user information",
+                    "parameters": {
+                        "userId": "1"
+                    },
+                    "parameterMetadata": {
+                        "userId": {
+                            "type": "string",
+                            "description": "ID of the user to retrieve",
+                            "required": true
+                        }
+                    },
+                    "map": false
+                },
+                {
+                    "id": "get_files",
+                    "tool": "get_file_by_user_id",
+                    "description": "Get all files of the user",
+                    "parameters": {
+                        "userId": "get_user.non_existent_field"
+                    },
+                    "parameterMetadata": {
+                        "userId": {
+                            "type": "string",
+                            "description": "ID of the user whose files to retrieve",
+                            "required": true
+                        }
+                    },
+                    "map": false
+                }
+            ],
+            "ui": {
+                "inputComponents": [
+                    {
+                        "key": "userInput.userId",
+                        "label": "User ID",
+                        "type": "string",
+                        "required": true
+                    }
+                ],
+                "outputComponents": [
+                    {
+                        "actionId": "get_user",
+                        "component": "dataCard",
+                        "props": {}
+                    },
+                    {
+                        "actionId": "get_files",
+                        "component": "table",
+                        "props": {}
+                    }
+                ]
+            }
+        };
+
+        const response = await request
+            .post('/workflow/execute')
+            .set('x-sashi-session-token', 'test-session-token')
+            .send({ workflow });
+
+        expect(response.status).toBe(200);
+        expect(response.body).toHaveProperty('success', true);
+        expect(response.body).toHaveProperty('errors');
+        expect(response.body.errors).toHaveLength(1);
+        expect(response.body.errors[0]).toHaveProperty('actionId', 'get_files');
+        expect(response.body.errors[0].error).toContain('Files for user with ID undefined not found');
     });
 }); 

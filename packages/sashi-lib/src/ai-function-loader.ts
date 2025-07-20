@@ -1,4 +1,3 @@
-import axios from 'axios';
 import { ChatCompletionMessageToolCall } from 'openai/resources';
 import { z } from 'zod';
 import { RepoFunctionMetadata, RepoMetadata } from './models/repo-metadata';
@@ -496,6 +495,14 @@ export class AIFunction {
             // Convert numbers, booleans, and other primitives to strings
             return String(value);
         }
+
+        if (expectedType instanceof z.ZodNumber && value !== undefined && value !== null) {
+            //check if value is a string that can be converted to a number
+            const parsed = Number(value);
+            if (!isNaN(parsed)) {
+                return parsed;
+            }
+        }
         return value;
     }
 
@@ -518,23 +525,16 @@ export class AIFunction {
                     ]
                 )
                 .parse(coercedArgs);
-            if (this.getRepo()) {
-                const result = await axios.post(`${hubUrl}/forward-call`, {
-                    name: this.getName(),
-                    args: JSON.stringify(parsedArgs),
-                    subToken: this.getRepo(),
-                });
-                return result.data;
-            } else {
-                const result = await this._implementation(...parsedArgs);
-                if (this._returnType) {
-                    const returnTypeSchema = this.validateAIField(
-                        this._returnType
-                    );
-                    return returnTypeSchema.parse(result);
-                }
-                return result;
+
+            const result = await this._implementation(...parsedArgs);
+            if (this._returnType) {
+                const returnTypeSchema = this.validateAIField(
+                    this._returnType
+                );
+                return returnTypeSchema.parse(result);
             }
+            return result;
+
         } catch (e) {
             if (e instanceof z.ZodError) {
                 // Format the error message for the user
