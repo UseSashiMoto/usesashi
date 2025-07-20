@@ -1,4 +1,4 @@
-import { Agent, handoff, run, tool } from '@openai/agents';
+import { Agent, AgentInputItem, assistant, handoff, run, tool, user } from '@openai/agents';
 import { z } from 'zod';
 import { generateSplitToolSchemas } from './ai-function-loader';
 import { verifyWorkflow } from './utils/verifyWorkflow';
@@ -284,7 +284,7 @@ Determine the appropriate response type based on whether workflow data is provid
 };
 
 // Main SashiAgent - Router that decides which agents to use
-const createSashiAgent = (workflowPlannerAgent: Agent, responseAgent: Agent) => {
+const createSashiAgent = (workflowPlannerAgent: Agent, responseAgent: Agent, refinerAgent: Agent) => {
     return new Agent({
         name: 'SashiAgent',
         instructions: `You are SashiAgent, the main conversational AI assistant that intelligently routes requests to specialized agents.
@@ -344,8 +344,25 @@ Analyze the user's request to understand their true intent and route accordingly
             }),
             handoff(responseAgent, {
                 toolDescriptionOverride: 'Hand off to Response Agent for informational responses, explanations, or when user wants to understand concepts'
+            }),
+            handoff(refinerAgent, {
+                toolDescriptionOverride: 'Hand off to Refiner Agent when user wants to modify or fix an existing workflow'
             })
         ]
+    });
+};
+
+const createWorkflowRefinerAgent = () => {
+    return new Agent({
+        name: 'Workflow Refiner',
+        instructions: `
+        You are the Workflow Refiner.
+        Given a workflow and a list of errors or user requests, fix or modify the workflow.
+        - Keep existing valid actions when possible.
+        - Fix invalid parameters, chaining, or missing UI components.
+        - Apply user-requested changes (e.g., add steps, update values).
+        Always return a complete, valid workflow JSON.
+        `
     });
 };
 
@@ -353,13 +370,16 @@ export class SashiAgent {
     private workflowPlannerAgent: Agent;
     private responseAgent: Agent;
     private mainAgent: Agent;
+    private refinerAgent: Agent;
 
     constructor() {
         this.workflowPlannerAgent = createWorkflowPlannerAgent();
         this.responseAgent = createResponseAgent();
+        this.refinerAgent = createWorkflowRefinerAgent();
         this.mainAgent = createSashiAgent(
             this.workflowPlannerAgent,
-            this.responseAgent
+            this.responseAgent,
+            this.refinerAgent
         );
     }
 
@@ -367,10 +387,23 @@ export class SashiAgent {
      * Main entry point for processing user requests.
      * The SashiAgent will route to appropriate specialized agents.
      */
-    async processRequest(inquiry: string, previous: any[] = []): Promise<SashiAgentResponse> {
+    async processRequest(inquiry: string, previous: { role: string, content: string }[] = []): Promise<SashiAgentResponse> {
         try {
+
+            const thread = previous.map((item) => {
+                if (item.role === 'user') {
+                    return user(item.content);
+                }
+                if (item.role === 'assistant') {
+                    return assistant(item.content);
+                }
+                return null;
+            }).filter((item) => item !== null) as AgentInputItem[];
+            thread.push(user(inquiry));
+            
+
             // Let the main SashiAgent handle routing via handoffs
-            const result = await run(this.mainAgent, inquiry);
+            const result = await run(this.mainAgent, thread);
 
             // Extract the final response from the result
             const finalOutput = result.finalOutput;
