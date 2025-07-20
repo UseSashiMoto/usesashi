@@ -23,6 +23,18 @@ jest.mock('@openai/agents', () => ({
         parameters: config.parameters,
         execute: config.execute
     })),
+    user: jest.fn().mockImplementation((message: unknown) => {
+        return {
+            content: message as string,
+            role: 'user'
+        }
+    }),
+    assistant: jest.fn().mockImplementation((args: unknown) => {
+        return {
+            content: args as string,
+            role: 'assistant'
+        }
+    }),
     handoff: jest.fn()
 }));
 
@@ -40,6 +52,32 @@ describe('Chat Endpoint', () => {
     let app: express.Application;
     let request: any;
     //let mockFunctionRegistry: Map<string, any>;
+
+    beforeAll(() => {
+        // Verify zod version compatibility
+        const zodPkg = require('zod/package.json');
+        const currentVersion = zodPkg.version;
+        const maxVersion = '3.25.67';
+
+        const isCompatible = (current: string, max: string) => {
+            const [curMajor, curMinor, curPatch] = current.split('.').map(Number);
+            const [maxMajor, maxMinor, maxPatch] = max.split('.').map(Number);
+
+            if (!curMajor || !curMinor || !curPatch || !maxMajor || !maxMinor || !maxPatch) {
+                throw new Error('Invalid version format');
+            }
+
+            if (curMajor > maxMajor) return false;
+            if (curMajor < maxMajor) return true;
+            if (curMinor > maxMinor) return false;
+            if (curMinor < maxMinor) return true;
+            return curPatch <= maxPatch;
+        };
+
+        if (!isCompatible(currentVersion, maxVersion)) {
+            console.warn(`Warning: Tests running with zod version ${currentVersion}, but library requires version <= ${maxVersion}`);
+        }
+    });
 
     beforeEach(() => {
         app = express();

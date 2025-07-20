@@ -8,68 +8,68 @@ Sashi is the core TypeScript/JavaScript library that powers the Sashi workflow s
 
 ## ✨ Core Features
 
--   🔹 **Function Registration Interface**: Declaratively expose your backend functions
--   🔹 **Workflow Execution Runtime**: Run complex workflows with simple commands
--   🔹 **UI Metadata Hooks**: Auto-generate beautiful interfaces
--   🔹 **SashiHub Integration**: Connect with the external SashiHub API
--   🔹 **AI-Powered Chat**: Execute admin tasks with natural language
--   🔹 **Secure & Reliable**: Built-in support for sensitive function confirmation
+- 🔹 **Function Registration Interface**: Declaratively expose your backend functions
+- 🔹 **Workflow Execution Runtime**: Run complex workflows with simple commands
+- 🔹 **UI Metadata Hooks**: Auto-generate beautiful interfaces
+- 🔹 **SashiHub Integration**: Connect with the external SashiHub API
+- 🔹 **AI-Powered Chat**: Execute admin tasks with natural language
+- 🔹 **Secure & Reliable**: Built-in support for sensitive function confirmation
 
 ## 🧩 Core Responsibilities
 
 ### 1. Function Registration
 
--   Provides a `registerFunction()` API to declare named functions, their parameters, and return types
--   Supports:
-    -   Zod-based parameter schemas
-    -   Sync and async functions
-    -   Visualization functions (with metadata)
-    -   Repository-scoped functions
+- Provides a `registerFunction()` API to declare named functions, their parameters, and return types
+- Supports:
+    - Zod-based parameter schemas
+    - Sync and async functions
+    - Visualization functions (with metadata)
+    - Repository-scoped functions
 
 ### 2. Function Metadata
 
 Functions are registered with:
 
--   Name/ID
--   Description (used for AI prompt/context)
--   Input parameter schema (Zod)
--   Return value type (for UI rendering)
--   Optional visibility/config flags (e.g., hidden, inactive)
--   Automatically generates metadata used by the AI layer and/or workflow editor
+- Name/ID
+- Description (used for AI prompt/context)
+- Input parameter schema (Zod)
+- Return value type (for UI rendering)
+- Optional visibility/config flags (e.g., hidden, inactive)
+- Automatically generates metadata used by the AI layer and/or workflow editor
 
 ### 3. Workflow Execution
 
--   Accepts a serialized workflow object (steps + parameters) and executes them in sequence
--   Handles:
-    -   Parameter chaining
-    -   Type conversion
-    -   Error catching and reporting
-    -   Array mapping ([*] style execution)
-    -   Optionally runs in debug mode for step-by-step inspection
+- Accepts a serialized workflow object (steps + parameters) and executes them in sequence
+- Handles:
+    - Parameter chaining
+    - Type conversion
+    - Error catching and reporting
+    - Array mapping ([*] style execution)
+    - Optionally runs in debug mode for step-by-step inspection
 
 ### 4. UI Metadata & Type Hints
 
--   Includes utility to infer UI types from data (e.g., table, badge, graph)
--   Used by the LLM and front-end UI generator to create input/output forms
+- Includes utility to infer UI types from data (e.g., table, badge, graph)
+- Used by the LLM and front-end UI generator to create input/output forms
 
 ### 5. Communication with SashiHub (sashihub)
 
--   Sends workflow save/load requests to sashihub via authenticated API calls
--   Relies on the developer to provide an x-api-token
--   Supports repository metadata sync via forward-call or metadata endpoints
+- Sends workflow save/load requests to sashihub via authenticated API calls
+- Relies on the developer to provide an x-api-token
+- Supports repository metadata sync via forward-call or metadata endpoints
 
 ## 🔒 Assumptions and Boundaries
 
--   sashilib is frontend-safe if used in limited exposure contexts
--   It does not persist workflows itself — all workflow state lives in sashihub
--   It does not handle user auth or rate limiting — this is up to the surrounding app or sashihub
+- sashilib is frontend-safe if used in limited exposure contexts
+- It does not persist workflows itself — all workflow state lives in sashihub
+- It does not handle user auth or rate limiting — this is up to the surrounding app or sashihub
 
 ## 🛠️ Use Cases
 
--   Register custom backend logic to be used in workflows
--   Create a shared interface for internal tools or ops automation
--   Power AI-driven workflows with securely validated parameters
--   Chain local and remote function calls in one workflow
+- Register custom backend logic to be used in workflows
+- Create a shared interface for internal tools or ops automation
+- Power AI-driven workflows with securely validated parameters
+- Chain local and remote function calls in one workflow
 
 ## 📦 Installation
 
@@ -219,10 +219,10 @@ registerFunctionIntoAI("change_user_type", ChangeUserRoleFunction)
 
 This example shows how to:
 
--   Use `AIFieldEnum` to create a dropdown selector in the UI
--   Define allowed values for the enum parameter
--   Handle enum validation automatically
--   Provide clear descriptions for the UI and AI
+- Use `AIFieldEnum` to create a dropdown selector in the UI
+- Define allowed values for the enum parameter
+- Handle enum validation automatically
+- Provide clear descriptions for the UI and AI
 
 ## 🛡️ Security
 
@@ -419,11 +419,11 @@ app.use(
 
 ### Available Categories
 
--   `math` - Basic math operations (add, subtract, multiply, divide, round)
--   `data` - Data manipulation (extract, replace, split, join, filter)
--   `datetime` - Date and time operations (format_date, add_days)
--   `system` - System utilities (get_current_time, generate_uuid)
--   `text` - Text processing (to_uppercase, to_lowercase, trim)
+- `math` - Basic math operations (add, subtract, multiply, divide, round)
+- `data` - Data manipulation (extract, replace, split, join, filter)
+- `datetime` - Date and time operations (format_date, add_days)
+- `system` - System utilities (get_current_time, generate_uuid)
+- `text` - Text processing (to_uppercase, to_lowercase, trim)
 
 ### How It Works
 
