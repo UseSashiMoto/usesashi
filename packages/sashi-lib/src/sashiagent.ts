@@ -1,6 +1,7 @@
 import { Agent, AgentInputItem, assistant, handoff, run, tool, user } from '@openai/agents';
 import { z } from 'zod';
 import { generateSplitToolSchemas } from './ai-function-loader';
+import { WorkflowResponse } from './models/models';
 import { verifyWorkflow } from './utils/verifyWorkflow';
 
 
@@ -44,7 +45,7 @@ const createWorkflowPlannerAgent = () => {
             required: ["workflow"],
             additionalProperties: true as const
         } as any,
-        execute: async ({ workflow }) => {
+        execute: async ({ workflow }: { workflow: WorkflowResponse }) => {
             const verification = verifyWorkflow(workflow);
 
             // Additional validation for UI components
@@ -53,14 +54,25 @@ const createWorkflowPlannerAgent = () => {
                 errors: [] as string[]
             };
 
-            // Collect all userInput.* parameters from actions
+            // Collect BASE userInput.* parameters from actions (not array operations)
             const userInputParams = new Set<string>();
             if (workflow.actions) {
                 for (const action of workflow.actions) {
                     if (action.parameters) {
                         for (const [key, value] of Object.entries(action.parameters)) {
                             if (typeof value === 'string' && value.startsWith('userInput.')) {
-                                userInputParams.add(value);
+                                // Only collect base parameters, not array operations
+                                if (value.includes('[*]')) {
+                                    // Extract base parameter from array operation
+                                    // e.g., "userInput.csvData[*].email" -> "userInput.csvData"
+                                    const baseParam = value.split('[*]')[0];
+                                    if (baseParam) {
+                                        userInputParams.add(baseParam);
+                                    }
+                                } else {
+                                    // Regular userInput parameter
+                                    userInputParams.add(value);
+                                }
                             }
                         }
                     }
@@ -80,6 +92,8 @@ const createWorkflowPlannerAgent = () => {
                             uiValidation.errors.push(`Missing UI component for parameter: ${param}`);
                         }
                     }
+
+
                 }
             }
 
@@ -179,21 +193,96 @@ You must create workflows with BOTH actions and UI components:
 ## UI Component Generation Rules
 
 ### Input Components
-For each userInput.* parameter in your workflow actions:
-1. Create a matching inputComponent with key="userInput.<fieldname>"
-2. Look up the parameter in the function schema to determine type and validation
-3. Use appropriate UI component types:
+For each BASE userInput.* parameter in your workflow actions:
+1. **ONLY create UI components for base form fields** (e.g., userInput.csvData, userInput.subject)
+2. **DO NOT create UI components for array operations** (e.g., userInput.csvData[*].email)
+3. Array operations like userInput.csvData[*].email are resolved from the base CSV field
+4. Look up the parameter in the function schema to determine type and validation
+5. Use appropriate UI component types:
    - string → single-line text input
-   - text → multi-line textarea (for longer content like messages)
+   - text → multi-line textarea (for longer content like messages)  
    - number → number input
    - boolean → switch/checkbox
    - enum → dropdown select with enumValues
+   - csv → CSV upload field with expectedColumns
 
 ### Output Components
 1. Create one output component per action
 2. Use "dataCard" for single object results
 3. Use "table" for array results
 4. Set actionId to match the action's id
+
+## CSV Data Processing:
+**IMPORTANT**: You have full CSV processing capabilities! The UI handles CSV parsing, and you can use existing backend functions with the parsed data.
+
+**How CSV Processing Works:**
+1. UI parses CSV text into array of objects (frontend)
+2. Backend functions receive the parsed array data (not raw CSV)
+3. Use existing functions like 'filter', 'extract', 'split', 'join' and any other functions that accept arrays
+4. For email workflows, use the bulk email functions designed for CSV processing
+
+**When user asks to process CSV data, validate data from files, or work with lists/batches of data:**
+
+1. **CSV Form Fields**: For workflows that need CSV input, add special field metadata:
+   - Set parameterMetadata type to "csv" for CSV input parameters
+   - Include "expectedColumns" array with the required column names
+   - Example: Set parameterMetadata with type "csv" and expectedColumns array
+
+2. **Common CSV Processing Patterns**:
+   - User validation: expectedColumns = ["name", "email", "age"]  
+   - File processing: expectedColumns = ["filename", "size", "type"]
+   - Product data: expectedColumns = ["name", "price", "category"]
+   - Contact lists: expectedColumns = ["name", "email", "phone"]
+
+3. **CSV Workflow Structure with Mapping**:
+   - For CSV data processing with individual row operations, use array operations: "userInput.csvData[*].fieldName"
+   - The UI will parse CSV and replace these array operations with actual values before execution
+   - Set "map": true when you want to process each CSV row individually 
+   - Use existing functions that work with individual objects from CSV rows
+   - Chain multiple actions to process, filter, or transform CSV data
+
+**CSV Array Operations**: Use "userInput.csvData[*].fieldName" to access individual fields when mapping over CSV rows.
+
+5. **CSV UI Components**:
+   - Add CSV inputComponent with type: "csv"
+   - Include expectedColumns in the component definition
+   - Example: Create inputComponent with key "userInput.csvData", type "csv", and expectedColumns array
+
+6. **CSV Workflow Keywords**: When user says:
+   - "send emails from CSV" → Use "send_mock_email" with map: true and userInput.csvData[*].email
+   - "validate users from CSV" → Use CSV field with ["name", "email", "age"] + validation functions
+   - "process file data" → Use CSV field with ["filename", "size", "type"] + data processing functions
+   - "bulk validate" → Use CSV field + filter/extract functions for validation
+   - "import data" → Use CSV field + appropriate processing functions
+
+7. **CSV Email Workflow Example**:
+   - Use tool: "send_mock_email" (NOT "send_email")
+   - Set email: "userInput.csvData[*].email", subject: "userInput.subject", message: "userInput.message"
+   - Set map: true (process each CSV row individually)
+   - UI components: ONLY create for userInput.csvData (CSV), userInput.subject (string), userInput.message (text)
+   - DO NOT create UI component for userInput.csvData[*].email (this is resolved from CSV)
+
+**CORRECT Example:**
+inputComponents: [
+  {"key": "userInput.csvData", "type": "csv", "expectedColumns": ["email"]},
+  {"key": "userInput.subject", "type": "string"},
+  {"key": "userInput.message", "type": "text"}
+]
+
+**WRONG Example (DO NOT DO THIS):**
+inputComponents: [
+  {"key": "userInput.csvData", "type": "csv"},
+  {"key": "userInput.csvData[*].email", "type": "string"}, // ❌ WRONG! Do not create this
+  {"key": "userInput.subject", "type": "string"}
+]
+
+8. **CSV General Processing Example**:
+   - Use "userInput.csvData[*].field" as parameter value for individual field access
+   - Set parameterMetadata type to "csv" with expectedColumns array
+   - Add UI inputComponent with type "csv" and same expectedColumns
+   - Use "map": true to process each CSV row individually
+
+**Remember**: Use "userInput.csvData[*].fieldName" with "map": true to process CSV data row by row!
 
 ## Important Rules:
 - NEVER put comments in the workflow JSON
@@ -361,7 +450,7 @@ export class SashiAgent {
                 return null;
             }).filter((item) => item !== null) as AgentInputItem[];
             thread.push(user(inquiry));
-            
+
 
             // Let the main SashiAgent handle routing via handoffs
             const result = await run(this.mainAgent, thread);

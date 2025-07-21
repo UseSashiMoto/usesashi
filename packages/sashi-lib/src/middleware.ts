@@ -1443,6 +1443,11 @@ function resolveParameters(
         }
 
         try {
+            // Check for unresolved userInput parameters - these should have been replaced by the UI
+            if (value.startsWith('userInput.')) {
+                throw new Error(`Unresolved userInput parameter: ${value} - this should have been replaced by the UI with actual form data`);
+            }
+
             // Split the reference into parts and validate
             const parts = value.split('.');
             if (parts.length < 2) {
@@ -1453,6 +1458,11 @@ function resolveParameters(
             const [actionRef, ...pathParts] = parts;
             if (!actionRef) {
                 throw new Error(`Invalid reference format: ${value} - missing action reference`);
+            }
+
+            // Check if this is a userInput reference that wasn't handled by UI
+            if (actionRef === 'userInput') {
+                throw new Error(`Unresolved userInput parameter: ${value} - this should have been replaced by the UI with actual form data`);
             }
 
             // Handle array operations

@@ -131,9 +131,10 @@ export interface WorkflowUIElement {
 export interface WorkflowUIComponent {
   key: string;
   label: string;
-  type: 'string' | 'number' | 'boolean' | 'enum' | 'text';
+  type: 'string' | 'number' | 'boolean' | 'enum' | 'text' | 'csv';
   required: boolean;
   enumValues?: string[];
+  expectedColumns?: string[]; // For CSV fields
 }
 
 export interface WorkflowOutputComponent {
@@ -155,9 +156,10 @@ export interface FormPayload {
   fields: {
     key: string;
     label?: string;
-    type?: 'string' | 'number' | 'boolean' | 'date' | 'enum';
+    type?: 'string' | 'number' | 'boolean' | 'date' | 'enum' | 'csv';
     required?: boolean;
     enumValues?: string[]; // Available options for enum type
+    expectedColumns?: string[]; // For CSV fields
   }[];
 }
 
