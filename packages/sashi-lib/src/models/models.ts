@@ -47,9 +47,10 @@ export interface FormPayload {
     fields: {
         key: string;
         label?: string;
-        type?: 'string' | 'number' | 'boolean' | 'date' | 'enum';
+        type?: 'string' | 'number' | 'boolean' | 'date' | 'enum' | 'csv';
         required?: boolean;
         enumValues?: string[]; // Available options for enum type
+        expectedColumns?: string[]; // For CSV fields
     }[];
 }
 
