@@ -1,5 +1,11 @@
 # @sashi/ui
 
+## 8.0.0
+
+### Major Changes
+
+- ebe0e46: Now allow agent to create github PR to help solve issues
+
 ## 7.0.0
 
 ### Major Changes

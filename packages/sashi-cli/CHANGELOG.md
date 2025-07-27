@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.0.0
+
+### Major Changes
+
+- ebe0e46: Now allow agent to create github PR to help solve issues
+
 ## 2.0.0
 
 ### Major Changes
