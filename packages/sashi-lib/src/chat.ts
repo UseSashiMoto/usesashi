@@ -1,3 +1,4 @@
+import { GitHubConfig } from "./github-api-service";
 import { getSashiAgent } from "./sashiagent";
 
 
@@ -105,10 +106,11 @@ const getSystemPrompt = () => {
 };
 
 
-export const processChatRequest = async ({ inquiry, previous }: { inquiry: string, previous: any[] }) => {
+export const processChatRequest = async ({ inquiry, previous }: { inquiry: string, previous: any[] }, config?: GitHubConfig) => {
     try {
+
         // Use the new SashiAgent orchestration
-        const sashiAgent = getSashiAgent();
+        const sashiAgent = getSashiAgent(config);
         const result = await sashiAgent.processRequest(inquiry, previous);
 
         return result;

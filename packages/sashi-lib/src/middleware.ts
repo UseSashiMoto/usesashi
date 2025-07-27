@@ -12,6 +12,8 @@ import {
 import { createAIBot, getAIBot } from "./aibot"
 
 import { processChatRequest } from "./chat"
+import { getGithubConfig } from "./github-api-service"
+import { createGitHubHubService } from './github-hub-service'
 import { GeneralResponse, WorkflowResponse } from "./models/models"
 import { MetaData } from "./models/repo-metadata"
 import { createWorkflowExecutionError, createWorkflowExecutionSuccess, WorkflowResult as NewWorkflowResult } from './types/workflow'
@@ -336,10 +338,10 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
 
 
-    // =============== WORKFLOW ENDPOINTS ===============
+    // =============== HUB FORWARDING HELPER ===============
 
-    // Helper to forward workflow requests to hub if available, or handle locally
-    const handleWorkflowRequest = async (req: Request, res: Response, hubPath: string, method: string) => {
+    // Generic helper to forward requests to hub with proper error handling and session management
+    const forwardToHub = async (req: Request, res: Response, hubPath: string, method: string) => {
         // Get session token from request
         const sessionToken = req.headers['x-session-token'] as string;
         let sessionId = sessionToken;
@@ -492,38 +494,260 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         }
     };
 
+    // =============== WORKFLOW ENDPOINTS ===============
+
     // Get all workflows
     router.get('/workflows', sessionValidation, asyncHandler(async (req, res) => {
-        return handleWorkflowRequest(req, res, '/workflows', 'GET');
+        return forwardToHub(req, res, '/workflows', 'GET');
     }));
 
     // Get a specific workflow by ID
     router.get('/workflows/:id', sessionValidation, asyncHandler(async (req, res) => {
-        return handleWorkflowRequest(req, res, `/workflows/${req.params.id}`, 'GET');
+        return forwardToHub(req, res, `/workflows/${req.params.id}`, 'GET');
     }));
 
     // Create a new workflow
     router.post('/workflows', sessionValidation, asyncHandler(async (req, res) => {
-        return handleWorkflowRequest(req, res, '/workflows', 'POST');
+        return forwardToHub(req, res, '/workflows', 'POST');
     }));
 
     // Update an existing workflow
     router.put('/workflows/:id', sessionValidation, asyncHandler(async (req, res) => {
-        return handleWorkflowRequest(req, res, `/workflows/${req.params.id}`, 'PUT');
+        return forwardToHub(req, res, `/workflows/${req.params.id}`, 'PUT');
     }));
 
     // Delete a specific workflow
     router.delete('/workflows/:id', sessionValidation, asyncHandler(async (req, res) => {
-        return handleWorkflowRequest(req, res, `/workflows/${req.params.id}`, 'DELETE');
+        return forwardToHub(req, res, `/workflows/${req.params.id}`, 'DELETE');
     }));
 
     // Delete all workflows
     router.delete('/workflows', sessionValidation, asyncHandler(async (req, res) => {
-        return handleWorkflowRequest(req, res, '/workflows', 'DELETE');
+        return forwardToHub(req, res, '/workflows', 'DELETE');
     }));
 
     router.get('/test-error', asyncHandler(async () => {
         throw new Error('Test error for Sentry');
+    }));
+
+    // GitHub Hub Integration routes
+    router.post('/github/initialize', asyncHandler(async (req, res) => {
+        const sessionToken = req.headers.authorization?.replace('Bearer ', '');
+        if (!sessionToken) {
+            return res.status(401).json({
+                error: 'Missing session token'
+            });
+        }
+
+        const hubUrl = process.env.HUB_URL || req.body.hubUrl;
+        if (!hubUrl) {
+            return res.status(400).json({
+                error: 'Hub URL not configured'
+            });
+        }
+
+        try {
+            const githubService = createGitHubHubService(hubUrl, sessionToken);
+
+            // Test if GitHub is configured in hub
+            const isConfigured = await githubService.isConfigured();
+
+            if (!isConfigured) {
+                return res.status(400).json({
+                    error: 'GitHub not configured in hub. Please configure GitHub integration in Settings first.'
+                });
+            }
+
+            // Test the connection
+            await githubService.testConnection();
+
+            res.json({
+                success: true,
+                message: 'GitHub hub service initialized and tested successfully'
+            });
+        } catch (error) {
+            res.status(500).json({
+                error: 'Failed to initialize GitHub hub service',
+                message: error instanceof Error ? error.message : 'Unknown error'
+            });
+        }
+    }));
+
+    router.get('/github/status', asyncHandler(async (req, res) => {
+        const sessionToken = req.headers.authorization?.replace('Bearer ', '');
+        if (!sessionToken) {
+            return res.status(401).json({
+                error: 'Missing session token'
+            });
+        }
+
+        const hubUrl = process.env.HUB_URL;
+        if (!hubUrl) {
+            return res.status(400).json({
+                error: 'Hub URL not configured'
+            });
+        }
+
+        try {
+            const githubService = createGitHubHubService(hubUrl, sessionToken);
+            const isConfigured = await githubService.isConfigured();
+
+            console.log('📊 GitHub Hub Status Check:', {
+                configured: isConfigured,
+                timestamp: new Date().toISOString(),
+                hubUrl: hubUrl
+            });
+
+            res.json({
+                configured: isConfigured,
+                message: isConfigured ? 'GitHub is configured in hub' : 'GitHub not configured in hub',
+                timestamp: new Date().toISOString(),
+                debug: {
+                    serviceExists: true,
+                    hasConfig: isConfigured ? 'yes' : 'no',
+                    hubUrl: hubUrl
+                }
+            });
+        } catch (error) {
+            res.status(500).json({
+                error: 'Failed to check GitHub status',
+                message: error instanceof Error ? error.message : 'Unknown error'
+            });
+        }
+    }));
+
+    router.post('/github/analyze', asyncHandler(async (req, res) => {
+        const sessionToken = req.headers.authorization?.replace('Bearer ', '');
+        if (!sessionToken) {
+            return res.status(401).json({
+                error: 'Missing session token'
+            });
+        }
+
+        const hubUrl = process.env.HUB_URL;
+        if (!hubUrl) {
+            return res.status(400).json({
+                error: 'Hub URL not configured'
+            });
+        }
+
+        try {
+            const { request } = req.body;
+            const githubService = createGitHubHubService(hubUrl, sessionToken);
+
+            if (!request) {
+                return res.status(400).json({
+                    error: 'Missing request parameter'
+                });
+            }
+
+            const analysis = await githubService.analyzeChangeRequest(request);
+            res.json(analysis);
+        } catch (error) {
+            res.status(500).json({
+                error: 'Failed to analyze request',
+                message: error instanceof Error ? error.message : 'Unknown error'
+            });
+        }
+    }));
+
+    router.post('/github/get-file', asyncHandler(async (req, res) => {
+        const sessionToken = req.headers.authorization?.replace('Bearer ', '');
+        if (!sessionToken) {
+            return res.status(401).json({
+                error: 'Missing session token'
+            });
+        }
+
+        const hubUrl = process.env.HUB_URL;
+        if (!hubUrl) {
+            return res.status(400).json({
+                error: 'Hub URL not configured'
+            });
+        }
+
+        try {
+            const { path } = req.body;
+            const githubService = createGitHubHubService(hubUrl, sessionToken);
+
+            if (!path) {
+                return res.status(400).json({
+                    error: 'Missing path parameter'
+                });
+            }
+
+            const file = await githubService.getFileContent(path);
+            res.json(file);
+        } catch (error) {
+            res.status(500).json({
+                error: 'Failed to get file content',
+                message: error instanceof Error ? error.message : 'Unknown error'
+            });
+        }
+    }));
+
+    router.post('/github/create-pr', asyncHandler(async (req, res) => {
+        const sessionToken = req.headers.authorization?.replace('Bearer ', '');
+        if (!sessionToken) {
+            return res.status(401).json({
+                error: 'Missing session token'
+            });
+        }
+
+        const hubUrl = process.env.HUB_URL;
+        if (!hubUrl) {
+            return res.status(400).json({
+                error: 'Hub URL not configured'
+            });
+        }
+
+        try {
+            const { request, targetFile, currentContent, newContent } = req.body;
+            const githubService = createGitHubHubService(hubUrl, sessionToken);
+
+            if (!request || !targetFile || !newContent) {
+                return res.status(400).json({
+                    error: 'Missing required parameters: request, targetFile, newContent'
+                });
+            }
+
+            const pullRequest = await githubService.executeCodeChange(
+                request,
+                targetFile,
+                currentContent || '',
+                newContent
+            );
+
+            res.json({
+                success: true,
+                pullRequest: {
+                    number: pullRequest.number,
+                    title: pullRequest.title,
+                    url: pullRequest.html_url,
+                    branch: pullRequest.head.ref
+                }
+            });
+        } catch (error) {
+            res.status(500).json({
+                error: 'Failed to create pull request',
+                message: error instanceof Error ? error.message : 'Unknown error'
+            });
+        }
+    }));
+
+    // =============== GITHUB CONFIG ENDPOINTS ===============
+
+    // GitHub Config CRUD endpoints - forward to hub
+    router.get('/github/config', sessionValidation, asyncHandler(async (req, res) => {
+        return forwardToHub(req, res, '/github/config', 'GET');
+    }));
+
+    router.post('/github/config', sessionValidation, asyncHandler(async (req, res) => {
+        return forwardToHub(req, res, '/github/config', 'POST');
+    }));
+
+    router.delete('/github/config', sessionValidation, asyncHandler(async (req, res) => {
+        return forwardToHub(req, res, '/github/config', 'DELETE');
     }));
 
     function guessUIType(result: any): 'card' | 'table' | 'badge' | 'text' | 'textarea' | 'graph' {
@@ -790,14 +1014,13 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                 try {
                     console.log(`[Chat] Processing inquiry: "${inquiry.substring(0, 100)}${inquiry.length > 100 ? '...' : ''}"`);
 
-                    // Add a promise race with timeout for the AI call
-                    const aiCallTimeout = new Promise<never>((_, reject) => {
-                        setTimeout(() => reject(new Error('AI_TIMEOUT')), 45000); // 45 second AI timeout
-                    });
 
-                    const aiCallPromise = processChatRequest({ inquiry, previous });
 
-                    const result = await Promise.race([aiCallPromise, aiCallTimeout]);
+                    const githubConfig = await getGithubConfig({ hubUrl, apiSecretKey });
+
+                    const aiCallPromise = processChatRequest({ inquiry, previous }, githubConfig);
+
+                    const result = await Promise.race([aiCallPromise]);
 
                     console.log('Chat result:', result);
 
@@ -1404,7 +1627,7 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
     // =============== AUDIT ENDPOINTS ===============
     router.get('/audit/workflow', sessionValidation, asyncHandler(async (req, res) => {
-        return handleWorkflowRequest(req, res, '/audit/workflow', 'GET');
+        return forwardToHub(req, res, '/audit/workflow', 'GET');
     }));
 
 
