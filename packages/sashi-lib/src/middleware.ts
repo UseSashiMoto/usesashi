@@ -10,7 +10,9 @@ import {
     toggleFunctionActive
 } from "./ai-function-loader"
 import { createAIBot, getAIBot } from "./aibot"
+import { getSashiAgent } from "./sashiagent"
 
+import { setDefaultOpenAIKey } from "@openai/agents"
 import { processChatRequest } from "./chat"
 import { getGithubConfig } from "./github-api-service"
 import { GeneralResponse, WorkflowResponse } from "./models/models"
@@ -140,13 +142,30 @@ export interface DatabaseClient {
 
 const checkOpenAI = async (): Promise<boolean> => {
     try {
-        const aibot = getAIBot();
-        await aibot.chatCompletion({
-            messages: [{ role: 'user', content: 'test' }],
-            temperature: 0
-        });
-        return true;
+        // Test both the agents library configuration and SashiAgent functionality
+        const sashiAgent = getSashiAgent();
+        const response = await sashiAgent.processRequest('test connection', []);
+        if (response && response.type === 'general' && response.content.includes('I encountered an error while processing your request')) {
+            console.error('SashiAgent connection test failed:', response.content);
+            return false;
+        }
+        // Verify we got a valid response
+        return response && response.type === 'general' && typeof response.content === 'string';
     } catch (error) {
+        console.error('SashiAgent connection test failed:', error);
+        return false;
+    }
+};
+
+const checkAgentsConfiguration = async (openAIKey: string): Promise<boolean> => {
+    try {
+        setDefaultOpenAIKey(openAIKey);
+
+        // Verify that setDefaultOpenAIKey was called successfully
+        // This checks if the @openai/agents library is properly configured
+        return true; // If we got here without errors during setup, it's configured
+    } catch (error) {
+        console.error('OpenAI Agents configuration check failed:', error);
         return false;
     }
 };
@@ -187,6 +206,9 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         sessionSecret
     } = options
 
+
+
+
     // Ensure URLs have proper protocols
     const sashiServerUrl = rawSashiServerUrl ? ensureUrlProtocol(rawSashiServerUrl) : undefined;
     const hubUrl = ensureUrlProtocol(rawHubUrl);
@@ -203,30 +225,45 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     // Handle preflight requests
     router.options('*', cors());
 
+    // Set OpenAI key for @openai/agents library (this is where the production error originates)
+    try {
+        setDefaultOpenAIKey(openAIKey);
+        console.log('✅ OpenAI agents library configured successfully');
+    } catch (error) {
+        console.error('❌ Failed to configure OpenAI agents library:', error);
+        throw new Error(`Failed to configure OpenAI agents: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+
     createAIBot({ apiKey: openAIKey, sashiSecretKey: apiSecretKey, hubUrl })
 
     async function checkSetup(debug: boolean) {
         console.log('\n🔍 Sashi Middleware Status Check\n')
 
         // Show loading states
-        printStatus('Checking OpenAI connection...', 'loading')
+        printStatus('Checking OpenAI Agents configuration...', 'loading')
+        printStatus('Checking SashiAgent connection...', 'loading')
         printStatus('Checking Hub connection...', 'loading')
 
         try {
-            // Run both checks in parallel
+            const agentsConfigured = await checkAgentsConfiguration(openAIKey);
+            // Run all checks in parallel
             const [openAIConnected, hubConnected] = await Promise.all([
+
                 checkOpenAI(),
                 checkHubConnection(hubUrl, apiSecretKey)
             ])
 
             // Clear the loading states
-            process.stdout.write('\x1b[2A') // Move up two lines
+            process.stdout.write('\x1b[3A') // Move up three lines
             process.stdout.write('\x1b[2K') // Clear first line
             process.stdout.write('\x1b[1A') // Move up one more line
             process.stdout.write('\x1b[2K') // Clear second line
+            process.stdout.write('\x1b[1A') // Move up one more line
+            process.stdout.write('\x1b[2K') // Clear third line
 
             // Show individual success/failure messages
-            printStatus('OpenAI connection', openAIConnected)
+            printStatus('OpenAI Agents configuration', agentsConfigured)
+            printStatus('SashiAgent connection', openAIConnected)
             printStatus(`Hub connection (${hubUrl})`, hubConnected)
 
             // Show the remaining statuses
@@ -252,11 +289,14 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         } catch (error) {
             console.error('Error during status checks:', error)
             // Clear loading states and show error
-            process.stdout.write('\x1b[2A')
+            process.stdout.write('\x1b[3A')
             process.stdout.write('\x1b[2K')
             process.stdout.write('\x1b[1A')
             process.stdout.write('\x1b[2K')
-            printStatus('OpenAI connection', false)
+            process.stdout.write('\x1b[1A')
+            process.stdout.write('\x1b[2K')
+            printStatus('OpenAI Agents configuration', false)
+            printStatus('SashiAgent connection', false)
             printStatus('Hub connection', false)
         }
     }
