@@ -1,5 +1,11 @@
 # sashi-lib
 
+## 8.1.0
+
+### Minor Changes
+
+- 91e47f2: Added checks for the agent and openai
+
 ## 8.0.0
 
 ### Major Changes

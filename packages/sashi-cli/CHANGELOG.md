@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.1.0
+
+### Minor Changes
+
+- 91e47f2: Added checks for the agent and openai
+
 ## 3.0.0
 
 ### Major Changes
