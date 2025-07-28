@@ -150,7 +150,7 @@ describe('Chat Endpoint', () => {
 
 
         const router = createMiddleware({
-            openAIKey: process.env.OPENAI_API_KEY as string,
+            openAIKey: 'test-api-key-for-ci', // Use test key instead of env var
             sashiServerUrl: 'https://example.com',
             apiSecretKey: 'test-secret-key',
         });
