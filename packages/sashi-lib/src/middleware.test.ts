@@ -35,7 +35,24 @@ jest.mock('@openai/agents', () => ({
             role: 'assistant'
         }
     }),
-    handoff: jest.fn()
+    handoff: jest.fn(),
+    setDefaultOpenAIKey: jest.fn().mockImplementation((key: unknown) => {
+        // Mock successful configuration
+        if (!key || (typeof key === 'string' && key.trim() === '')) {
+            throw new Error('Invalid API key');
+        }
+        return true;
+    })
+}));
+
+// Create a controllable mock for SashiAgent
+const mockProcessRequest = jest.fn();
+
+// Mock SashiAgent
+jest.mock('./sashiagent', () => ({
+    getSashiAgent: jest.fn(() => ({
+        processRequest: mockProcessRequest
+    }))
 }));
 
 fetchMock.enableMocks(); // Enable fetch mocks
@@ -52,6 +69,12 @@ describe('Chat Endpoint', () => {
     let app: express.Application;
     let request: any;
     //let mockFunctionRegistry: Map<string, any>;
+
+    // Mock console methods to prevent test output noise
+    beforeAll(() => {
+        jest.spyOn(console, 'log').mockImplementation(() => { });
+        jest.spyOn(console, 'error').mockImplementation(() => { });
+    });
 
     beforeAll(() => {
         // Verify zod version compatibility
@@ -89,6 +112,22 @@ describe('Chat Endpoint', () => {
 
         // Clear all mocks before each test
         jest.clearAllMocks();
+
+        // Set up default SashiAgent mock behavior
+        mockProcessRequest.mockImplementation((inquiry: unknown) => {
+            // For health check requests
+            if (inquiry === 'test connection') {
+                return Promise.resolve({
+                    type: 'general',
+                    content: 'Test connection successful'
+                } as any);
+            }
+            // Default successful response
+            return Promise.resolve({
+                type: 'general',
+                content: 'This is a simple response from the agent.'
+            } as any);
+        });
 
         // Mock axios.post
         mockedAxios.post.mockResolvedValue({
@@ -156,14 +195,19 @@ describe('Chat Endpoint', () => {
                 },
             });
 
-            // Verify that OpenAI SDK was called
-            expect(mockedRun).toHaveBeenCalled();
+            // Verify that SashiAgent processRequest was called
+            expect(mockProcessRequest).toHaveBeenCalled();
         });
 
 
         it('should handle errors in message processing', async () => {
-            (mockedAxios.post as any).mockRejectedValueOnce(new Error('Chat error'));
-            mockedRun.mockRejectedValueOnce(new Error('Chat error'));
+            // Override the default mock to return an error response
+            mockProcessRequest.mockImplementationOnce(() => {
+                return Promise.resolve({
+                    type: 'general',
+                    content: 'I encountered an error while processing your request: Chat error. Please try again or rephrase your request.'
+                });
+            });
 
             const response = await request
                 .post('/chat')

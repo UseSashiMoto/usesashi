@@ -7,10 +7,23 @@ jest.mock('@openai/agents', () => ({
     Agent: jest.fn(),
     run: jest.fn(),
     tool: jest.fn(),
-    handoff: jest.fn()
+    handoff: jest.fn(),
+    setDefaultOpenAIKey: jest.fn().mockImplementation((key) => {
+        if (!key || (typeof key === 'string' && key.trim() === '')) {
+            throw new Error('Invalid API key');
+        }
+        return true;
+    })
 }));
 
-jest.mock('../sashiagent');
+jest.mock('../sashiagent', () => ({
+    getSashiAgent: jest.fn(() => ({
+        processRequest: jest.fn().mockResolvedValue({
+            type: 'general',
+            content: 'Test connection successful'
+        })
+    }))
+}));
 
 // Define mock function type
 type MockFunction = jest.Mock<Promise<any>, [string, Record<string, any>]>;
@@ -162,6 +175,12 @@ describe('Workflow Execution Tests', () => {
     let request: any; // Using any to avoid type compatibility issues with supertest
     let callFunctionSpy: MockFunction;
 
+    // Mock console methods to prevent test output noise
+    beforeAll(() => {
+        jest.spyOn(console, 'log').mockImplementation(() => { });
+        jest.spyOn(console, 'error').mockImplementation(() => { });
+    });
+
     beforeAll(() => {
         // Import the actual module to spy on the function
         const aiLoader = require('../ai-function-loader');
@@ -171,6 +190,7 @@ describe('Workflow Execution Tests', () => {
         app = express();
         const middleware = createMiddleware({
             openAIKey: 'test-key', // Mock key for testing
+            apiSecretKey: 'test-secret-key', // Required for middleware validation
             debug: true,
         });
         app.use(middleware);
