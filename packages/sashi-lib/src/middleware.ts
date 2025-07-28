@@ -11,6 +11,7 @@ import {
 } from "./ai-function-loader"
 import { createAIBot, getAIBot } from "./aibot"
 
+import { setDefaultOpenAIKey } from "@openai/agents"
 import { processChatRequest } from "./chat"
 import { getGithubConfig } from "./github-api-service"
 import { GeneralResponse, WorkflowResponse } from "./models/models"
@@ -187,6 +188,9 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         sessionSecret
     } = options
 
+
+
+
     // Ensure URLs have proper protocols
     const sashiServerUrl = rawSashiServerUrl ? ensureUrlProtocol(rawSashiServerUrl) : undefined;
     const hubUrl = ensureUrlProtocol(rawHubUrl);
@@ -202,6 +206,9 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
     // Handle preflight requests
     router.options('*', cors());
+
+
+    setDefaultOpenAIKey(openAIKey);
 
     createAIBot({ apiKey: openAIKey, sashiSecretKey: apiSecretKey, hubUrl })
 
