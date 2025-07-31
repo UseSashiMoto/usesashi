@@ -482,6 +482,144 @@ const TrimFunction = new AIFunction("trim", "remove whitespace from beginning an
         };
     });
 
+// ---------------------------------------------------------------------------
+// GENERAL-PURPOSE LLM EXECUTION
+// ---------------------------------------------------------------------------
+
+import { getAIBot } from "./aibot";
+
+const LLMExecuteResult = new AIObject("LLMExecuteResult", "result of a general LLM execution", true)
+    .field({
+        name: "result",
+        description: "raw content returned by the language model",
+        type: "string",
+        required: true
+    })
+    .field({
+        name: "operation",
+        description: "description of what the LLM was asked to do",
+        type: "string",
+        required: true
+    });
+
+const LLMExecuteFunction = new AIFunction(
+    "llm_execute",
+    `Perform any ad-hoc natural-language task with OpenAI. Supply a 'prompt' that may contain {{placeholders}} and a JSON string 'data' providing replacement values. The merged prompt is sent to the model and the raw response is returned in 'result'. Use this for template filling, summarisation, translation, classification, etc.`,
+    undefined,
+    false,
+    true
+)
+    .args({
+        name: "prompt",
+        description: "Prompt text that can include {{placeholders}} to be substituted from 'data'.",
+        type: "string",
+        required: true
+    })
+    .args({
+        name: "data",
+        description: "JSON string with key/value pairs to inject into the prompt.",
+        type: "string",
+        required: false
+    })
+    .returns(LLMExecuteResult)
+    .implement(async (prompt: string, data?: string) => {
+        const model = "gpt-4o-mini";
+        let merged = prompt;
+        if (data) {
+            let obj: Record<string, any> = {};
+            try { obj = JSON.parse(data); } catch { throw new Error("Invalid JSON in 'data'"); }
+            merged = merged.replace(/{{\s*(\w+)\s*}}/g, (_m, k) => (k in obj ? String(obj[k]) : _m));
+        }
+
+        const ai = getAIBot();
+        const completion = await ai.chatCompletion({
+            model,
+            messages: [{ role: "user", content: merged }],
+            max_tokens: 1024,
+            temperature: 0
+        });
+
+        return {
+            result: completion.message?.content || "",
+            operation: `llm_execute(model=${model})`
+        };
+    });
+
+// ---------------------------------------------------------------------------
+// LLM STRUCTURED OUTPUT FUNCTION
+// ---------------------------------------------------------------------------
+
+const LLMStructuredResult = new AIObject("LLMStructuredResult", "result from LLM with JSON payload", true)
+    .field({
+        name: "json",
+        description: "JSON string produced by the model that matches the requested structure",
+        type: "string",
+        required: true
+    })
+    .field({
+        name: "operation",
+        description: "description of the structured operation",
+        type: "string",
+        required: true
+    });
+
+const LLMStructuredFunction = new AIFunction(
+    "llm_structured",
+    `Return structured JSON. Provide an 'instruction' that describes what JSON you want, and a 'schema' OR 'example' that the model MUST follow exactly. Optionally include 'input_text' that the model should operate on. The response will be placed verbatim in the 'json' field.`,
+    undefined,
+    false,
+    true
+)
+    .args({
+        name: "instruction",
+        description: "What the model should do (e.g., 'Extract name, email from text').",
+        type: "string",
+        required: true
+    })
+    .args({
+        name: "schema",
+        description: "(Preferred) JSON schema or object outline describing expected shape.",
+        type: "string",
+        required: false
+    })
+    .args({
+        name: "example",
+        description: "Example JSON showing desired keys/format (if schema not supplied).",
+        type: "string",
+        required: false
+    })
+    .args({
+        name: "input_text",
+        description: "Text for the model to analyse or transform.",
+        type: "string",
+        required: false
+    })
+    .returns(LLMStructuredResult)
+    .implement(async (instruction: string, schema?: string, example?: string, input_text?: string) => {
+        const model = "gpt-4o-mini";
+        const ai = getAIBot();
+
+        // Compose a strict system prompt to force JSON-only output
+        const sysPromptParts = [
+            "You are a JSON-only API. Reply with **ONLY** JSON, no markdown, no code fences.",
+        ];
+        if (schema) {
+            sysPromptParts.push(`The JSON must match this schema exactly: ${schema}`);
+        } else if (example) {
+            sysPromptParts.push(`The JSON must have exactly the same keys and structure as this example: ${example}`);
+        }
+
+        const messages: any[] = [
+            { role: "system", content: sysPromptParts.join("\n") },
+            { role: "user", content: instruction + (input_text ? "\n\nInput:\n" + input_text : "") }
+        ];
+
+        const completion = await ai.chatCompletion({ model, messages, temperature: 0, max_tokens: 1024 });
+        const content = completion.message?.content || "";
+
+        return { json: content.trim(), operation: "llm_structured" };
+    });
+
 // ============================================================================
 // REGISTRATION FUNCTIONS
 // ============================================================================
@@ -517,6 +655,7 @@ export function registerTextProcessingFunctions() {
     registerFunctionIntoAI("to_uppercase", ToUpperCaseFunction);
     registerFunctionIntoAI("to_lowercase", ToLowerCaseFunction);
     registerFunctionIntoAI("trim", TrimFunction);
+    registerFunctionIntoAI("llm_execute", LLMExecuteFunction);
 }
 
 // Main registration function that loads all functions
@@ -580,5 +719,7 @@ export const defaultFunctions = {
     // Text processing
     to_uppercase: ToUpperCaseFunction,
     to_lowercase: ToLowerCaseFunction,
-    trim: TrimFunction
+    trim: TrimFunction,
+    llm_execute: LLMExecuteFunction,
+    llm_structured: LLMStructuredFunction
 }; 

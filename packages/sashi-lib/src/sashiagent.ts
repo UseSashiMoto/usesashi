@@ -213,6 +213,44 @@ For each BASE userInput.* parameter in your workflow actions:
 3. Use "table" for array results
 4. Set actionId to match the action's id
 
+## Output Component Data Formatting
+**CRITICAL**: The UI components expect data in specific formats. When actions return results, ensure they match these expected structures:
+
+### Table Component Data Format
+For "table" outputComponents, the action result MUST be formatted as:
+\`\`\`json
+{
+  "data": [
+    {"column1": "value1", "column2": "value2", ...},
+    {"column1": "value3", "column2": "value4", ...}
+  ]
+}
+\`\`\`
+The TableComponent expects: \`data.data\` (array of objects where each object represents a row)
+
+### DataCard Component Data Format  
+For "dataCard" outputComponents, the action result should be a single object:
+\`\`\`json
+{
+  "field1": "value1",
+  "field2": "value2", 
+  ...
+}
+\`\`\`
+The DataCardComponent expects the object properties directly.
+
+### Backend Function Return Guidelines
+- Functions that return arrays (like bulk operations with map:true) should wrap results in \`{"data": [...results...]}\`
+- Functions that return single objects can return the object directly
+- For CSV mapping operations with table output, ensure the mapped results are collected into the proper array format
+
+**Example workflow with proper table formatting:**
+\`\`\`workflow
+Action with map:true → Returns array of email results
+Expected result format: {"data": [{"email":"user1@example.com","status":"sent"}, {"email":"user2@example.com","status":"sent"}]}
+UI outputComponent: {"actionId": "send_email", "component": "table", "props": {}}
+\`\`\`
+
 ## CSV Data Processing:
 **IMPORTANT**: You have full CSV processing capabilities! The UI handles CSV parsing, and you can use existing backend functions with the parsed data.
 
