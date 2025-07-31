@@ -1049,13 +1049,14 @@ Remember: You're a technical translator for PMs. Think features first, then code
 
 // Main SashiAgent - Router that decides which agents to use
 const createSashiAgent = (workflowPlannerAgent: Agent, responseAgent: Agent, refinerAgent: Agent, githubAgent: Agent, config?: GitHubConfig) => {
-
     let hasGithub = false;
     if (config) {
         hasGithub = true;
     }
 
-    console.log('hasGithub', hasGithub);
+    console.log('has github access', hasGithub);
+
+
     return new Agent({
         name: 'SashiAgent',
         instructions: `You are SashiAgent, the main conversational AI assistant that intelligently routes requests to specialized agents.
@@ -1073,7 +1074,6 @@ You are the entry point for all user requests. Your job is to understand the use
 - Add or modify features in code
 - Create pull requests
 - Any request that involves modifying repository files
-- you are given a hasGithub flag, if it is true, you have access to github if it is false, you do not have access to github so dont try to use github tools
 
 **Route to Workflow Creation** when the user's intent is to:
 - Accomplish a specific task that requires backend operations (non-GitHub)
@@ -1131,9 +1131,9 @@ Focus on the user's underlying goal, not specific words:
 
 Analyze the user's request to understand their true intent and route accordingly.`,
         handoffs: [
-            hasGithub ? handoff(githubAgent, {
+            handoff(githubAgent, {
                 toolDescriptionOverride: 'Hand off to GitHub Agent when user wants to make code changes, modify files, or create pull requests'
-            }) : null,
+            }),
             handoff(workflowPlannerAgent, {
                 toolDescriptionOverride: 'Hand off to Workflow Planner when user wants to accomplish a specific task that requires backend operations (non-GitHub)'
             }),
