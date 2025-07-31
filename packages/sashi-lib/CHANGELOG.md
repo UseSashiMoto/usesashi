@@ -1,5 +1,11 @@
 # sashi-lib
 
+## 8.2.0
+
+### Minor Changes
+
+- a248540: improve output formatting
+
 ## 8.1.0
 
 ### Minor Changes
