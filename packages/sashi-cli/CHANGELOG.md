@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.2.0
+
+### Minor Changes
+
+- a248540: improve output formatting
+
 ## 3.1.0
 
 ### Minor Changes
