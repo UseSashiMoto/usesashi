@@ -1047,15 +1047,132 @@ Remember: You're a technical translator for PMs. Think features first, then code
     });
 };
 
-// Main SashiAgent - Router that decides which agents to use
-const createSashiAgent = (workflowPlannerAgent: Agent, responseAgent: Agent, refinerAgent: Agent, githubAgent: Agent, config?: GitHubConfig) => {
-    let hasGithub = false;
-    if (config) {
-        hasGithub = true;
+// Helper function to validate GitHub configuration
+const validateGitHubConfig = (config?: GitHubConfig): { isValid: boolean, status: string, missingFields: string[] } => {
+    if (!config) {
+        return {
+            isValid: false,
+            status: "GitHub is not configured. No configuration provided.",
+            missingFields: ['token', 'owner', 'repo']
+        };
     }
 
-    console.log('has github access', hasGithub);
+    const missingFields: string[] = [];
+    if (!config.token) missingFields.push('token');
+    if (!config.owner) missingFields.push('owner');
+    if (!config.repo) missingFields.push('repo');
 
+    if (missingFields.length > 0) {
+        return {
+            isValid: false,
+            status: `GitHub configuration incomplete. Missing: ${missingFields.join(', ')}`,
+            missingFields
+        };
+    }
+
+    return {
+        isValid: true,
+        status: `GitHub is properly configured and connected (${config.owner}/${config.repo})`,
+        missingFields: []
+    };
+};
+
+// Main SashiAgent - Router that decides which agents to use
+const createSashiAgent = (workflowPlannerAgent: Agent, responseAgent: Agent, refinerAgent: Agent, githubAgent: Agent, config?: GitHubConfig) => {
+    const githubValidation = validateGitHubConfig(config);
+    const hasValidGithub = githubValidation.isValid;
+
+    // GitHub status checking tool
+    const checkGitHubStatusTool = tool({
+        name: 'check_github_status',
+        description: 'Check the current GitHub integration status and configuration, optionally fetch repository details',
+        strict: false,
+        parameters: {
+            type: "object" as const,
+            properties: {
+                includeRepoDetails: {
+                    type: "boolean" as const,
+                    description: "Whether to fetch detailed repository information from GitHub API"
+                }
+            },
+            required: [],
+            additionalProperties: false as const
+        } as any,
+        execute: async ({ includeRepoDetails = false }: { includeRepoDetails?: boolean } = {}) => {
+            const baseStatus = {
+                configured: hasValidGithub,
+                status: githubValidation.status,
+                details: {
+                    hasToken: !!config?.token,
+                    hasOwner: !!config?.owner,
+                    hasRepo: !!config?.repo,
+                    missingFields: githubValidation.missingFields,
+                    repoInfo: config?.owner && config?.repo ? `${config.owner}/${config.repo}` : null
+                }
+            };
+
+            // If GitHub is configured and repo details are requested, fetch them
+            if (hasValidGithub && includeRepoDetails && config) {
+                try {
+                    const githubService = await getInitializedGitHubService();
+                    if (githubService) {
+                        const repoData = await githubService.testConnection(); // This fetches repo details
+                        return {
+                            ...baseStatus,
+                            repositoryDetails: {
+                                name: repoData.name,
+                                fullName: repoData.full_name,
+                                description: repoData.description,
+                                htmlUrl: repoData.html_url,
+                                defaultBranch: repoData.default_branch,
+                                language: repoData.language,
+                                isPrivate: repoData.private,
+                                createdAt: repoData.created_at,
+                                updatedAt: repoData.updated_at,
+                                size: repoData.size,
+                                stargazersCount: repoData.stargazers_count,
+                                forksCount: repoData.forks_count,
+                                openIssuesCount: repoData.open_issues_count,
+                                topics: repoData.topics || [],
+                                license: repoData.license?.name || null,
+                                owner: {
+                                    login: repoData.owner.login,
+                                    type: repoData.owner.type,
+                                    htmlUrl: repoData.owner.html_url
+                                }
+                            }
+                        };
+                    }
+                } catch (error) {
+                    return {
+                        ...baseStatus,
+                        repositoryDetails: {
+                            error: `Failed to fetch repository details: ${error instanceof Error ? error.message : 'Unknown error'}`
+                        }
+                    };
+                }
+            }
+
+            return baseStatus;
+        }
+    });
+
+    // Helper function to get GitHub service (moved up for reuse)
+    const getInitializedGitHubService = async () => {
+        try {
+            if (!config?.token || !config?.owner || !config?.repo) {
+                return null;
+            }
+            return initializeGitHubAPI({
+                token: config.token,
+                owner: config.owner,
+                repo: config.repo
+            });
+        } catch (error) {
+            console.error('Failed to initialize GitHub service:', error);
+            return null;
+        }
+    };
 
     return new Agent({
         name: 'SashiAgent',
@@ -1064,9 +1181,17 @@ const createSashiAgent = (workflowPlannerAgent: Agent, responseAgent: Agent, ref
 ## Your Role
 You are the entry point for all user requests. Your job is to understand the user's intent and route them to the appropriate specialized agents to fulfill their needs.
 
+## GitHub Integration Status
+${githubValidation.status}
+${hasValidGithub ? '✅ GitHub features are AVAILABLE' : '❌ GitHub features are NOT AVAILABLE'}
+
+${!hasValidGithub ? `
+**IMPORTANT**: When users request GitHub/code-related features, you must inform them that GitHub is not properly configured and they need to configure it first. Use the check_github_status tool to provide specific details about what's missing.
+` : ''}
+
 ## Core Decision: Workflow vs GitHub vs Conversational Response
 
-**Route to GitHub Agent** when the user's intent is to:
+**Route to GitHub Agent** when the user's intent is to:${hasValidGithub ? '' : ' (⚠️ ONLY if GitHub is configured)'}
 - Make code changes or modifications
 - Update files in a repository
 - Fix bugs or issues in code
@@ -1104,36 +1229,90 @@ Focus on the user's underlying goal, not specific words:
 - User expects to receive actual results or see changes
 - Request implies system interaction or backend operations
 
+**GitHub Status Intent Indicators:**
+- "Is GitHub connected/configured/attached?"
+- "GitHub status", "GitHub integration"
+- "Can I use GitHub features?"
+- "What's my GitHub setup?"
+- "Which repo is connected?"
+- "What repository am I connected to?"
+- "Show me repo details/information"
+- "Tell me about the connected repository"
+- Any direct questions about GitHub connectivity, configuration, or repository information
+
 **Informational Intent Indicators:**
 - User wants to understand or learn something
-- Request is about concepts, processes, or explanations
+- Request is about concepts, processes, or explanations  
 - User is exploring capabilities or asking "how" questions
-- Request is conversational or exploratory in nature
+- Request is conversational or exploratory in nature (NOT about GitHub status)
 
 ## Routing Strategy
 
+**For GitHub Status Questions:**
+1. ALWAYS use check_github_status tool first for any GitHub connectivity/status questions
+2. For repository detail questions, use check_github_status with includeRepoDetails=true
+3. Provide clear, direct answer about current configuration state
+4. Include configuration guidance if needed
+5. Do NOT hand off to other agents for these questions
+
 **For GitHub Code Requests:**
-1. Hand off to GitHub Agent for explain-then-approve workflow
+${hasValidGithub ?
+                '1. Hand off to GitHub Agent for explain-then-approve workflow' :
+                '1. Use check_github_status tool to show current status\n2. Inform user that GitHub is not configured and explain what they need to do\n3. Do NOT hand off to GitHub Agent - explain the limitation instead'}
 
 **For Other Actionable Requests:**
 1. Hand off to Workflow Planner to create complete workflow with actions and UI components
 
 **For Informational Requests:**
-1. Hand off directly to Response Agent for conversational response
+1. Hand off directly to Response Agent for conversational response (NOT for GitHub status questions)
 
 ## Key Principles
+- **PRIORITY**: For ANY GitHub status/connectivity question, use check_github_status tool FIRST - do not route to other agents
 - Focus on intent, not keywords
 - Be confident in your routing decisions
 - Trust the specialized agents to handle their domains
 - Prioritize user experience through smooth handoffs
-- When in doubt about code changes, route to GitHub Agent
+${hasValidGithub ?
+                '- When in doubt about code changes, route to GitHub Agent' :
+                '- When users request code changes, use check_github_status tool and inform them GitHub needs to be configured first'}
 - When in doubt about other actions, consider if the user expects to see actual results or data
+- Always be transparent about GitHub configuration status
 
-Analyze the user's request to understand their true intent and route accordingly.`,
+## GitHub Status Question Examples (Use check_github_status tool):
+- "Is GitHub connected?" → Use tool, provide status
+- "Is GitHub attached?" → Use tool, provide status
+- "Can I use GitHub features?" → Use tool, explain availability
+- "What's my GitHub setup?" → Use tool, show configuration
+- "GitHub status" → Use tool, provide detailed status
+- "Which repo is connected?" → Use tool with includeRepoDetails=true
+- "What repository am I connected to?" → Use tool with includeRepoDetails=true
+- "Show me repo details" → Use tool with includeRepoDetails=true
+- "Tell me about the connected repository" → Use tool with includeRepoDetails=true
+
+## GitHub Configuration Guidance
+${!hasValidGithub ? `
+When informing users about GitHub configuration, explain they need to:
+1. Provide a GitHub personal access token
+2. Specify the repository owner (username/organization)
+3. Specify the repository name
+4. Configure these in the system settings
+
+Missing fields: ${githubValidation.missingFields.join(', ')}
+` : 'GitHub is properly configured and ready to use!'}
+
+## Decision Framework
+1. **First**: Is this a GitHub status/connectivity/repository question? → Use check_github_status tool (with includeRepoDetails=true for repo info)
+2. **Second**: Is this a GitHub code change request? → Route based on GitHub availability
+3. **Third**: Is this an actionable request (non-GitHub)? → Route to Workflow Planner
+4. **Fourth**: Is this informational/conversational? → Route to Response Agent
+
+Analyze the user's request and follow this priority order for routing decisions.`,
+        tools: [checkGitHubStatusTool],
         handoffs: [
-            handoff(githubAgent, {
-                toolDescriptionOverride: 'Hand off to GitHub Agent when user wants to make code changes, modify files, or create pull requests'
-            }),
+            // Only include GitHub agent if properly configured
+            ...(hasValidGithub ? [handoff(githubAgent, {
+                toolDescriptionOverride: 'Hand off to GitHub Agent when user wants to make code changes, modify files, or create pull requests (GitHub is configured)'
+            })] : []),
             handoff(workflowPlannerAgent, {
                 toolDescriptionOverride: 'Hand off to Workflow Planner when user wants to accomplish a specific task that requires backend operations (non-GitHub)'
             }),
@@ -1168,12 +1347,15 @@ export class SashiAgent {
     private mainAgent: Agent;
     private refinerAgent: Agent;
     private config?: GitHubConfig;
+    private githubValidation: { isValid: boolean, status: string, missingFields: string[] };
+
     constructor(config?: GitHubConfig) {
         this.workflowPlannerAgent = createWorkflowPlannerAgent();
         this.responseAgent = createResponseAgent();
         this.githubAgent = createGitHubAgent(config);
         this.refinerAgent = createWorkflowRefinerAgent();
         this.config = config;
+        this.githubValidation = validateGitHubConfig(config);
         this.mainAgent = createSashiAgent(
             this.workflowPlannerAgent,
             this.responseAgent,
@@ -1181,6 +1363,23 @@ export class SashiAgent {
             this.githubAgent,
             config
         );
+    }
+
+    /**
+     * Check GitHub integration status
+     */
+    getGitHubStatus() {
+        return {
+            configured: this.githubValidation.isValid,
+            status: this.githubValidation.status,
+            details: {
+                hasToken: !!this.config?.token,
+                hasOwner: !!this.config?.owner,
+                hasRepo: !!this.config?.repo,
+                missingFields: this.githubValidation.missingFields,
+                repoInfo: this.config?.owner && this.config?.repo ? `${this.config.owner}/${this.config.repo}` : null
+            }
+        };
     }
 
     /**
@@ -1244,12 +1443,15 @@ export class SashiAgent {
     }
 }
 
-// Export a singleton instance
+// Export a singleton instance with config awareness
 let sashiAgent: SashiAgent | null = null;
+let currentConfig: GitHubConfig | undefined = undefined;
 
 export const getSashiAgent = (config?: GitHubConfig): SashiAgent => {
-    if (!sashiAgent) {
+    // Create new instance if no agent exists or config has changed
+    if (!sashiAgent || JSON.stringify(currentConfig) !== JSON.stringify(config)) {
         sashiAgent = new SashiAgent(config);
+        currentConfig = config;
     }
     return sashiAgent;
 }; 

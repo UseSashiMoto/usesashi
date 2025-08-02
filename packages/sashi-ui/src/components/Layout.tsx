@@ -6,7 +6,7 @@ import { WorkflowStorage } from '@/utils/workflowStorage';
 import { DashboardIcon, GearIcon, GitHubLogoIcon } from '@radix-ui/react-icons';
 import * as Toast from '@radix-ui/react-toast';
 import axios from 'axios';
-import { ChevronDown, ChevronUp, History, HomeIcon, MessageSquare } from 'lucide-react';
+import { ChevronDown, ChevronUp, Github, History, HomeIcon, MessageSquare } from 'lucide-react';
 import React, { useEffect, useMemo, useState, type FC, type PropsWithChildren } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from './Button';
@@ -91,8 +91,12 @@ export const Layout: FC<{} & PropsWithChildren> = ({ children }) => {
   const apiUrl = useAppStore((state) => state.apiUrl);
   const metadata: Metadata | undefined = useAppStore((state: { metadata: any }) => state.metadata);
   const connectedToHub: boolean = useAppStore((state: { connectedToHub: any }) => state.connectedToHub);
+  const connectedToGithub: boolean = useAppStore((state: { connectedToGithub: any }) => state.connectedToGithub);
+  const githubConfig = useAppStore((state) => state.githubConfig);
   const location = useLocation();
   const setConnectedToHub = useAppStore((state: { setConnectedToHub: any }) => state.setConnectedToHub);
+  const setConnectedToGithub = useAppStore((state: { setConnectedToGithub: any }) => state.setConnectedToGithub);
+  const setGithubConfig = useAppStore((state) => state.setGithubConfig);
 
   const setHubUrl = useAppStore((state) => state.setHubUrl);
   const hubUrl = useAppStore((state) => state.hubUrl);
@@ -132,6 +136,55 @@ export const Layout: FC<{} & PropsWithChildren> = ({ children }) => {
     };
     checkConnectedToHub();
   }, [apiUrl, sessionToken]);
+
+  useEffect(() => {
+    const checkConnectedToGithub = async () => {
+      try {
+        console.log('🔍 Checking GitHub connection and fetching config...', { apiUrl, sessionToken });
+
+        const response = await fetch(`${apiUrl}/github/config`, {
+          method: 'GET',
+          headers: {
+            [HEADER_SESSION_TOKEN]: sessionToken ?? '',
+          },
+        });
+
+        if (response.ok) {
+          const config = await response.json();
+          console.log('✅ GitHub config retrieved:', {
+            hasToken: !!config.token,
+            owner: config.owner,
+            repo: config.repo,
+          });
+
+          // Validate that we have all required config fields
+          const isValidConfig = config.token && config.owner && config.repo;
+
+          if (isValidConfig) {
+            setGithubConfig(config);
+            setConnectedToGithub(true);
+            console.log('✅ GitHub fully connected and configured');
+          } else {
+            console.warn('⚠️ GitHub config incomplete:', config);
+            setGithubConfig(undefined);
+            setConnectedToGithub(false);
+          }
+        } else {
+          console.log('❌ GitHub config not found or accessible');
+          setGithubConfig(undefined);
+          setConnectedToGithub(false);
+        }
+      } catch (error) {
+        console.error('❌ Error checking GitHub connection:', error);
+        setGithubConfig(undefined);
+        setConnectedToGithub(false);
+      }
+    };
+
+    if (apiUrl && sessionToken) {
+      checkConnectedToGithub();
+    }
+  }, [apiUrl, sessionToken, setConnectedToGithub, setGithubConfig]);
 
   const getMetadata = async () => {
     try {
@@ -206,6 +259,28 @@ export const Layout: FC<{} & PropsWithChildren> = ({ children }) => {
                   <span className={`text-sm ${connectedToHub ? 'text-green-500' : 'text-red-500'}`}>
                     {connectedToHub ? 'Connected' : 'Disconnected'}
                   </span>
+                </div>
+                <div className="flex flex-col space-y-1 mb-4">
+                  <div className="flex items-center space-x-2">
+                    <Github className="h-4 w-4" />
+                    <span className="text-sm font-medium">GitHub:</span>
+                    <div
+                      className={`w-3 h-3 rounded-full ${connectedToGithub ? 'bg-green-500' : 'bg-red-500'} shadow-lg ${
+                        connectedToGithub ? 'animate-pulse-green' : 'animate-pulse-red'
+                      }`}
+                    ></div>
+                    <span className={`text-sm ${connectedToGithub ? 'text-green-500' : 'text-red-500'}`}>
+                      {connectedToGithub ? 'Connected' : 'Disconnected'}
+                    </span>
+                  </div>
+                  {connectedToGithub && githubConfig && (
+                    <div className="text-xs text-slate-500 ml-6">
+                      {githubConfig.owner}/{githubConfig.repo}
+                    </div>
+                  )}
+                  {!connectedToGithub && (
+                    <div className="text-xs text-slate-500 ml-6">Configure in Settings to enable code changes</div>
+                  )}
                 </div>
                 <div className="h-px w-full bg-slate-100 dark:bg-slate-700" />
                 <div className="w-full space-y-1"></div>

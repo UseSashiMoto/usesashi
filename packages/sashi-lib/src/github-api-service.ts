@@ -239,21 +239,83 @@ export class GitHubAPIService {
             branchName
         );
 
-        // Create PR
-        const prTitle = `Update ${targetFile.split('/').pop()}: ${request}`;
-        const prBody = `## Changes Made
+        // Create PR with short summary title and detailed description
+        const prTitle = this.generateShortSummary(request);
+        const prBody = `## Summary
+${request}
 
-**Request:** ${request}
-
+## Changes Made
 **File Modified:** \`${targetFile}\`
 
-**Changes:**
+## Detailed Description
+This pull request implements the following changes:
 - ${request}
+
+## Implementation Details
+- Modified file: \`${targetFile}\`
+- Changes applied: ${request}
+- Branch: \`${branchName}\`
+
+## Testing Recommendations
+Please test the following functionality after merging:
+- Verify the changes work as expected
+- Check for any side effects or regressions
+- Test related components or features
 
 ---
 *This pull request was created by Sashi AI Assistant on ${timestamp}*`;
 
         return this.createPullRequest(prTitle, prBody, branchName);
+    }
+
+    private generateShortSummary(request: string): string {
+        // Remove common filler words and normalize
+        const cleanRequest = request
+            .toLowerCase()
+            .replace(/\b(please|can you|could you|i want to|i need to|let's|the|a|an|and|or|but|in|on|at|to|for|of|with|by)\b/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        // Extract key action and target
+        const actionMatch = cleanRequest.match(/\b(add|remove|update|fix|change|create|delete|modify|implement|refactor|build|setup|configure)\b/);
+        const action = actionMatch ? actionMatch[0] : 'update';
+
+        // Extract main subject (component, feature, etc.)
+        let subject = '';
+
+        // Look for component names (capitalized words ending with common suffixes)
+        const componentMatch = cleanRequest.match(/\b[a-z]*[A-Z][a-zA-Z]*(?:component|button|modal|form|page|service|hook|menu|card|input|table|list)\b/i);
+        if (componentMatch && componentMatch[0]) {
+            subject = componentMatch[0];
+        } else {
+            // Look for quoted text (often the main feature/element)
+            const quotedMatch = request.match(/"([^"]+)"/);
+            if (quotedMatch && quotedMatch[1]) {
+                subject = quotedMatch[1];
+            } else {
+                // Extract first meaningful noun or phrase
+                const words = cleanRequest.split(' ').filter(w => w.length > 2);
+                if (words.length > 1) {
+                    subject = words.slice(1, 3).join(' '); // Take 1-2 words after action
+                } else if (words.length === 1 && words[0]) {
+                    subject = words[0];
+                }
+            }
+        }
+
+        // Capitalize first letter and create title
+        const capitalizedAction = action.charAt(0).toUpperCase() + action.slice(1);
+        const capitalizedSubject = subject ? subject.charAt(0).toUpperCase() + subject.slice(1) : '';
+
+        // Create concise title (max ~60 characters for good GitHub display)
+        const title = capitalizedSubject ? `${capitalizedAction} ${capitalizedSubject}` : capitalizedAction;
+
+        // Truncate if too long, but try to keep it meaningful
+        if (title.length > 60) {
+            return title.substring(0, 57) + '...';
+        }
+
+        return title;
     }
 
     private extractSearchTerms(request: string): string[] {
