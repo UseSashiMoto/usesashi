@@ -1,31 +1,98 @@
-import React, { lazy, Suspense, useMemo } from 'react';
-
-// Lazy load markdown components to avoid SSR issues
-const ReactMarkdown = lazy(() => import('react-markdown'));
-
-// Dynamically load highlight.js styles only in browser environment
-if (typeof window !== 'undefined') {
-  try {
-    import('highlight.js/styles/github.css');
-  } catch {
-    // Styles failed to load, continue without syntax highlighting styles
-  }
-}
+import React, { useMemo } from 'react';
 
 interface MarkdownRendererProps {
   content: string;
   className?: string;
 }
 
-// Simple fallback component for when markdown can't be loaded
-const MarkdownFallback = ({ content, className = '' }: MarkdownRendererProps) => {
-  // Basic text processing for fallback
+// Simple code highlighting for common languages
+const highlightCode = (code: string, language?: string): string => {
+  // Basic syntax highlighting for common patterns
+  let highlighted = code;
+
+  if (language === 'javascript' || language === 'js' || language === 'typescript' || language === 'ts') {
+    highlighted = highlighted
+      .replace(
+        /\b(const|let|var|function|class|if|else|for|while|return|import|export|from|default)\b/g,
+        '<span class="text-purple-600 dark:text-purple-400 font-semibold">$1</span>'
+      )
+      .replace(/\b(true|false|null|undefined)\b/g, '<span class="text-blue-600 dark:text-blue-400">$1</span>')
+      .replace(/(\/\/.*$)/gm, '<span class="text-gray-500 dark:text-gray-400 italic">$1</span>')
+      .replace(/('[^']*'|"[^"]*")/g, '<span class="text-green-600 dark:text-green-400">$1</span>');
+  } else if (language === 'json') {
+    highlighted = highlighted
+      .replace(/("[^"]*")\s*:/g, '<span class="text-blue-600 dark:text-blue-400">$1</span>:')
+      .replace(/:\s*("[^"]*")/g, ': <span class="text-green-600 dark:text-green-400">$1</span>')
+      .replace(/\b(true|false|null)\b/g, '<span class="text-purple-600 dark:text-purple-400">$1</span>');
+  } else if (language === 'css') {
+    highlighted = highlighted
+      .replace(/([.#][a-zA-Z-]+)/g, '<span class="text-blue-600 dark:text-blue-400">$1</span>')
+      .replace(/([a-zA-Z-]+):/g, '<span class="text-purple-600 dark:text-purple-400">$1</span>:');
+  }
+
+  return highlighted;
+};
+
+// Enhanced markdown processor
+const processMarkdown = (content: string): string => {
+  let processed = content;
+
+  // Process code blocks first (multiline)
+  processed = processed.replace(/```(\w+)?\n([\s\S]*?)\n```/g, (match, language, code) => {
+    const highlightedCode = highlightCode(code, language);
+    return `<pre class="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg border overflow-x-auto"><code class="text-sm font-mono">${highlightedCode}</code></pre>`;
+  });
+
+  // Process inline code
+  processed = processed.replace(
+    /`([^`]+)`/g,
+    '<code class="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono border">$1</code>'
+  );
+
+  // Process headers
+  processed = processed.replace(/^### (.*$)/gm, '<h3 class="text-lg font-bold mb-2 mt-4">$1</h3>');
+  processed = processed.replace(/^## (.*$)/gm, '<h2 class="text-xl font-bold mb-3 mt-4">$1</h2>');
+  processed = processed.replace(/^# (.*$)/gm, '<h1 class="text-2xl font-bold mb-4 mt-4">$1</h1>');
+
+  // Process bold and italic
+  processed = processed.replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold">$1</strong>');
+  processed = processed.replace(/\*(.*?)\*/g, '<em class="italic">$1</em>');
+
+  // Process links
+  processed = processed.replace(
+    /\[([^\]]+)\]\(([^)]+)\)/g,
+    '<a href="$2" class="text-blue-600 dark:text-blue-400 hover:underline" target="_blank" rel="noopener noreferrer">$1</a>'
+  );
+
+  // Process lists
+  processed = processed.replace(/^- (.*$)/gm, '<li class="ml-4">$1</li>');
+  processed = processed.replace(/(<li[\s\S]*?<\/li>)/g, '<ul class="list-disc list-inside space-y-1 mb-2">$1</ul>');
+
+  // Process numbered lists
+  processed = processed.replace(/^\d+\. (.*$)/gm, '<li class="ml-4">$1</li>');
+
+  // Process blockquotes
+  processed = processed.replace(
+    /^> (.*$)/gm,
+    '<blockquote class="border-l-4 border-blue-500 pl-4 italic text-gray-600 dark:text-gray-400 my-2">$1</blockquote>'
+  );
+
+  // Process line breaks (keep double line breaks as paragraphs)
+  processed = processed.replace(/\n\n/g, '</p><p class="mb-2">');
+  processed = processed.replace(/\n/g, '<br>');
+
+  // Wrap in paragraph if doesn't start with a block element
+  if (!processed.match(/^<(h[1-6]|pre|ul|ol|blockquote|div)/)) {
+    processed = `<p class="mb-2">${processed}</p>`;
+  }
+
+  return processed;
+};
+
+export const MarkdownRenderer = ({ content, className = '' }: MarkdownRendererProps) => {
+  // Process markdown content
   const processedContent = useMemo(() => {
-    return content
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold text
-      .replace(/\*(.*?)\*/g, '<em>$1</em>') // Italic text
-      .replace(/`([^`]+)`/g, '<code class="bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded text-sm">$1</code>') // Inline code
-      .replace(/\n/g, '<br>'); // Line breaks
+    return processMarkdown(content);
   }, [content]);
 
   return (
@@ -33,108 +100,6 @@ const MarkdownFallback = ({ content, className = '' }: MarkdownRendererProps) =>
       className={`prose prose-sm max-w-none dark:prose-invert ${className}`}
       dangerouslySetInnerHTML={{ __html: processedContent }}
     />
-  );
-};
-
-// Loading component
-const MarkdownLoader = () => (
-  <div className="animate-pulse">
-    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mb-2"></div>
-    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2 mb-2"></div>
-    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-2/3"></div>
-  </div>
-);
-
-// Full markdown component with all features
-const FullMarkdownRenderer = ({ content, className = '' }: MarkdownRendererProps) => {
-  // Dynamic imports for plugins to avoid SSR issues
-  const [plugins, setPlugins] = React.useState<any>({ remarkGfm: null, rehypeHighlight: null, rehypeRaw: null });
-
-  React.useEffect(() => {
-    // Only load plugins in browser environment
-    if (typeof window !== 'undefined') {
-      Promise.all([import('remark-gfm'), import('rehype-highlight'), import('rehype-raw')])
-        .then(([remarkGfm, rehypeHighlight, rehypeRaw]) => {
-          setPlugins({
-            remarkGfm: remarkGfm.default,
-            rehypeHighlight: rehypeHighlight.default,
-            rehypeRaw: rehypeRaw.default,
-          });
-        })
-        .catch(() => {
-          // Plugins failed to load, will use basic markdown
-        });
-    }
-  }, []);
-
-  return (
-    <ReactMarkdown
-      remarkPlugins={plugins.remarkGfm ? [plugins.remarkGfm] : []}
-      rehypePlugins={plugins.rehypeHighlight && plugins.rehypeRaw ? [plugins.rehypeHighlight, plugins.rehypeRaw] : []}
-      components={{
-        // Custom styling for code blocks
-        pre: ({ node, ...props }: any) => (
-          <pre {...props} className="bg-gray-100 dark:bg-gray-800 p-3 rounded-md text-sm overflow-x-auto border" />
-        ),
-        code: ({ node, inline, ...props }: any) => (
-          <code {...props} className={inline ? 'bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded text-sm' : ''} />
-        ),
-        // Custom styling for tables
-        table: ({ node, ...props }: any) => (
-          <table {...props} className="border-collapse border border-gray-300 dark:border-gray-600 w-full" />
-        ),
-        th: ({ node, ...props }: any) => (
-          <th
-            {...props}
-            className="border border-gray-300 dark:border-gray-600 px-3 py-2 bg-gray-50 dark:bg-gray-700 font-semibold"
-          />
-        ),
-        td: ({ node, ...props }: any) => (
-          <td {...props} className="border border-gray-300 dark:border-gray-600 px-3 py-2" />
-        ),
-        // Custom styling for blockquotes
-        blockquote: ({ node, ...props }: any) => (
-          <blockquote {...props} className="border-l-4 border-blue-500 pl-4 italic text-gray-600 dark:text-gray-400" />
-        ),
-        // Custom styling for headings
-        h1: ({ node, ...props }: any) => <h1 {...props} className="text-2xl font-bold mb-2" />,
-        h2: ({ node, ...props }: any) => <h2 {...props} className="text-xl font-bold mb-2" />,
-        h3: ({ node, ...props }: any) => <h3 {...props} className="text-lg font-bold mb-2" />,
-        // Custom styling for lists
-        ul: ({ node, ...props }: any) => <ul {...props} className="list-disc list-inside space-y-1" />,
-        ol: ({ node, ...props }: any) => <ol {...props} className="list-decimal list-inside space-y-1" />,
-        // Custom styling for links
-        a: ({ node, ...props }: any) => (
-          <a
-            {...props}
-            className="text-blue-600 dark:text-blue-400 hover:underline"
-            target="_blank"
-            rel="noopener noreferrer"
-          />
-        ),
-      }}
-    >
-      {content}
-    </ReactMarkdown>
-  );
-};
-
-export const MarkdownRenderer = ({ content, className = '' }: MarkdownRendererProps) => {
-  // Check if we're in a browser environment
-  const isBrowser = typeof window !== 'undefined';
-
-  // If not in browser environment, use fallback
-  if (!isBrowser) {
-    return <MarkdownFallback content={content} className={className} />;
-  }
-
-  // In browser environment, use Suspense with lazy loading
-  return (
-    <div className={`prose prose-sm max-w-none dark:prose-invert ${className}`}>
-      <Suspense fallback={<MarkdownLoader />}>
-        <FullMarkdownRenderer content={content} className={className} />
-      </Suspense>
-    </div>
   );
 };
 
