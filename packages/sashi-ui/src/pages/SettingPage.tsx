@@ -15,6 +15,8 @@ export const SettingPage = () => {
   const hubUrl = useAppStore((state) => state.hubUrl);
   const setApiUrl = useAppStore((state) => state.setAPIUrl);
   const setHubUrl = useAppStore((state) => state.setHubUrl);
+  const setConnectedToGithub = useAppStore((state) => state.setConnectedToGithub);
+  const setGithubConfig = useAppStore((state) => state.setGithubConfig);
 
   // Regular settings
   const [tempHubUrl, setTempHubUrl] = useState(hubUrl);
@@ -24,6 +26,7 @@ export const SettingPage = () => {
   const [githubToken, setGithubToken] = useState('');
   const [githubOwner, setGithubOwner] = useState('');
   const [githubRepo, setGithubRepo] = useState('');
+  const [githubTokenLastFour, setGithubTokenLastFour] = useState(''); // Store last 4 chars for display
   const [isValidatingGithub, setIsValidatingGithub] = useState(false);
   const [githubValidationError, setGithubValidationError] = useState('');
   const [githubValidationSuccess, setGithubValidationSuccess] = useState(false);
@@ -52,6 +55,12 @@ export const SettingPage = () => {
           setGithubRepo(config.repo || '');
           setGithubToken(''); // Don't load token for security
           setGithubValidationSuccess(true);
+
+          // Update global store to reflect existing GitHub connection in Layout
+          if (config.token && config.owner && config.repo) {
+            setConnectedToGithub(true);
+            setGithubConfig(config);
+          }
         } else if (response.status !== 404) {
           console.error('Failed to load GitHub config:', response.statusText);
         }
@@ -120,7 +129,19 @@ export const SettingPage = () => {
           if (hubResponse.ok) {
             console.log('GitHub config saved via middleware successfully');
             setGithubValidationSuccess(true);
+            setGithubTokenLastFour(githubToken.slice(-4)); // Store last 4 chars for display
             setGithubToken(''); // Clear token from UI for security
+
+            // Update global store to reflect GitHub connection in Layout
+            setConnectedToGithub(true);
+            setGithubConfig({
+              token: githubToken,
+              owner: githubOwner,
+              repo: githubRepo,
+              repoName: repoData.name,
+              defaultBranch: repoData.default_branch,
+            });
+
             toast({
               title: 'GitHub connected successfully',
               description: `Connected to ${repoData.full_name} and saved to hub`,
@@ -165,8 +186,13 @@ export const SettingPage = () => {
       setGithubToken('');
       setGithubOwner('');
       setGithubRepo('');
+      setGithubTokenLastFour('');
       setGithubValidationSuccess(false);
       setGithubValidationError('');
+
+      // Update global store to reflect GitHub disconnection in Layout
+      setConnectedToGithub(false);
+      setGithubConfig(undefined);
 
       toast({
         title: 'GitHub disconnected',
@@ -283,70 +309,62 @@ export const SettingPage = () => {
                   </ol>
                 </div>
 
-                {/* GitHub Configuration Form */}
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="githubtoken">
-                      Personal Access Token
-                      <span className="text-red-500 ml-1">*</span>
-                    </Label>
-                    <Input
-                      id="githubtoken"
-                      type="password"
-                      placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
-                      value={githubToken}
-                      onChange={(e) => setGithubToken(e.target.value)}
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
+                {/* GitHub Configuration - Show different UI based on connection status */}
+                {!githubValidationSuccess ? (
+                  /* Configuration Form - Only show when not connected */
+                  <div className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="githubowner">
-                        Repository Owner
+                      <Label htmlFor="githubtoken">
+                        Personal Access Token
                         <span className="text-red-500 ml-1">*</span>
                       </Label>
                       <Input
-                        id="githubowner"
-                        placeholder="username or organization"
-                        value={githubOwner}
-                        onChange={(e) => setGithubOwner(e.target.value)}
+                        id="githubtoken"
+                        type="password"
+                        placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                        value={githubToken}
+                        onChange={(e) => setGithubToken(e.target.value)}
                       />
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="githubrepo">
-                        Repository Name
-                        <span className="text-red-500 ml-1">*</span>
-                      </Label>
-                      <Input
-                        id="githubrepo"
-                        placeholder="repository-name"
-                        value={githubRepo}
-                        onChange={(e) => setGithubRepo(e.target.value)}
-                      />
-                    </div>
-                  </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="githubowner">
+                          Repository Owner
+                          <span className="text-red-500 ml-1">*</span>
+                        </Label>
+                        <Input
+                          id="githubowner"
+                          placeholder="username or organization"
+                          value={githubOwner}
+                          onChange={(e) => setGithubOwner(e.target.value)}
+                        />
+                      </div>
 
-                  {/* Validation Messages */}
-                  {githubValidationError && (
-                    <div className="flex items-center gap-2 p-3 border border-red-200 bg-red-50 text-red-800 rounded-md">
-                      <AlertCircle className="h-4 w-4" />
-                      <span className="text-sm">{githubValidationError}</span>
+                      <div className="space-y-2">
+                        <Label htmlFor="githubrepo">
+                          Repository Name
+                          <span className="text-red-500 ml-1">*</span>
+                        </Label>
+                        <Input
+                          id="githubrepo"
+                          placeholder="repository-name"
+                          value={githubRepo}
+                          onChange={(e) => setGithubRepo(e.target.value)}
+                        />
+                      </div>
                     </div>
-                  )}
 
-                  {githubValidationSuccess && (
-                    <div className="flex items-center gap-2 p-3 border border-green-200 bg-green-50 text-green-800 rounded-md">
-                      <CheckCircle2 className="h-4 w-4" />
-                      <span className="text-sm">
-                        GitHub repository connected successfully! You can now ask the AI to make code changes.
-                      </span>
-                    </div>
-                  )}
+                    {/* Validation Messages */}
+                    {githubValidationError && (
+                      <div className="flex items-center gap-2 p-3 border border-red-200 bg-red-50 text-red-800 rounded-md">
+                        <AlertCircle className="h-4 w-4" />
+                        <span className="text-sm">{githubValidationError}</span>
+                      </div>
+                    )}
 
-                  {/* Action Buttons */}
-                  <div className="flex gap-2">
-                    {!githubValidationSuccess ? (
+                    {/* Action Button for Connecting */}
+                    <div className="flex gap-2">
                       <Button
                         onClick={validateGithubConnection}
                         disabled={isValidatingGithub || !githubToken || !githubOwner || !githubRepo}
@@ -361,13 +379,67 @@ export const SettingPage = () => {
                           'Connect Repository'
                         )}
                       </Button>
-                    ) : (
+                    </div>
+                  </div>
+                ) : (
+                  /* Connected Status Display */
+                  <div className="space-y-4">
+                    {/* Success Message */}
+                    <div className="flex items-center gap-2 p-3 border border-green-200 bg-green-50 text-green-800 rounded-md">
+                      <CheckCircle2 className="h-4 w-4" />
+                      <span className="text-sm">
+                        GitHub repository connected successfully! You can now ask the AI to make code changes.
+                      </span>
+                    </div>
+
+                    {/* Connected Repository Details */}
+                    <div className="p-4 bg-gray-50 rounded-lg border">
+                      <h4 className="font-medium text-gray-900 mb-3">Connected Repository</h4>
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium text-gray-600">Repository:</span>
+                          <span className="text-sm text-gray-900 font-mono bg-white px-2 py-1 rounded border">
+                            {githubOwner}/{githubRepo}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium text-gray-600">Access Token:</span>
+                          <span className="text-sm text-gray-900 font-mono bg-white px-2 py-1 rounded border">
+                            ghp_****...****{githubTokenLastFour || 'xxxx'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium text-gray-600">Status:</span>
+                          <span className="text-sm text-green-700 flex items-center gap-1">
+                            <CheckCircle2 className="h-3 w-3" />
+                            Connected & Ready
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Action Buttons for Connected State */}
+                    <div className="flex gap-2">
                       <Button onClick={disconnectGithub} variant="outline" className="flex-1">
                         Disconnect GitHub
                       </Button>
-                    )}
+                      <Button
+                        onClick={() => {
+                          setGithubValidationSuccess(false);
+                          setGithubToken('');
+                          setGithubTokenLastFour('');
+                          // Reset global store state to show disconnected in Layout
+                          setConnectedToGithub(false);
+                          setGithubConfig(undefined);
+                        }}
+                        variant="ghost"
+                        size="sm"
+                      >
+                        Reconfigure
+                      </Button>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Usage Guide */}
                 {githubValidationSuccess && (
