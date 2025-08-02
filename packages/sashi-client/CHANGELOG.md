@@ -1,5 +1,11 @@
 # @sashi/client
 
+## 8.4.0
+
+### Minor Changes
+
+- c7e9fa2: better display of github condition and markdown text display
+
 ## 8.3.0
 
 ### Minor Changes
