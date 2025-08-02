@@ -8,6 +8,8 @@ interface MessageState {
   messages: MessageItem[];
   metadata: Metadata;
   connectedToHub: boolean;
+  connectedToGithub: boolean;
+  githubConfig?: GitHubConfig;
   apiUrl?: string;
   sessionToken?: string;
   apiToken?: string;
@@ -20,21 +22,35 @@ interface MessageState {
   addMessage: (newmessage: MessageItem) => void;
   setMetadata: (metadata: Metadata) => void;
   setConnectedToHub: (connected: boolean) => void;
+  setConnectedToGithub: (connected: boolean) => void;
+  setGithubConfig: (config?: GitHubConfig) => void;
   clearMessages: () => void;
   subscribedRepos: RepoMetadata[];
   setSubscribedRepos: (repos: RepoMetadata[]) => void;
   setRehydrated: () => void;
 }
 
+interface GitHubConfig {
+  token: string;
+  owner: string;
+  repo: string;
+  repoName?: string;
+  defaultBranch?: string;
+}
+
 const useAppStore = create<MessageState>()(
   persist(
     (set, get) => ({
       connectedToHub: false,
+      connectedToGithub: false,
+      githubConfig: undefined,
       apiUrl: undefined,
       sessionToken: undefined,
       apiToken: undefined,
       hubUrl: undefined,
       setConnectedToHub: (connected: boolean) => set({ connectedToHub: connected }),
+      setConnectedToGithub: (connected: boolean) => set({ connectedToGithub: connected }),
+      setGithubConfig: (config?: GitHubConfig) => set({ githubConfig: config }),
       setHubUrl: (hubUrl: string) => set({ hubUrl: ensureUrlProtocol(hubUrl) }),
       subscribedRepos: [],
       setSubscribedRepos: (repos: RepoMetadata[]) => set({ subscribedRepos: repos }),

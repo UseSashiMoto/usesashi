@@ -7,12 +7,13 @@ import useAppStore from '../store/chat-store';
 import { detectWorkflowEntryType } from '../utils/workflowClassification';
 import { Button } from './Button';
 import { DataCardComponent } from './DataCardComponent';
+import { MarkdownRenderer } from './MarkdownRenderer';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { WorkflowUICard } from './workflows/WorkflowUICard';
 
+import { WorkflowResponse } from '@/models/payload';
 import { BotIcon, UserIcon } from './message-icons';
 import { TableComponent } from './TableComponent';
-import { WorkflowResponse } from '@/models/payload';
 
 interface VisualizationContent {
   type: string;
@@ -34,8 +35,6 @@ interface MessageProps {
   onRetry?: (originalText?: string) => void;
   isLatestMessage?: boolean; // New prop to identify if this is the latest message
 }
-
-
 
 interface MessagePart {
   type: 'text' | 'workflow';
@@ -268,24 +267,12 @@ const MessageComponent = React.memo<MessageProps>(
                 />
               );
             } else {
-              // Render text content with existing markdown processing
-              const processedContent = part.content
-                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold text
-                .replace(
-                  /```json\n([\s\S]*?)\n```/g,
-                  '<pre class="bg-gray-100 dark:bg-gray-800 p-2 rounded text-xs overflow-x-auto"><code>$1</code></pre>'
-                ) // JSON code blocks
-                .replace(
-                  /```([\s\S]*?)```/g,
-                  '<pre class="bg-gray-100 dark:bg-gray-800 p-2 rounded text-xs overflow-x-auto"><code>$1</code></pre>'
-                ) // Regular code blocks
-                .replace(/\n/g, '<br>'); // Line breaks
-
+              // Render text content with proper markdown processing
               return (
-                <div
+                <MarkdownRenderer
                   key={`${messageId}_text_${index}`}
-                  className={`${isError ? 'text-red-600 dark:text-red-400' : ''}`}
-                  dangerouslySetInnerHTML={{ __html: processedContent }}
+                  content={part.content}
+                  className={isError ? 'text-red-600 dark:text-red-400' : ''}
                 />
               );
             }
