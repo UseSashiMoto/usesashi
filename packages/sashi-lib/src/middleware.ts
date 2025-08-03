@@ -1220,6 +1220,14 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
     router.post('/workflow/execute', sessionValidation, async (req, res) => {
         const { workflow: _workflow, debug = false } = req.body;
+        // Debug audit logging configuration
+        if (debug) {
+            console.log('Audit logging configuration:', {
+                HUB_URL: hubUrl ? `${hubUrl.substring(0, 20)}...` : 'NOT SET',
+                apiSecretKey: apiSecretKey ? 'SET' : 'NOT SET',
+                auditingEnabled: !!(hubUrl && apiSecretKey)
+            });
+        }
         const workflow: WorkflowResponse = _workflow as WorkflowResponse;
         const startTime = new Date();
         const sessionId = req.headers[HEADER_SESSION_TOKEN] as string;
@@ -1257,17 +1265,32 @@ export const createMiddleware = (options: MiddlewareOptions) => {
             auditLog.duration = auditLog.endTime.getTime() - startTime.getTime();
 
             // Try to send audit log to hub
-            try {
-                await fetch(`${process.env.HUB_URL}/audit/workflow`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        [HEADER_API_TOKEN]: apiSecretKey ? apiSecretKey : ''
-                    },
-                    body: JSON.stringify(auditLog)
-                });
-            } catch (hubError) {
-                console.error('Failed to send audit log to hub:', hubError);
+            if (hubUrl && apiSecretKey) {
+                try {
+                    const response = await fetch(`${hubUrl}/audit/workflow`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            [HEADER_API_TOKEN]: apiSecretKey
+                        },
+                        body: JSON.stringify(auditLog)
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+
+                    if (debug) {
+                        console.log('Audit log successfully saved:', auditLog.workflowId);
+                    }
+                } catch (hubError) {
+                    console.error('Failed to send audit log to hub:', hubError);
+                    // Cancel execution if audit log fails to save when both HUB_URL and apiSecretKey exist
+                    return res.status(500).json({
+                        error: 'Execution cancelled: Failed to save audit log',
+                        details: 'Audit logging is required but could not be completed'
+                    });
+                }
             }
 
             return res.status(400).json(error);
@@ -1399,17 +1422,38 @@ export const createMiddleware = (options: MiddlewareOptions) => {
             auditLog.duration = auditLog.endTime.getTime() - startTime.getTime();
 
             // Try to send audit log to hub
-            try {
-                await fetch(`${process.env.HUB_URL}/audit/workflow`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        [HEADER_API_TOKEN]: apiSecretKey ? apiSecretKey : ''
-                    },
-                    body: JSON.stringify(auditLog)
-                });
-            } catch (hubError) {
-                console.error('Failed to send audit log to hub:', hubError);
+            if (hubUrl && apiSecretKey) {
+                try {
+                    const response = await fetch(`${hubUrl}/audit/workflow`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            [HEADER_API_TOKEN]: apiSecretKey
+                        },
+                        body: JSON.stringify(auditLog)
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+
+                    if (debug) {
+                        console.log('Audit log successfully saved:', auditLog.workflowId);
+                    }
+                } catch (hubError) {
+                    console.error('Failed to send audit log to hub:', {
+                        error: hubError,
+                        hubUrl: hubUrl,
+                        hasApiSecret: !!apiSecretKey,
+                        auditLogId: auditLog.workflowId
+                    });
+                    // Cancel execution if audit log fails to save when both HUB_URL and apiSecretKey exist
+                    return res.status(500).json({
+                        error: 'Execution cancelled: Failed to save audit log',
+                        details: 'Audit logging is required but could not be completed',
+                        debugInfo: hubError instanceof Error ? hubError.message : 'Unknown error'
+                    });
+                }
             }
 
             res.json(createWorkflowExecutionSuccess(results, errors.length > 0 ? errors : undefined));
@@ -1429,17 +1473,38 @@ export const createMiddleware = (options: MiddlewareOptions) => {
             auditLog.duration = auditLog.endTime.getTime() - startTime.getTime();
 
             // Try to send audit log to hub
-            try {
-                await fetch(`${process.env.HUB_URL}/audit/workflow`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        [HEADER_API_TOKEN]: apiSecretKey ? apiSecretKey : ''
-                    },
-                    body: JSON.stringify(auditLog)
-                });
-            } catch (hubError) {
-                console.error('Failed to send audit log to hub:', hubError);
+            if (hubUrl && apiSecretKey) {
+                try {
+                    const response = await fetch(`${hubUrl}/audit/workflow`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            [HEADER_API_TOKEN]: apiSecretKey
+                        },
+                        body: JSON.stringify(auditLog)
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+
+                    if (debug) {
+                        console.log('Audit log successfully saved:', auditLog.workflowId);
+                    }
+                } catch (hubError) {
+                    console.error('Failed to send audit log to hub:', {
+                        error: hubError,
+                        hubUrl: hubUrl,
+                        hasApiSecret: !!apiSecretKey,
+                        auditLogId: auditLog.workflowId
+                    });
+                    // Cancel execution if audit log fails to save when both HUB_URL and apiSecretKey exist
+                    return res.status(500).json({
+                        error: 'Execution cancelled: Failed to save audit log',
+                        details: 'Audit logging is required but could not be completed',
+                        debugInfo: hubError instanceof Error ? hubError.message : 'Unknown error'
+                    });
+                }
             }
 
             res.status(500).json(
