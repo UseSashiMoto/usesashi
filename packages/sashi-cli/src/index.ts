@@ -37,10 +37,10 @@ program
     .option('--hub-url <url>', 'Sashi Hub URL (optional)')
     .action(initCommand);
 
-// Add command - add specific Sashi features
+// Add command - add Sashi middleware
 program
-    .command('add <feature>')
-    .description('Add specific Sashi features (middleware, ui, functions, workflows)')
+    .command('add')
+    .description('Add Sashi middleware to your project')
     .option('-y, --yes', 'Skip prompts and use defaults', false)
     .action(addCommand);
 
