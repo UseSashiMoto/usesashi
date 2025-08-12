@@ -8,11 +8,11 @@ Imagine a world where managing your application is as easy as having a conversat
 
 ## ✨ Why You'll Love Sashi
 
--   **🤖 AI-Powered Chat**: Execute admin tasks with simple, natural language commands.
--   **🔗 Seamless Integration**: Effortlessly connect with Sashi-labeled functions in your backend.
--   **💬 User-Friendly**: No need for complex commands—just speak your mind!
--   **🔒 Secure and Reliable**: Built-in support for sensitive function confirmation.
--   **⚡ Real-Time Updates**: Get instant feedback and results.
+- **🤖 AI-Powered Chat**: Execute admin tasks with simple, natural language commands.
+- **🔗 Seamless Integration**: Effortlessly connect with Sashi-labeled functions in your backend.
+- **💬 User-Friendly**: No need for complex commands—just speak your mind!
+- **🔒 Secure and Reliable**: Built-in support for sensitive function confirmation.
+- **⚡ Real-Time Updates**: Get instant feedback and results.
 
 ## 🛠️ Setting Up Your Magical Portal
 
@@ -21,28 +21,87 @@ Sashi is served directly from the Sashi middleware. Here's how to set it up:
 1. **Prepare Your Backend**: Use `@sashimo/lib` to set up the Sashi middleware.
 
 ```typescript
-import express from 'express';
-import { createMiddleware } from '@sashimo/lib';
+import express from "express"
+import { createMiddleware } from "@sashimo/lib"
 
-const app = express();
+const app = express()
 
-app.use('/sashi', createMiddleware({
-  openAIKey: process.env.OPENAI_API_KEY || "",
-  // Other configuration options
-}));
+app.use(
+    "/sashi",
+    createMiddleware({
+        openAIKey: process.env.OPENAI_API_KEY || "",
+        apiSecretKey: process.env.SASHI_API_SECRET_KEY || "",
+        hubUrl: "https://hub.usesashi.com", // Optional: Connect to Sashi Hub
+        // Other configuration options
+    })
+)
 ```
 
 2. **Access the Admin Chat**: Open your browser and navigate to the path where you've mounted the middleware, followed by `/bot`. For example:
-
     - `http://yourwebsite.com/sashi/bot`
 
 3. **Customize Your Path**: Use the `sashiServerUrl` option to set a custom route.
 
 ```typescript
-app.use('/control-panel', createMiddleware({
-  sashiServerUrl: 'http://yourwebsite.com/control-panel',
-  // other options...
-}));
+app.use(
+    "/control-panel",
+    createMiddleware({
+        sashiServerUrl: "http://yourwebsite.com/control-panel",
+        apiSecretKey: process.env.SASHI_API_SECRET_KEY || "",
+        hubUrl: "https://hub.usesashi.com", // Optional: Connect to Sashi Hub
+        // other options...
+    })
+)
+```
+
+## 🪄 Sashi CLI - Your Installation Wizard
+
+The Sashi CLI makes setting up and managing your Sashi installation a breeze! Here are the magical commands at your disposal:
+
+### Quick Setup Commands
+
+```bash
+# Setup Sashi in an existing project
+sashi setup
+
+# Create a new project with Sashi pre-configured
+sashi init my-awesome-project
+
+# Add Sashi middleware to your project
+sashi add
+
+# Update Sashi packages to latest version
+sashi update
+
+# Check your Sashi setup and configuration
+sashi check
+```
+
+### Framework Support
+
+The CLI automatically detects your project type and provides the perfect setup:
+
+- **Next.js**: Full-stack admin capabilities
+- **Node.js/Express**: Backend admin functions
+- **TypeScript**: Enhanced type safety and IntelliSense
+
+### CLI Options
+
+```bash
+# Setup with specific framework
+sashi setup --framework nextjs
+
+# Use TypeScript setup
+sashi setup --typescript
+
+# Skip prompts and use defaults
+sashi setup --yes
+
+# Provide API key directly
+sashi setup --api-key your-openai-key
+
+# Provide Sashi Hub URL
+sashi setup --hub-url https://hub.usesashi.com
 ```
 
 ## 🏷️ Labeling and Registering Functions
@@ -53,124 +112,133 @@ Before diving into the magic, label and register your functions:
 
 ```typescript
 import {
-  AIArray,
-  AIFunction,
-  AIObject,
-  registerFunctionIntoAI
-} from "@sashimo/lib";
+    AIArray,
+    AIFunction,
+    AIObject,
+    registerFunctionIntoAI,
+} from "@sashimo/lib"
 
-const UserObject = new AIObject("User", "a user in the system", true)
-  .field({
+const UserObject = new AIObject("User", "a user in the system", true).field({
     name: "email",
     description: "the email of the user",
     type: "string",
-    required: true
-  });
+    required: true,
+})
 
 const GetUserByIdFunction = new AIFunction("get_user_by_id", "get a user by id")
-  .args({
-    name: "userId",
-    description: "a user's id",
-    type: "number",
-    required: true
-  })
-  .returns(UserObject)
-  .implement(async (userId: number) => {
-    const user = await getUserById(userId);
-    return user;
-  });
+    .args({
+        name: "userId",
+        description: "a user's id",
+        type: "number",
+        required: true,
+    })
+    .returns(UserObject)
+    .implement(async (userId: number) => {
+        const user = await getUserById(userId)
+        return user
+    })
 
-registerFunctionIntoAI("get_user_by_id", GetUserByIdFunction);
+registerFunctionIntoAI("get_user_by_id", GetUserByIdFunction)
 ```
 
 ### Advanced Example: Handling Multiple Objects
 
 ```typescript
-const ProductObject = new AIObject("Product", "a product in the inventory", true)
-  .field({
-    name: "productId",
-    description: "the unique identifier for a product",
-    type: "number",
-    required: true
-  })
-  .field({
-    name: "productName",
-    description: "the name of the product",
-    type: "string",
-    required: true
-  });
+const ProductObject = new AIObject(
+    "Product",
+    "a product in the inventory",
+    true
+)
+    .field({
+        name: "productId",
+        description: "the unique identifier for a product",
+        type: "number",
+        required: true,
+    })
+    .field({
+        name: "productName",
+        description: "the name of the product",
+        type: "string",
+        required: true,
+    })
 
-const GetProductsFunction = new AIFunction("get_products", "retrieve a list of products")
-  .returns(new AIArray(ProductObject))
-  .implement(async () => {
-    const products = await getAllProducts();
-    return products;
-  });
+const GetProductsFunction = new AIFunction(
+    "get_products",
+    "retrieve a list of products"
+)
+    .returns(new AIArray(ProductObject))
+    .implement(async () => {
+        const products = await getAllProducts()
+        return products
+    })
 
-registerFunctionIntoAI("get_products", GetProductsFunction);
+registerFunctionIntoAI("get_products", GetProductsFunction)
 ```
 
 ### Example: Using AIArray for Complex Returns
 
 ```typescript
 const OrderObject = new AIObject("Order", "an order placed by a user", true)
-  .field({
-    name: "orderId",
-    description: "the unique identifier for an order",
-    type: "number",
-    required: true
-  })
-  .field({
-    name: "orderDate",
-    description: "the date when the order was placed",
-    type: "string",
-    required: true
-  });
+    .field({
+        name: "orderId",
+        description: "the unique identifier for an order",
+        type: "number",
+        required: true,
+    })
+    .field({
+        name: "orderDate",
+        description: "the date when the order was placed",
+        type: "string",
+        required: true,
+    })
 
-const GetUserOrdersFunction = new AIFunction("get_user_orders", "get all orders for a user")
-  .args({
-    name: "userId",
-    description: "a user's id",
-    type: "number",
-    required: true
-  })
-  .returns(new AIArray(OrderObject))
-  .implement(async (userId: number) => {
-    const orders = await getOrdersByUserId(userId);
-    return orders;
-  });
+const GetUserOrdersFunction = new AIFunction(
+    "get_user_orders",
+    "get all orders for a user"
+)
+    .args({
+        name: "userId",
+        description: "a user's id",
+        type: "number",
+        required: true,
+    })
+    .returns(new AIArray(OrderObject))
+    .implement(async (userId: number) => {
+        const orders = await getOrdersByUserId(userId)
+        return orders
+    })
 
-registerFunctionIntoAI("get_user_orders", GetUserOrdersFunction);
+registerFunctionIntoAI("get_user_orders", GetUserOrdersFunction)
 ```
 
 ## 🛡️ Security Spells
 
 Protect your magical realm with robust security:
 
--   **Custom Middleware**: Validate session tokens before reaching Sashi.
--   **Session Management**: Use the `getSession` function to manage sessions securely.
+- **Custom Middleware**: Validate session tokens before reaching Sashi.
+- **Session Management**: Use the `getSession` function to manage sessions securely.
 
 ```typescript
-import { Request, Response, NextFunction } from 'express';
-import { createMiddleware } from '@sashimo/lib';
+import { Request, Response, NextFunction } from "express"
+import { createMiddleware } from "@sashimo/lib"
 
 const verifySessionMiddleware = async (
     req: Request,
     res: Response,
     next: NextFunction
 ) => {
-    const sessionToken = req.headers["x-sashi-session-token"];
+    const sessionToken = req.headers["x-sashi-session-token"]
 
     if (!sessionToken) {
-        return res.status(401).send("Unauthorized");
+        return res.status(401).send("Unauthorized")
     }
 
     if (sessionToken !== "userone-session-token") {
-        return res.status(401).send("Unauthorized");
+        return res.status(401).send("Unauthorized")
     }
 
-    next();
-};
+    next()
+}
 
 app.use(
     "/sashi",
@@ -178,10 +246,10 @@ app.use(
     createMiddleware({
         openAIKey: process.env.OPENAI_API_KEY || "",
         getSession: async (req, res) => {
-            return "userone-session-token";
-        }
+            return "userone-session-token"
+        },
     })
-);
+)
 ```
 
 ## 📚 Dive Deeper into the Magic
@@ -215,10 +283,10 @@ graph TD
     B --> C[Users Create Workflows]
     C --> D[Workflows Executed When Needed]
     D --> E[Results Displayed to User]
-    
+
     A1[Developer] --> A
     C1[End User] --> C
-    
+
     style A fill:#a4c2f4
     style B fill:#b6d7a8
     style C fill:#f9d77e
@@ -235,10 +303,10 @@ Your registered functions become building blocks that users can connect together
 graph LR
     A[Function: Get Users] --> B[Function: Filter Active Users]
     B --> C[Function: Send Notification]
-    
+
     A1[Output: User List] --> B1[Input: Users]
     B2[Output: Filtered Users] --> C1[Input: Recipients]
-    
+
     style A,B,C fill:#a4c2f4
     style A1,B1,B2,C1 fill:#d5a6bd
 ```
@@ -253,7 +321,7 @@ sequenceDiagram
     participant Sashi as Sashi System
     participant User as User
     participant Ext as External Services
-    
+
     Dev->>Sashi: Register functions
     User->>Sashi: Create workflows using functions
     User->>Sashi: Execute workflow
