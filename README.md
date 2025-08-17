@@ -254,7 +254,7 @@ app.use(
 
 ## 📚 Dive Deeper into the Magic
 
-For more spells and incantations, visit our [Sashi documentation](https://docs.sashi.ai).
+For more spells and incantations, visit our Sashi documentation (coming soon.).
 
 ## 🤝 Join the Sashi Fellowship
 
@@ -277,22 +277,6 @@ Once you register your functions with Sashi, they automatically become available
 3. **Save and reuse workflows** for common tasks
 4. **Execute workflows** with a single click instead of multiple manual steps
 
-### 🔗 Function Integration in Workflows
-
-Your registered functions become building blocks that users can connect together:
-
-```mermaid
-graph LR
-    A[Function: Get Users] --> B[Function: Filter Active Users]
-    B --> C[Function: Send Notification]
-
-    A1[Output: User List] --> B1[Input: Users]
-    B2[Output: Filtered Users] --> C1[Input: Recipients]
-
-    style A,B,C fill:#a4c2f4
-    style A1,B1,B2,C1 fill:#d5a6bd
-```
-
 ### 🌐 Data Flow Between Systems
 
 The workflow system handles all the data flow between your registered functions and external systems without you needing to implement any additional code:
@@ -300,7 +284,7 @@ The workflow system handles all the data flow between your registered functions 
 ```mermaid
 sequenceDiagram
     participant Dev as Developer
-    participant Sashi as Sashi System
+    participant Sashi as Sashi System/Your Backend
     participant User as User
     participant Ext as External Services
 
