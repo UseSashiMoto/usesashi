@@ -3,7 +3,8 @@
     "name": "usesashi_app",
     "workspaces": [
         "apps/*",
-        "packages/*"
+        "packages/*",
+        "examples/*"
     ],
     "scripts": {
         "build": "turbo build",
