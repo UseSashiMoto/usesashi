@@ -54,6 +54,39 @@ app.use(
 )
 ```
 
+## 🚀 Quick Start - Try Sashi Now!
+
+Deploy a complete Sashi integration example with one click:
+
+### 🌟 Live Demo & Integration Example
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FUseSashiMoto%2Fusesashi%2Ftree%2Fmain%2Fexamples%2Fsashi-integration-test&env=OPENAI_API_KEY&envDescription=Required%20environment%20variables%20for%20Sashi%20integration&envLink=https%3A%2F%2Fgithub.com%2FUseSashiMoto%2Fusesashi%2Fblob%2Fmain%2Fexamples%2Fsashi-integration-test%2F.env.example)
+
+A comprehensive Express.js server showcasing all Sashi features with extensive AI functions.
+
+**✨ What's Included:**
+- 🤖 **AI Admin Panel** - Natural language interface at `/sashi/bot`
+- 👥 **User Management** - Complete CRUD operations
+- 📧 **Email Services** - Templates, sending, analytics
+- 📊 **Analytics** - Event tracking, metrics, conversion funnels
+- 💳 **Payment Processing** - Transactions, subscriptions, refunds
+- 📁 **File Operations** - Upload, storage, metadata, search
+- 📝 **Content Management** - Articles, publishing, SEO
+- 🔐 **Authentication Examples** - Session tokens, security patterns
+
+**🚀 Deployment Requirements:**
+- Only requires an **OpenAI API key** to get started
+- Deploys in under 2 minutes
+- No database setup needed (uses in-memory data for demo)
+
+**📚 Perfect For:**
+- Testing Sashi capabilities
+- Learning integration patterns  
+- Backend API development
+- Comprehensive feature exploration
+
+[📖 View Full Documentation →](./examples/sashi-integration-test/README.md)
+
 ## 🪄 Sashi CLI - Your Installation Wizard
 
 The Sashi CLI makes setting up and managing your Sashi installation a breeze! Here are the magical commands at your disposal:
