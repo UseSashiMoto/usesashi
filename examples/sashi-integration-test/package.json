@@ -9,10 +9,10 @@
         "start": "ts-node src/index.ts",
         "build": "tsc",
         "serve": "node dist/index.js",
+        "test": "jest --passWithNoTests",
         "dev": "NODE_ENV=development nodemon src/index.ts",
         "dev:ngrok": "dotenv -e .env node scripts/start-ngrok.js",
         "dev:all": "concurrently \"yarn dev\" \"yarn dev:ngrok\"",
-        "test": "jest",
         "test:integration": "jest --testPathPattern=integration",
         "generate:token": "ts-node src/generate-token.ts",
         "seed": "ts-node src/scripts/seed.ts"

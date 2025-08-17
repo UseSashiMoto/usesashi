@@ -625,16 +625,16 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
   };
 
   // Render form fields based on type
-  const renderFormField = (field: WorkflowUIComponent | any) => {
+  const renderFormField = (field: WorkflowUIComponent) => {
     // Handle new UI format with inputComponents
     const fieldType = field.type;
-    const fieldKey = field.key;
+    const fieldKey: string | undefined = field?.key;
     const fieldLabel = field.label;
     const fieldRequired = field.required || false;
     const fieldEnumValues = field.enumValues || [];
 
     // Extract the form data key from userInput.* format
-    const formDataKey = fieldKey.startsWith('userInput.') ? fieldKey.substring('userInput.'.length) : fieldKey;
+    const formDataKey = fieldKey?.startsWith('userInput.') ? fieldKey?.substring('userInput.'.length) : fieldKey;
     const fieldValue = formData[formDataKey] || '';
 
     switch (fieldType) {
