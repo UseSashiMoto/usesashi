@@ -11,7 +11,6 @@ Imagine a world where managing your application is as easy as having a conversat
 - **🤖 AI-Powered Chat**: Execute admin tasks with simple, natural language commands.
 - **🔗 Seamless Integration**: Effortlessly connect with Sashi-labeled functions in your backend.
 - **💬 User-Friendly**: No need for complex commands—just speak your mind!
-- **🔒 Secure and Reliable**: Built-in support for sensitive function confirmation.
 - **⚡ Real-Time Updates**: Get instant feedback and results.
 
 ## 🛠️ Setting Up Your Magical Portal
