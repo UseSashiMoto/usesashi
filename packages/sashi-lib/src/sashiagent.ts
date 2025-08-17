@@ -47,6 +47,15 @@ const createWorkflowPlannerAgent = () => {
             additionalProperties: true as const
         } as any,
         execute: async ({ workflow }: { workflow: WorkflowResponse }) => {
+            console.log('🔍 validate_workflow tool called with workflow:', {
+                type: workflow.type,
+                actionsCount: workflow.actions?.length || 0,
+                hasUI: !!workflow.ui,
+                inputComponents: workflow.ui?.inputComponents?.length || 0,
+                outputComponents: workflow.ui?.outputComponents?.length || 0,
+                timestamp: new Date().toISOString()
+            });
+            
             const verification = verifyWorkflow(workflow);
 
             // Additional validation for UI components
@@ -82,29 +91,35 @@ const createWorkflowPlannerAgent = () => {
 
             // Validate inputComponents schema structure
             if (workflow.ui && workflow.ui.inputComponents) {
+                console.log('🔍 Validating inputComponents:', workflow.ui.inputComponents);
                 workflow.ui.inputComponents.forEach((component: any, index: number) => {
                     const componentPrefix = `inputComponent[${index}]`;
+                    console.log(`🔍 Validating ${componentPrefix}:`, component);
+                    
+                    // Check for incorrect schema usage (component + props instead of key + label + type)
+                    if (component.component && component.props) {
+                        console.log(`❌ ${componentPrefix}: Found incorrect schema with component/props`);
+                        uiValidation.valid = false;
+                        uiValidation.errors.push(`${componentPrefix}: Using incorrect schema - use {key, label, type} instead of {component, props}`);
+                    }
                     
                     // Check required fields for inputComponents
                     if (!component.key || typeof component.key !== 'string') {
+                        console.log(`❌ ${componentPrefix}: Missing or invalid key field`);
                         uiValidation.valid = false;
                         uiValidation.errors.push(`${componentPrefix}: Missing or invalid 'key' field (required string)`);
                     }
                     
                     if (!component.label || typeof component.label !== 'string') {
+                        console.log(`❌ ${componentPrefix}: Missing or invalid label field`);
                         uiValidation.valid = false;
                         uiValidation.errors.push(`${componentPrefix}: Missing or invalid 'label' field (required string)`);
                     }
                     
                     if (!component.type || typeof component.type !== 'string') {
+                        console.log(`❌ ${componentPrefix}: Missing or invalid type field`);
                         uiValidation.valid = false;
                         uiValidation.errors.push(`${componentPrefix}: Missing or invalid 'type' field (required string)`);
-                    }
-                    
-                    // Check for incorrect schema usage (component + props instead of key + label + type)
-                    if (component.component && component.props) {
-                        uiValidation.valid = false;
-                        uiValidation.errors.push(`${componentPrefix}: Using incorrect schema - use {key, label, type} instead of {component, props}`);
                     }
                 });
             }
@@ -156,11 +171,27 @@ const createWorkflowPlannerAgent = () => {
                 });
             }
 
-            return {
+            const finalResult = {
                 valid: verification.valid && uiValidation.valid,
                 errors: [...verification.errors, ...uiValidation.errors],
                 workflow: workflow
             };
+            
+            console.log('🔍 Validation result:', {
+                verificationValid: verification.valid,
+                uiValidationValid: uiValidation.valid,
+                finalValid: finalResult.valid,
+                totalErrors: finalResult.errors.length,
+                errors: finalResult.errors
+            });
+            
+            // If validation fails, throw an error to prevent workflow from being used
+            if (!finalResult.valid) {
+                console.error('❌ WORKFLOW VALIDATION FAILED - Workflow should be rejected:', finalResult.errors);
+                throw new Error(`Workflow validation failed: ${finalResult.errors.join('; ')}`);
+            }
+            
+            return finalResult;
         }
     });
 

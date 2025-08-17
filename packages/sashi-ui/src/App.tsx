@@ -158,7 +158,6 @@ export const App = ({ apiUrl: oldApiUrl, sessionToken: initialSessionToken, base
   }, []);
 
   if (!ready) {
-    console.log('not ready', ready);
     return null;
   }
 

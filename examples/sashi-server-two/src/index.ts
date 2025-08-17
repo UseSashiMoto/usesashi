@@ -1,8 +1,11 @@
 import { createMiddleware } from "@sashimo/lib"
 import express from "express"
 import { Express } from "express-serve-static-core"
+import "./services/analytics_service"
+import "./services/content_service"
 import "./services/email_service"
 import "./services/file_service"
+import "./services/payment_service"
 import "./services/user_service"
 
 require("dotenv").config()
