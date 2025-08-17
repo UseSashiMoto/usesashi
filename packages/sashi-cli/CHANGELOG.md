@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.4.0
+
+### Minor Changes
+
+- d70f22d: bugfixes
+
 ## 3.3.0
 
 ### Minor Changes
