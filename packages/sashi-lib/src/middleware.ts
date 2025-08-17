@@ -183,6 +183,82 @@ const checkHubConnection = async (hubUrl: string, apiSecretKey?: string): Promis
     }
 };
 
+// Hub connection cache class
+class HubConnectionCache {
+    private isConnected: boolean = false;
+    private lastChecked: number = 0;
+    private checkInterval: number = 30000; // 30 seconds
+    private hubUrl: string;
+    private apiSecretKey?: string;
+    private isChecking: boolean = false;
+
+    constructor(hubUrl: string, apiSecretKey?: string) {
+        this.hubUrl = hubUrl;
+        this.apiSecretKey = apiSecretKey;
+    }
+
+    // Check if we have a valid cached connection
+    async isHubConnected(): Promise<boolean> {
+        const now = Date.now();
+
+        // If we have a recent check and it was successful, return cached result
+        if (this.isConnected && (now - this.lastChecked) < this.checkInterval) {
+            return true;
+        }
+
+        // If we're already checking, wait for that check to complete
+        if (this.isChecking) {
+            return new Promise((resolve) => {
+                const checkInterval = setInterval(() => {
+                    if (!this.isChecking) {
+                        clearInterval(checkInterval);
+                        resolve(this.isConnected);
+                    }
+                }, 100);
+            });
+        }
+
+        // Perform the connection check
+        return this.refreshConnection();
+    }
+
+    // Force refresh the connection status
+    async refreshConnection(): Promise<boolean> {
+        if (!this.hubUrl || !this.apiSecretKey) {
+            this.isConnected = false;
+            return false;
+        }
+
+        this.isChecking = true;
+        try {
+            this.isConnected = await checkHubConnection(this.hubUrl, this.apiSecretKey);
+            this.lastChecked = Date.now();
+        } catch (error) {
+            this.isConnected = false;
+        } finally {
+            this.isChecking = false;
+        }
+
+        return this.isConnected;
+    }
+
+    // Mark connection as failed (called when requests fail)
+    markConnectionFailed(): void {
+        this.isConnected = false;
+        this.lastChecked = 0; // Force next check
+    }
+
+    // Get connection info for debugging
+    getConnectionInfo() {
+        return {
+            isConnected: this.isConnected,
+            lastChecked: new Date(this.lastChecked).toISOString(),
+            hasCredentials: !!(this.hubUrl && this.apiSecretKey),
+            hubUrl: this.hubUrl
+        };
+    }
+}
+
 const printStatus = (message: string, status: boolean | 'loading' = true) => {
     let statusText;
     if (status === 'loading') {
@@ -212,6 +288,38 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     // Ensure URLs have proper protocols
     const sashiServerUrl = rawSashiServerUrl ? ensureUrlProtocol(rawSashiServerUrl) : undefined;
     const hubUrl = ensureUrlProtocol(rawHubUrl);
+
+    // Initialize hub connection cache
+    const hubConnectionCache = new HubConnectionCache(hubUrl, apiSecretKey);
+
+    // Helper function to send audit logs to hub
+    const sendAuditLogToHub = async (auditLog: any): Promise<boolean> => {
+        const isConnected = await hubConnectionCache.isHubConnected();
+        if (!isConnected) {
+            return false;
+        }
+
+        try {
+            const response = await fetch(`${hubUrl}/audit/workflow`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    [HEADER_API_TOKEN]: apiSecretKey!
+                },
+                body: JSON.stringify(auditLog)
+            });
+
+            if (!response.ok) {
+                hubConnectionCache.markConnectionFailed();
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            return true;
+        } catch (error) {
+            hubConnectionCache.markConnectionFailed();
+            throw error;
+        }
+    };
 
     const router = Router();
 
@@ -362,12 +470,13 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
     router.get('/check_hub_connection', async (_req, res) => {
         try {
-            const connectedData = await fetch(`${hubUrl}/ping`, {
-                headers: apiSecretKey ? {
-                    [HEADER_API_TOKEN]: apiSecretKey,
-                } : undefined,
+            // Force refresh the connection and return the result
+            const connected = await hubConnectionCache.refreshConnection();
+            const connectionInfo = hubConnectionCache.getConnectionInfo();
+            res.json({
+                connected,
+                connectionInfo: debug ? connectionInfo : undefined
             });
-            res.json({ connected: connectedData.status === 200 });
         } catch (error) {
             res.json({ connected: false });
         }
@@ -399,20 +508,24 @@ export const createMiddleware = (options: MiddlewareOptions) => {
             }
         }
 
-        // Check if hub configuration is available
-        if (!hubUrl || !apiSecretKey) {
-            console.error('Hub configuration missing:', { hubUrl: !!hubUrl, apiSecretKey: !!apiSecretKey });
+        // Check if hub connection is available using cache
+        const isHubConnected = await hubConnectionCache.isHubConnected();
+        if (!isHubConnected) {
+            const connectionInfo = hubConnectionCache.getConnectionInfo();
+            console.error('Hub connection not available:', connectionInfo);
             return res.status(500).json({
-                error: 'Hub server not configured',
-                details: 'Missing hub URL or API secret key. Please check your server configuration.',
-                code: 'HUB_CONFIG_MISSING'
+                error: 'Hub server not available',
+                details: !connectionInfo.hasCredentials
+                    ? 'Missing hub URL or API secret key. Please check your server configuration.'
+                    : 'Unable to connect to hub server. Please check your network connection and hub server status.',
+                code: !connectionInfo.hasCredentials ? 'HUB_CONFIG_MISSING' : 'HUB_CONNECTION_FAILED'
             });
         }
 
         try {
             const headers: Record<string, string> = {
                 'Content-Type': 'application/json',
-                [HEADER_API_TOKEN]: apiSecretKey,
+                [HEADER_API_TOKEN]: apiSecretKey!,
             };
 
             // Add session ID if available
@@ -490,6 +603,9 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
         } catch (error: any) {
             console.error(`Error forwarding workflow request to hub (${hubPath}):`, error);
+
+            // Mark connection as failed in cache
+            hubConnectionCache.markConnectionFailed();
 
             // Categorize different types of errors
             let errorMessage = 'Hub connection failed';
@@ -1222,10 +1338,12 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         const { workflow: _workflow, debug = false } = req.body;
         // Debug audit logging configuration
         if (debug) {
+            const connectionInfo = hubConnectionCache.getConnectionInfo();
             console.log('Audit logging configuration:', {
                 HUB_URL: hubUrl ? `${hubUrl.substring(0, 20)}...` : 'NOT SET',
                 apiSecretKey: apiSecretKey ? 'SET' : 'NOT SET',
-                auditingEnabled: !!(hubUrl && apiSecretKey)
+                auditingEnabled: connectionInfo.hasCredentials,
+                connectionStatus: connectionInfo
             });
         }
         const workflow: WorkflowResponse = _workflow as WorkflowResponse;
@@ -1265,27 +1383,16 @@ export const createMiddleware = (options: MiddlewareOptions) => {
             auditLog.duration = auditLog.endTime.getTime() - startTime.getTime();
 
             // Try to send audit log to hub
-            if (hubUrl && apiSecretKey) {
-                try {
-                    const response = await fetch(`${hubUrl}/audit/workflow`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            [HEADER_API_TOKEN]: apiSecretKey
-                        },
-                        body: JSON.stringify(auditLog)
-                    });
-
-                    if (!response.ok) {
-                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                    }
-
-                    if (debug) {
-                        console.log('Audit log successfully saved:', auditLog.workflowId);
-                    }
-                } catch (hubError) {
-                    console.error('Failed to send audit log to hub:', hubError);
-                    // Cancel execution if audit log fails to save when both HUB_URL and apiSecretKey exist
+            try {
+                const auditSent = await sendAuditLogToHub(auditLog);
+                if (auditSent && debug) {
+                    console.log('Audit log successfully saved:', auditLog.workflowId);
+                }
+            } catch (hubError) {
+                console.error('Failed to send audit log to hub:', hubError);
+                // Cancel execution if audit log fails to save when hub connection is configured
+                const connectionInfo = hubConnectionCache.getConnectionInfo();
+                if (connectionInfo.hasCredentials) {
                     return res.status(500).json({
                         error: 'Execution cancelled: Failed to save audit log',
                         details: 'Audit logging is required but could not be completed'
@@ -1422,32 +1529,21 @@ export const createMiddleware = (options: MiddlewareOptions) => {
             auditLog.duration = auditLog.endTime.getTime() - startTime.getTime();
 
             // Try to send audit log to hub
-            if (hubUrl && apiSecretKey) {
-                try {
-                    const response = await fetch(`${hubUrl}/audit/workflow`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            [HEADER_API_TOKEN]: apiSecretKey
-                        },
-                        body: JSON.stringify(auditLog)
-                    });
-
-                    if (!response.ok) {
-                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                    }
-
-                    if (debug) {
-                        console.log('Audit log successfully saved:', auditLog.workflowId);
-                    }
-                } catch (hubError) {
-                    console.error('Failed to send audit log to hub:', {
-                        error: hubError,
-                        hubUrl: hubUrl,
-                        hasApiSecret: !!apiSecretKey,
-                        auditLogId: auditLog.workflowId
-                    });
-                    // Cancel execution if audit log fails to save when both HUB_URL and apiSecretKey exist
+            try {
+                const auditSent = await sendAuditLogToHub(auditLog);
+                if (auditSent && debug) {
+                    console.log('Audit log successfully saved:', auditLog.workflowId);
+                }
+            } catch (hubError) {
+                console.error('Failed to send audit log to hub:', {
+                    error: hubError,
+                    hubUrl: hubUrl,
+                    hasApiSecret: !!apiSecretKey,
+                    auditLogId: auditLog.workflowId
+                });
+                // Cancel execution if audit log fails to save when hub connection is configured
+                const connectionInfo = hubConnectionCache.getConnectionInfo();
+                if (connectionInfo.hasCredentials) {
                     return res.status(500).json({
                         error: 'Execution cancelled: Failed to save audit log',
                         details: 'Audit logging is required but could not be completed',
@@ -1473,32 +1569,21 @@ export const createMiddleware = (options: MiddlewareOptions) => {
             auditLog.duration = auditLog.endTime.getTime() - startTime.getTime();
 
             // Try to send audit log to hub
-            if (hubUrl && apiSecretKey) {
-                try {
-                    const response = await fetch(`${hubUrl}/audit/workflow`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            [HEADER_API_TOKEN]: apiSecretKey
-                        },
-                        body: JSON.stringify(auditLog)
-                    });
-
-                    if (!response.ok) {
-                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                    }
-
-                    if (debug) {
-                        console.log('Audit log successfully saved:', auditLog.workflowId);
-                    }
-                } catch (hubError) {
-                    console.error('Failed to send audit log to hub:', {
-                        error: hubError,
-                        hubUrl: hubUrl,
-                        hasApiSecret: !!apiSecretKey,
-                        auditLogId: auditLog.workflowId
-                    });
-                    // Cancel execution if audit log fails to save when both HUB_URL and apiSecretKey exist
+            try {
+                const auditSent = await sendAuditLogToHub(auditLog);
+                if (auditSent && debug) {
+                    console.log('Audit log successfully saved:', auditLog.workflowId);
+                }
+            } catch (hubError) {
+                console.error('Failed to send audit log to hub:', {
+                    error: hubError,
+                    hubUrl: hubUrl,
+                    hasApiSecret: !!apiSecretKey,
+                    auditLogId: auditLog.workflowId
+                });
+                // Cancel execution if audit log fails to save when hub connection is configured
+                const connectionInfo = hubConnectionCache.getConnectionInfo();
+                if (connectionInfo.hasCredentials) {
                     return res.status(500).json({
                         error: 'Execution cancelled: Failed to save audit log',
                         details: 'Audit logging is required but could not be completed',

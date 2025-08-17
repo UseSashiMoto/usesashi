@@ -430,29 +430,34 @@ export function getGitHubAPIService(): GitHubAPIService | null {
 
 
 export async function getGithubConfig(config?: { hubUrl?: string, apiSecretKey?: string }): Promise<GitHubConfig | undefined> {
-    if (!config || !config.hubUrl || !config.apiSecretKey) {
+    try {
+        if (!config || !config.hubUrl || !config.apiSecretKey) {
+            return undefined;
+        }
+
+        const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+            [HEADER_API_TOKEN]: config?.apiSecretKey,
+        };
+
+        // Prepare the request options
+        const fetchOptions: RequestInit = {
+            method: "GET",
+            headers,
+            // Add timeout to prevent hanging requests
+            signal: AbortSignal.timeout(30000), // 30 second timeout
+        };
+
+        const hubResponse = await fetch(`${config.hubUrl}/github/config`, fetchOptions);
+
+        if (!hubResponse.ok) {
+            return undefined;
+        }
+
+        const githubConfig = await hubResponse.json();
+        return githubConfig;
+    } catch (error) {
+        console.error('no GitHub config found:', error);
         return undefined;
     }
-
-    const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        [HEADER_API_TOKEN]: config?.apiSecretKey,
-    };
-
-    // Prepare the request options
-    const fetchOptions: RequestInit = {
-        method: "GET",
-        headers,
-        // Add timeout to prevent hanging requests
-        signal: AbortSignal.timeout(30000), // 30 second timeout
-    };
-
-    const hubResponse = await fetch(`${config.hubUrl}/github/config`, fetchOptions);
-
-    if (!hubResponse.ok) {
-        return undefined;
-    }
-
-    const githubConfig = await hubResponse.json();
-    return githubConfig;
 }

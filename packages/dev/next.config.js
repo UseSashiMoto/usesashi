@@ -1,9 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  experimental: {
-    transpilePackages: ['sashi-ui'],
-  },
+  transpilePackages: ['sashi-ui', 'sashi-lib', '@sashimo/ui', '@sashimo/lib'],
+
+
   webpack: (config) => {
     config.node = {
       ...config.node,
