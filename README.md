@@ -11,7 +11,6 @@ Imagine a world where managing your application is as easy as having a conversat
 - **🤖 AI-Powered Chat**: Execute admin tasks with simple, natural language commands.
 - **🔗 Seamless Integration**: Effortlessly connect with Sashi-labeled functions in your backend.
 - **💬 User-Friendly**: No need for complex commands—just speak your mind!
-- **🔒 Secure and Reliable**: Built-in support for sensitive function confirmation.
 - **⚡ Real-Time Updates**: Get instant feedback and results.
 
 ## 🛠️ Setting Up Your Magical Portal
@@ -254,7 +253,7 @@ app.use(
 
 ## 📚 Dive Deeper into the Magic
 
-For more spells and incantations, visit our [Sashi documentation](https://docs.sashi.ai).
+For more spells and incantations, visit our Sashi documentation (coming soon.).
 
 ## 🤝 Join the Sashi Fellowship
 
@@ -277,40 +276,6 @@ Once you register your functions with Sashi, they automatically become available
 3. **Save and reuse workflows** for common tasks
 4. **Execute workflows** with a single click instead of multiple manual steps
 
-```mermaid
-graph TD
-    A[Register Functions] --> B[Functions Available in Workflow System]
-    B --> C[Users Create Workflows]
-    C --> D[Workflows Executed When Needed]
-    D --> E[Results Displayed to User]
-
-    A1[Developer] --> A
-    C1[End User] --> C
-
-    style A fill:#a4c2f4
-    style B fill:#b6d7a8
-    style C fill:#f9d77e
-    style D fill:#d5a6bd
-    style E fill:#ea9999
-    style A1,C1 fill:#d9d9d9
-```
-
-### 🔗 Function Integration in Workflows
-
-Your registered functions become building blocks that users can connect together:
-
-```mermaid
-graph LR
-    A[Function: Get Users] --> B[Function: Filter Active Users]
-    B --> C[Function: Send Notification]
-
-    A1[Output: User List] --> B1[Input: Users]
-    B2[Output: Filtered Users] --> C1[Input: Recipients]
-
-    style A,B,C fill:#a4c2f4
-    style A1,B1,B2,C1 fill:#d5a6bd
-```
-
 ### 🌐 Data Flow Between Systems
 
 The workflow system handles all the data flow between your registered functions and external systems without you needing to implement any additional code:
@@ -318,7 +283,7 @@ The workflow system handles all the data flow between your registered functions 
 ```mermaid
 sequenceDiagram
     participant Dev as Developer
-    participant Sashi as Sashi System
+    participant Sashi as Sashi System/Your Backend
     participant User as User
     participant Ext as External Services
 
@@ -343,7 +308,41 @@ The workflow storage, execution, and visualization are all handled automatically
 
 For more information on how users can use the workflows you enable, direct them to our [Workflow Documentation](https://docs.sashi.ai/workflows).
 
----
+## 🚀 Quick Start - Try Sashi Now!
+
+Deploy a complete Sashi integration example with one click:
+
+### 🌟 Live Demo & Integration Example
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FUseSashiMoto%2Fusesashi%2Ftree%2Fmain%2Fexamples%2Fsashi-integration-test&env=OPENAI_API_KEY&envDescription=Required%20environment%20variables%20for%20Sashi%20integration&envLink=https%3A%2F%2Fgithub.com%2FUseSashiMoto%2Fusesashi%2Fblob%2Fmain%2Fexamples%2Fsashi-integration-test%2F.env.example)
+
+A comprehensive Express.js server showcasing all Sashi features with extensive AI functions.
+
+**✨ What's Included:**
+
+- 🤖 **AI Admin Panel** - Natural language interface at `/sashi/bot`
+- 👥 **User Management** - Complete CRUD operations
+- 📧 **Email Services** - Templates, sending, analytics
+- 📊 **Analytics** - Event tracking, metrics, conversion funnels
+- 💳 **Payment Processing** - Transactions, subscriptions, refunds
+- 📁 **File Operations** - Upload, storage, metadata, search
+- 📝 **Content Management** - Articles, publishing, SEO
+- 🔐 **Authentication Examples** - Session tokens, security patterns
+
+**🚀 Deployment Requirements:**
+
+- Only requires an **OpenAI API key** to get started
+- Deploys in under 2 minutes
+- No database setup needed (uses in-memory data for demo)
+
+**📚 Perfect For:**
+
+- Testing Sashi capabilities
+- Learning integration patterns
+- Backend API development
+- Comprehensive feature exploration
+
+## [📖 View Full Documentation →](./examples/sashi-integration-test/README.md)
 
 <p align="center" style="color: rgb(12, 80, 255);">
   Crafted with 💖 by the Sashimotors
