@@ -373,11 +373,15 @@ export class AIFunction {
         | z.ZodEnum<[string, ...string[]]>
         | z.ZodArray<z.ZodTypeAny>
         | z.ZodNull
-        | z.ZodAny => {
+        | z.ZodAny
+        | z.ZodOptional<any> => {
+        
+        let schema: any;
+        
         if (param instanceof AIArray) {
-            return z.array(this.validateAIField(param.getItemType()));
+            schema = z.array(this.validateAIField(param.getItemType()));
         } else if (param instanceof AIObject) {
-            return z.any();
+            schema = z.any();
         } else if (param instanceof AIFieldEnum) {
             // Handle enum fields
             const values = param.getValues();
@@ -387,31 +391,54 @@ export class AIFunction {
             // Ensure we have at least one value plus rest spread
             // Explicitly type check the array to ensure it meets Zod's requirements
             const enumValues = values as [string, ...string[]];
-            return z.enum(enumValues);
+            schema = z.enum(enumValues);
         } else {
             switch (param.type) {
                 case 'string':
-                    return z.string();
+                    schema = z.string();
+                    break;
                 case 'number':
-                    return z.number();
+                    schema = z.number();
+                    break;
                 case 'boolean':
-                    return z.boolean();
+                    schema = z.boolean();
+                    break;
                 case 'array':
-                    return z.array(z.any()); // Adjust based on the specific type of array elements
+                    schema = z.array(z.any()); // Adjust based on the specific type of array elements
+                    break;
                 case 'object':
-                    return z.any();
+                    schema = z.any();
+                    break;
                 case 'enum':
                     const enumValues = (param as AIEnum).values;
                     if (!enumValues?.length) {
                         throw new Error('Enum must have at least one value');
                     }
                     // Explicitly type check the array to ensure it meets Zod's requirements
-                    return z.enum(enumValues as [string, ...string[]]);
+                    schema = z.enum(enumValues as [string, ...string[]]);
+                    break;
                 default:
-                    return z.null();
+                    schema = z.null();
             }
         }
+
+        // Make the schema optional if the parameter is not required
+        const isRequired = this.getParameterRequired(param);
+        return isRequired ? schema : z.optional(schema);
     };
+
+    // Helper method to determine if a parameter is required
+    private getParameterRequired(param: AIField<any> | AIObject | AIArray | AIFieldEnum): boolean {
+        if (param instanceof AIArray) {
+            return param.getRequired();
+        } else if (param instanceof AIObject) {
+            return param.getRequired();
+        } else if (param instanceof AIFieldEnum) {
+            return param.getRequired();
+        } else {
+            return param.required ?? true; // Default to required if not specified
+        }
+    }
 
     description() {
         return {
@@ -447,18 +474,9 @@ export class AIFunction {
                             };
                         }
                     }, {}),
+                    // Only include actually required parameters
                     required: this._params
-                        .filter((param) => {
-                            if (param instanceof AIArray) {
-                                return param.getRequired();
-                            } else if (param instanceof AIObject) {
-                                return param.getRequired();
-                            } else if (param instanceof AIFieldEnum) {
-                                return param.getRequired();
-                            } else {
-                                return param.required;
-                            }
-                        })
+                        .filter((param) => this.getParameterRequired(param))
                         .map((param) => {
                             if (param instanceof AIArray) {
                                 return param.getName();
@@ -514,47 +532,80 @@ export class AIFunction {
 
     async execute(...args: any[]) {
         try {
+            // Handle the case where fewer arguments are provided than parameters
+            // Fill missing optional parameters with undefined
+            const paddedArgs = [...args];
+            while (paddedArgs.length < this._params.length) {
+                const param = this._params[paddedArgs.length];
+                if (param && !this.getParameterRequired(param)) {
+                    paddedArgs.push(undefined);
+                } else {
+                    break; // Stop if we encounter a required parameter
+                }
+            }
+
+            // Create validation schema for provided arguments only
+            const paramSchemas = this._params.slice(0, paddedArgs.length).map(this.validateAIField);
+            
+            if (paramSchemas.length === 0) {
+                // No parameters expected or provided
+                const result = await this._implementation();
+                if (this._returnType) {
+                    const returnTypeSchema = this.validateAIField(this._returnType);
+                    return returnTypeSchema.parse(result);
+                }
+                return result;
+            }
+
             // Coerce args to expected types before validation
-            const coercedArgs = args.map((arg, index) => {
+            const coercedArgs = paddedArgs.slice(0, paramSchemas.length).map((arg, index) => {
                 const expectedType = this._params[index];
                 if (!expectedType) {
-                    return arg; // Return original value if no type information is available
+                    return arg;
                 }
                 return this.coerceToType(arg, this.validateAIField(expectedType));
             });
 
+            // Validate arguments
             const parsedArgs = z
-                .tuple(
-                    this._params.map(this.validateAIField) as [
-                        z.ZodTypeAny,
-                        ...z.ZodTypeAny[],
-                    ]
-                )
+                .tuple(paramSchemas as [z.ZodTypeAny, ...z.ZodTypeAny[]])
                 .parse(coercedArgs);
 
-            const result = await this._implementation(...parsedArgs);
+            // Filter out undefined optional parameters when calling the implementation
+            const filteredArgs = parsedArgs.filter((arg, index) => {
+                if (arg === undefined) {
+                    const param = this._params[index];
+                    return param && this.getParameterRequired(param);
+                }
+                return true;
+            });
+
+            const result = await this._implementation(...filteredArgs);
             if (this._returnType) {
-                const returnTypeSchema = this.validateAIField(
-                    this._returnType
-                );
+                const returnTypeSchema = this.validateAIField(this._returnType);
                 return returnTypeSchema.parse(result);
             }
             return result;
 
         } catch (e) {
             if (e instanceof z.ZodError) {
-                // Format the error message for the user
+                // Enhanced error formatting
                 const errorDetails = e.errors
                     .map((error) => {
-                        const path = error.path.join(' > ');
-                        return `Field "${path}": ${error.message}`;
+                        const path = error.path.join(' > ') || error.path[0]?.toString() || 'unknown';
+                        const paramIndex = parseInt(path);
+                        const param = this._params[paramIndex];
+                        const paramName = param instanceof AIArray ? param.getName() :
+                                         param instanceof AIObject ? param.getName() :
+                                         param instanceof AIFieldEnum ? param.getName() :
+                                         param?.name || path;
+                        return `Field "${paramName}": ${error.message}`;
                     })
                     .join('\n');
 
-                // Return a simple, formatted message for LLM output
                 return `There was an issue with the parameters you provided for the function "${this._name}":\n${errorDetails}\nPlease check your input and try again.`;
             } else {
-                // Handle any other errors
+                console.error(`Error in function ${this._name}:`, e);
                 return `An unexpected error occurred while calling the function "${this._name}". Please try again.`;
             }
         }

@@ -80,22 +80,80 @@ const createWorkflowPlannerAgent = () => {
                 }
             }
 
+            // Validate inputComponents schema structure
+            if (workflow.ui && workflow.ui.inputComponents) {
+                workflow.ui.inputComponents.forEach((component: any, index: number) => {
+                    const componentPrefix = `inputComponent[${index}]`;
+                    
+                    // Check required fields for inputComponents
+                    if (!component.key || typeof component.key !== 'string') {
+                        uiValidation.valid = false;
+                        uiValidation.errors.push(`${componentPrefix}: Missing or invalid 'key' field (required string)`);
+                    }
+                    
+                    if (!component.label || typeof component.label !== 'string') {
+                        uiValidation.valid = false;
+                        uiValidation.errors.push(`${componentPrefix}: Missing or invalid 'label' field (required string)`);
+                    }
+                    
+                    if (!component.type || typeof component.type !== 'string') {
+                        uiValidation.valid = false;
+                        uiValidation.errors.push(`${componentPrefix}: Missing or invalid 'type' field (required string)`);
+                    }
+                    
+                    // Check for incorrect schema usage (component + props instead of key + label + type)
+                    if (component.component && component.props) {
+                        uiValidation.valid = false;
+                        uiValidation.errors.push(`${componentPrefix}: Using incorrect schema - use {key, label, type} instead of {component, props}`);
+                    }
+                });
+            }
+
             // Check if UI components exist for each userInput parameter
             if (userInputParams.size > 0) {
                 if (!workflow.ui || !workflow.ui.inputComponents) {
                     uiValidation.valid = false;
                     uiValidation.errors.push('Workflow has userInput parameters but no UI inputComponents defined');
                 } else {
-                    const componentIds = new Set(workflow.ui.inputComponents.map((c: any) => c.key));
+                    const componentIds = new Set(workflow.ui.inputComponents.map((c: any) => c.key).filter(Boolean));
                     for (const param of userInputParams) {
                         if (!componentIds.has(param)) {
                             uiValidation.valid = false;
                             uiValidation.errors.push(`Missing UI component for parameter: ${param}`);
                         }
                     }
-
-
                 }
+            }
+
+            // Validate outputComponents schema structure  
+            if (workflow.ui && workflow.ui.outputComponents) {
+                workflow.ui.outputComponents.forEach((component: any, index: number) => {
+                    const componentPrefix = `outputComponent[${index}]`;
+                    
+                    if (!component.actionId || typeof component.actionId !== 'string') {
+                        uiValidation.valid = false;
+                        uiValidation.errors.push(`${componentPrefix}: Missing or invalid 'actionId' field (required string)`);
+                    }
+                    
+                    if (!component.component || typeof component.component !== 'string') {
+                        uiValidation.valid = false;
+                        uiValidation.errors.push(`${componentPrefix}: Missing or invalid 'component' field (required string)`);
+                    }
+                    
+                    if (!component.props || typeof component.props !== 'object') {
+                        uiValidation.valid = false;
+                        uiValidation.errors.push(`${componentPrefix}: Missing or invalid 'props' field (required object)`);
+                    }
+                    
+                    // Check that actionId references a valid action
+                    if (component.actionId && workflow.actions) {
+                        const actionExists = workflow.actions.some((action: any) => action.id === component.actionId);
+                        if (!actionExists) {
+                            uiValidation.valid = false;
+                            uiValidation.errors.push(`${componentPrefix}: actionId '${component.actionId}' does not match any action in the workflow`);
+                        }
+                    }
+                });
             }
 
             return {

@@ -153,14 +153,7 @@ export type WorkflowEntryType = 'form' | 'button' | 'auto_update' | 'label';
 
 // Type-specific payloads
 export interface FormPayload {
-  fields: {
-    key: string;
-    label?: string;
-    type?: 'string' | 'number' | 'boolean' | 'date' | 'enum' | 'csv';
-    required?: boolean;
-    enumValues?: string[]; // Available options for enum type
-    expectedColumns?: string[]; // For CSV fields
-  }[];
+  fields: WorkflowUIComponent[];
 }
 
 export interface AutoUpdatePayload {
