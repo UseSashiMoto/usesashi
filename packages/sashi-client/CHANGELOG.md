@@ -1,5 +1,11 @@
 # @sashi/client
 
+## 8.5.0
+
+### Minor Changes
+
+- d70f22d: bugfixes
+
 ## 8.4.0
 
 ### Minor Changes
