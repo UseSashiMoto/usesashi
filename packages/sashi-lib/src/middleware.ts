@@ -1334,6 +1334,114 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     }));
 
 
+    // Runtime workflow validation endpoint
+    router.post('/workflow/validate', sessionValidation, async (req, res) => {
+        try {
+            const { workflow } = req.body;
+
+            if (!workflow) {
+                return res.status(400).json({
+                    valid: false,
+                    errors: ['No workflow provided'],
+                    suggestions: ['Please provide a workflow object in the request body']
+                });
+            }
+
+            // Import verification utility
+            const { verifyWorkflow } = await import('./utils/verifyWorkflow');
+            const validationResult = verifyWorkflow(workflow);
+
+            // Enhanced validation with AI-powered suggestions
+            const suggestions: string[] = [];
+            const fixes: { type: string; description: string; solutions: { title: string; description: string; example: string }[] | { title: string; description: string; action: string }[] | { title: string; description: string; example: string }[] }[] = [];
+
+            validationResult.errors.forEach(error => {
+                if (error.includes('userInput.')) {
+                    suggestions.push('🔧 Fix userInput parameters by using Solution 1 (empty parameters with parameterMetadata) or Solution 2 (${parameterName} syntax)');
+                    fixes.push({
+                        type: 'parameter_resolution',
+                        description: 'Unresolved userInput parameters detected',
+                        solutions: [
+                            {
+                                title: 'Auto-Generated Form (Recommended)',
+                                description: 'Leave parameters empty and use parameterMetadata',
+                                example: '{"parameters": {}, "parameterMetadata": {"userId": {"type": "number", "required": true}}}'
+                            },
+                            {
+                                title: 'Direct Parameter References',
+                                description: 'Use ${parameterName} syntax with UI components',
+                                example: '{"parameters": {"userId": "${userId}"}, "ui": {"inputComponents": [...]}}'
+                            }
+                        ]
+                    });
+                }
+
+                if (error.includes('Unknown tool')) {
+                    const toolMatch = error.match(/Unknown tool "([^"]+)"/);
+                    if (toolMatch) {
+                        const invalidTool = toolMatch[1];
+                        suggestions.push(`❌ Tool "${invalidTool}" not found. Check available tools at /api/functions`);
+                        fixes.push({
+                            type: 'invalid_tool',
+                            description: `Tool "${invalidTool}" is not registered`,
+                            solutions: [
+                                {
+                                    title: 'Check Available Tools',
+                                    description: 'Use GET /api/functions to see all available tools',
+                                    action: 'fetch_available_tools'
+                                }
+                            ]
+                        });
+                    }
+                }
+
+                if (error.includes('Missing required parameter')) {
+                    const paramMatch = error.match(/Missing required parameter "([^"]+)" for tool "([^"]+)"/);
+                    if (paramMatch) {
+                        const [, param, tool] = paramMatch;
+                        suggestions.push(`📝 Add required parameter "${param}" for tool "${tool}"`);
+                        fixes.push({
+                            type: 'missing_parameter',
+                            description: `Required parameter "${param}" missing`,
+                            solutions: [
+                                {
+                                    title: 'Add Parameter to Metadata',
+                                    description: `Add "${param}" to parameterMetadata with proper type`,
+                                    example: `"parameterMetadata": {"${param}": {"type": "string|number|boolean", "required": true}}`
+                                }
+                            ]
+                        });
+                    }
+                }
+            });
+
+            // Get available functions for context
+            const registry = getFunctionRegistry();
+            const availableTools = Array.from(registry.keys());
+
+            res.json({
+                valid: validationResult.valid,
+                errors: validationResult.errors,
+                suggestions: suggestions.length > 0 ? suggestions : ['✅ Workflow structure looks good!'],
+                fixes: fixes,
+                context: {
+                    availableTools: availableTools.slice(0, 10), // Show first 10
+                    totalToolsAvailable: availableTools.length,
+                    validationTimestamp: new Date().toISOString()
+                }
+            });
+
+        } catch (error) {
+            console.error('Workflow validation error:', error);
+            res.status(500).json({
+                valid: false,
+                errors: ['Internal validation error'],
+                suggestions: ['Please check the workflow format and try again'],
+                details: error instanceof Error ? error.message : 'Unknown error'
+            });
+        }
+    });
+
     router.post('/workflow/execute', sessionValidation, async (req, res) => {
         const { workflow: _workflow, debug = false } = req.body;
         // Debug audit logging configuration

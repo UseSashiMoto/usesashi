@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sashi Firebase Functions Example</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+        .function-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .function-button {
+            padding: 1rem;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: #f8f9fa;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .function-button:hover {
+            background: #e9ecef;
+        }
+        .function-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .response-area {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            min-height: 200px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            overflow-y: auto;
+            max-height: 400px;
+        }
+        .method-selector {
+            margin: 1rem 0;
+        }
+        .method-selector label {
+            margin-right: 1rem;
+        }
+        .loading {
+            color: #666;
+            font-style: italic;
+        }
+        .error {
+            color: #dc3545;
+        }
+        .success {
+            color: #28a745;
+        }
+        .info-box {
+            background: #e3f2fd;
+            padding: 1rem;
+            border-radius: 8px;
+            border-left: 4px solid #2196f3;
+            margin: 1rem 0;
+        }
+        .warning-box {
+            background: #fff3cd;
+            padding: 1rem;
+            border-radius: 8px;
+            border-left: 4px solid #ffc107;
+            margin: 1rem 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔥 Sashi Firebase Functions Example</h1>
+        <p>This example demonstrates @sashimo/lib integration with Firebase Functions using both HTTP and Callable functions.</p>
+        
+        <div class="warning-box">
+            <strong>⚠️ Setup Required:</strong> Make sure you have configured your Firebase project and deployed the functions. Update the project ID and region in the JavaScript section below.
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>Configuration</h2>
+        <div>
+            <label for="projectId">Firebase Project ID:</label>
+            <input type="text" id="projectId" placeholder="your-firebase-project" style="margin: 0 1rem; padding: 0.5rem;">
+        </div>
+        <div style="margin-top: 1rem;">
+            <label for="region">Region:</label>
+            <input type="text" id="region" value="us-central1" style="margin: 0 1rem; padding: 0.5rem;">
+        </div>
+        
+        <div class="method-selector">
+            <h3>Function Type:</h3>
+            <label>
+                <input type="radio" name="functionType" value="http" checked>
+                HTTP Functions (REST API)
+            </label>
+            <label>
+                <input type="radio" name="functionType" value="callable">
+                Callable Functions (Firebase SDK)
+            </label>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>Test Functions</h2>
+        <div class="function-grid">
+            <button class="function-button" onclick="testFunction('Get all Firebase users')">
+                Get All Users
+            </button>
+            <button class="function-button" onclick="testFunction('Get Firebase active users')">
+                Get Active Users
+            </button>
+            <button class="function-button" onclick="testFunction('Create a Firebase user named Test User with email test@firebase.com')">
+                Create User
+            </button>
+            <button class="function-button" onclick="testFunction('Get Firebase user by ID user_1')">
+                Get User by ID
+            </button>
+            <button class="function-button" onclick="testFunction('Track a page_view event for user_2')">
+                Track Event
+            </button>
+            <button class="function-button" onclick="testFunction('Get Firebase analytics dashboard')">
+                Analytics Dashboard
+            </button>
+            <button class="function-button" onclick="testFunction('Get Firebase events by type page_view')">
+                Events by Type
+            </button>
+            <button class="function-button" onclick="testFunction('Get Firebase user events for user_1')">
+                User Events
+            </button>
+            <button class="function-button" onclick="testFunction('Get Firebase conversion funnel')">
+                Conversion Funnel
+            </button>
+        </div>
+
+        <div style="margin: 2rem 0;">
+            <h3>Custom Message</h3>
+            <input type="text" id="customMessage" placeholder="Enter your message..." style="width: 70%; padding: 0.5rem; margin-right: 1rem;">
+            <button onclick="testCustomMessage()" style="padding: 0.5rem 1rem;">Send</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>Response</h2>
+        <div id="response" class="response-area">No response yet. Click a button above to test the functions.</div>
+    </div>
+
+    <div class="container">
+        <h2>Available Endpoints</h2>
+        <div class="info-box">
+            <ul>
+                <li><strong>HTTP Function:</strong> <code>https://[region]-[project].cloudfunctions.net/sashi/chat</code></li>
+                <li><strong>Callable Function:</strong> <code>sashiCall</code></li>
+                <li><strong>Hybrid Function:</strong> <code>sashiHybrid</code></li>
+                <li><strong>Health Check:</strong> <code>https://[region]-[project].cloudfunctions.net/health</code></li>
+                <li><strong>Info:</strong> <code>https://[region]-[project].cloudfunctions.net/info</code></li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js'
+        import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js'
+
+        let app, functions, sashiCall, sashiHybrid
+
+        window.initFirebase = () => {
+            const projectId = document.getElementById('projectId').value
+            const region = document.getElementById('region').value
+            
+            if (!projectId) {
+                alert('Please enter your Firebase Project ID')
+                return false
+            }
+
+            try {
+                app = initializeApp({ projectId })
+                functions = getFunctions(app, region)
+                sashiCall = httpsCallable(functions, 'sashiCall')
+                sashiHybrid = httpsCallable(functions, 'sashiHybrid')
+                
+                document.getElementById('response').textContent = 'Firebase initialized successfully!'
+                document.getElementById('response').className = 'response-area success'
+                return true
+            } catch (error) {
+                document.getElementById('response').textContent = `Error initializing Firebase: ${error.message}`
+                document.getElementById('response').className = 'response-area error'
+                return false
+            }
+        }
+
+        window.testHttpFunction = async (message) => {
+            const projectId = document.getElementById('projectId').value
+            const region = document.getElementById('region').value
+            
+            if (!projectId) {
+                alert('Please enter your Firebase Project ID')
+                return
+            }
+
+            const url = `https://${region}-${projectId}.cloudfunctions.net/sashi/chat`
+            
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-sashi-session-token': 'firebase-demo-session'
+                    },
+                    body: JSON.stringify({
+                        type: '/chat/message',
+                        inquiry: message,
+                        previous: []
+                    })
+                })
+
+                const data = await response.json()
+                
+                if (response.ok) {
+                    return data.output?.content || JSON.stringify(data, null, 2)
+                } else {
+                    throw new Error(data.error || 'Unknown error')
+                }
+            } catch (error) {
+                throw new Error(`HTTP request failed: ${error.message}`)
+            }
+        }
+
+        window.testCallableFunction = async (message) => {
+            if (!sashiCall) {
+                if (!window.initFirebase()) return
+            }
+
+            try {
+                const result = await sashiCall({
+                    action: 'chat',
+                    inquiry: message
+                })
+                
+                return result.data?.content || JSON.stringify(result.data, null, 2)
+            } catch (error) {
+                throw new Error(`Callable function failed: ${error.message}`)
+            }
+        }
+
+        window.testFunction = async (message) => {
+            const responseDiv = document.getElementById('response')
+            const functionType = document.querySelector('input[name="functionType"]:checked').value
+            
+            responseDiv.textContent = 'Loading...'
+            responseDiv.className = 'response-area loading'
+            
+            try {
+                let result
+                if (functionType === 'http') {
+                    result = await window.testHttpFunction(message)
+                } else {
+                    result = await window.testCallableFunction(message)
+                }
+                
+                responseDiv.textContent = result
+                responseDiv.className = 'response-area success'
+            } catch (error) {
+                responseDiv.textContent = error.message
+                responseDiv.className = 'response-area error'
+            }
+        }
+
+        window.testCustomMessage = () => {
+            const message = document.getElementById('customMessage').value
+            if (!message.trim()) {
+                alert('Please enter a message')
+                return
+            }
+            
+            window.testFunction(message)
+            document.getElementById('customMessage').value = ''
+        }
+
+        // Handle Enter key in custom message input
+        document.getElementById('customMessage').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                window.testCustomMessage()
+            }
+        })
+    </script>
+</body>
+</html>
