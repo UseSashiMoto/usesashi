@@ -4,15 +4,22 @@ export * from "./default-functions"
 // Legacy Express middleware (for backward compatibility)
 export * from "./middleware"
 
-// Generic HTTP abstractions (for custom integrations)
+// NEW: Web Standards Core System (recommended)
+export * from "./core"
+
+// Enhanced framework integrations using core
+export * from "./express-core"
+export * from "./nextjs-core"
+
+// Legacy: Generic HTTP abstractions (for custom integrations)
 export * from "./http/generic-middleware"
 export * from "./http/generic-router"
 export * from "./types/http"
 
-// Adapters (for custom integrations)
-export * from "./adapters/express-adapter"
+// Legacy: Adapters (for custom integrations)
+export { ExpressAdapter as LegacyExpressAdapter } from "./adapters/express-adapter"
 export * from "./adapters/firebase-adapter"
-export * from "./adapters/nextjs-adapter"
+export { NextApiAdapter as LegacyNextApiAdapter, NextAppRouterAdapter as LegacyNextAppRouterAdapter } from "./adapters/nextjs-adapter"
 
 // Framework-specific exports
 export { createExpressMiddleware, createMiddleware } from "./express"

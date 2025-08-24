@@ -1,6 +1,6 @@
 // Next.js-specific entry points
 import { NextApiAdapter, NextAppRouterAdapter } from './adapters/nextjs-adapter'
-import { createGenericMiddleware, GenericMiddlewareOptions } from './generic-middleware'
+import { createGenericMiddleware, GenericMiddlewareOptions } from './http/generic-middleware'
 
 // Re-export types that Next.js users might need
 export { HttpRequest, HttpResponse, MiddlewareHandler } from './types/http'
@@ -17,7 +17,7 @@ export const createNextApiHandler = (options: NextMiddlewareOptions) => {
   const genericRouter = createGenericMiddleware({
     ...options,
     adapter
-  }) as any
+  }) 
 
   // Return a Next.js API handler
   return async (req: any, res: any) => {
@@ -32,7 +32,7 @@ export const createNextApiHandler = (options: NextMiddlewareOptions) => {
         // Extract parameters
         httpReq.params = genericRouter.extractParams(route.path, httpReq.path)
 
-        // Execute middleware chain
+        // Execute middleware chainok
         const executeMiddleware = async (index = 0) => {
           if (index < (route.middleware?.length || 0)) {
             const middleware = route.middleware![index]
@@ -66,79 +66,98 @@ export const createNextAppHandler = (options: NextMiddlewareOptions) => {
 
   // Create handlers for each HTTP method
   const createMethodHandler = (method: string) => {
-    return async (request: Request) => {
+    return async (request: Request, context?: { params?: Record<string, string | string[]> }) => {
       try {
-        const httpReq = adapter.adaptRequest(request as any)
-        const httpRes = adapter.adaptResponse({} as any) // App Router uses different response handling
+        // Parse request body if needed
+        let body: any = undefined
+        if (['POST', 'PUT', 'PATCH'].includes(method)) {
+          const contentType = request.headers.get('content-type') || ''
+          if (contentType.includes('application/json')) {
+            try {
+              body = await request.json()
+            } catch (e) {
+              // Body might already be consumed or empty
+              body = undefined
+            }
+          } else if (contentType.includes('application/x-www-form-urlencoded')) {
+            try {
+              const text = await request.text()
+              body = Object.fromEntries(new URLSearchParams(text))
+            } catch (e) {
+              body = undefined
+            }
+          }
+        }
 
-        // Override method to match the specific handler
+        // Create a modified request with the parsed body
+        const requestWithBody = new Proxy(request, {
+          get(target, prop) {
+            if (prop === 'json') {
+              return async () => body
+            }
+            if (prop === 'body' && body !== undefined) {
+              return body
+            }
+            return (target as any)[prop]
+          }
+        })
+
+        const httpReq = adapter.adaptRequest(requestWithBody as any)
         httpReq.method = method
 
+        // Handle dynamic route parameters
+        if (context?.params) {
+          // Only assign string values, ignore string[] for compatibility
+          httpReq.params = {
+            ...httpReq.params,
+            ...Object.fromEntries(
+              Object.entries(context.params).filter(([_, v]) => typeof v === 'string')
+            )
+          }
+        }
+
+        // Extract clean path for route matching
+        const url = new URL(request.url)
+        const pathSegments = url.pathname.split('/').filter(Boolean)
+
+        // Handle catch-all routes - extract the actual path after the catch-all segment
+        if (pathSegments.length > 0) {
+          // Find the API route segment (usually ends with the catch-all folder name)
+          const apiIndex = pathSegments.findIndex(segment => segment.startsWith('api'))
+          if (apiIndex !== -1 && apiIndex < pathSegments.length - 1) {
+            // Take everything after the API route folder
+            const routeSegments = pathSegments.slice(apiIndex + 2) // Skip 'api' and route folder
+            httpReq.path = routeSegments.length > 0 ? '/' + routeSegments.join('/') : '/'
+          }
+        }
+
+        // Find matching route
         const route = genericRouter.matchRoute(method, httpReq.path)
 
         if (route) {
-          httpReq.params = genericRouter.extractParams(route.path, httpReq.path)
+          httpReq.params = { ...httpReq.params, ...genericRouter.extractParams(route.path, httpReq.path) }
 
-          let responseData: any = null
-          let statusCode = 200
-          const responseHeaders: Record<string, string> = {}
-
-          // Create a custom response handler for App Router
-          const appRouterRes = {
-            status: (code: number) => {
-              statusCode = code
-              return appRouterRes
-            },
-            json: (data: any) => {
-              responseData = data
-              responseHeaders['Content-Type'] = 'application/json'
-            },
-            send: (data: string) => {
-              responseData = data
-            },
-            setHeader: (name: string, value: string) => {
-              responseHeaders[name] = value
-            },
-            getHeader: (name: string) => responseHeaders[name],
-            redirect: (url: string) => {
-              statusCode = 302
-              responseHeaders['Location'] = url
-            },
-            type: (contentType: string) => {
-              responseHeaders['Content-Type'] = contentType
-            },
-            headersSent: false
-          }
+          // Create response handler using the adapter
+          const httpRes = adapter.adaptResponse({} as any)
 
           // Execute middleware chain
           const executeMiddleware = async (index = 0) => {
             if (index < (route.middleware?.length || 0)) {
               const middleware = route.middleware![index]
-              await middleware(httpReq, appRouterRes as any, () => executeMiddleware(index + 1))
+              await middleware(httpReq, httpRes, () => executeMiddleware(index + 1))
             } else {
-              await route.handler(httpReq, appRouterRes as any)
+              await route.handler(httpReq, httpRes)
             }
           }
 
           await executeMiddleware()
 
-          // Create Response object
-          if (responseHeaders['Location']) {
-            return new Response(null, {
-              status: statusCode,
-              headers: responseHeaders
-            })
-          } else if (responseData !== null) {
-            const body = typeof responseData === 'string'
-              ? responseData
-              : JSON.stringify(responseData)
-            return new Response(body, {
-              status: statusCode,
-              headers: responseHeaders
-            })
-          } else {
-            return new Response(null, { status: statusCode, headers: responseHeaders })
-          }
+          // The adapter's createHandler method should return the proper Response
+          const handler = adapter.createHandler(async (req, res) => {
+            await executeMiddleware()
+          })
+
+          return await handler(requestWithBody as any)
         } else {
           return new Response(
             JSON.stringify({ error: 'Not found' }),
@@ -151,7 +170,10 @@ export const createNextAppHandler = (options: NextMiddlewareOptions) => {
       } catch (error) {
         console.error('Next.js App Router handler error:', error)
         return new Response(
-          JSON.stringify({ error: 'Internal server error' }),
+          JSON.stringify({
+            error: 'Internal server error',
+            details: error instanceof Error ? error.message : 'Unknown error'
+          }),
           {
             status: 500,
             headers: { 'Content-Type': 'application/json' }
@@ -190,5 +212,5 @@ export const createSingleMethodHandler = (
   return handlers[method]
 }
 
-// Re-export utilities
-export { validateRepoRequest, validateSessionRequest } from './generic-middleware'
+// Re-export utilities from generic middleware
+export { validateRepoRequest, validateSessionRequest } from './http/generic-middleware'
