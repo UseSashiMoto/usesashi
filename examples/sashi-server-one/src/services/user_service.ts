@@ -4,8 +4,45 @@ import {
     AIObject,
     registerFunctionIntoAI
 } from "@sashimo/lib"
-import generateDB from "your-db"
-import { Data } from "your-db/lib/types"
+
+// In-memory database types and implementation
+interface Data<T> {
+    id: number
+    data: T
+}
+
+class InMemoryDB<T> {
+    private store: Map<number, Data<T>> = new Map()
+
+    constructor(initialData: Data<T>[] = []) {
+        initialData.forEach(item => {
+            this.store.set(item.id, item)
+        })
+    }
+
+    getAll(): Data<T>[] {
+        return Array.from(this.store.values())
+    }
+
+    getById(id: number): Data<T> | undefined {
+        return this.store.get(id)
+    }
+
+    add(item: Data<T>): void {
+        this.store.set(item.id, item)
+    }
+
+    update(id: number, data: T): void {
+        const existing = this.store.get(id)
+        if (existing) {
+            this.store.set(id, { id, data })
+        }
+    }
+
+    remove(id: number): boolean {
+        return this.store.delete(id)
+    }
+}
 
 export interface User {
     name: string
@@ -40,7 +77,7 @@ const data: Data<User>[] = [
         }
     }
 ]
-const myDB = generateDB<User>(data)
+const myDB = new InMemoryDB<User>(data)
 
 export const getAllUsers = async () => {
     return myDB.getAll()

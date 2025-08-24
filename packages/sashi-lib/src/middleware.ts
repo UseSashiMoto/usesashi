@@ -1443,7 +1443,18 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     });
 
     router.post('/workflow/execute', sessionValidation, async (req, res) => {
-        const { workflow: _workflow, debug = false } = req.body;
+        const { workflow: _workflow, userInput, debug = false } = req.body;
+        
+        // Debug log the incoming request structure
+        if (debug) {
+            console.log('🔍 [Workflow Execute] Request body structure:', {
+                hasWorkflow: !!_workflow,
+                hasUserInput: !!userInput,
+                userInputKeys: userInput ? Object.keys(userInput) : [],
+                workflowType: _workflow?.type,
+                actionsCount: _workflow?.actions?.length || 0
+            });
+        }
         // Debug audit logging configuration
         if (debug) {
             const connectionInfo = hubConnectionCache.getConnectionInfo();
@@ -1455,6 +1466,15 @@ export const createMiddleware = (options: MiddlewareOptions) => {
             });
         }
         const workflow: WorkflowResponse = _workflow as WorkflowResponse;
+        
+        // Store userInput data on the request object for parameter resolution
+        if (userInput) {
+            req.body.userInput = userInput;
+            if (debug) {
+                console.log('🔍 [Workflow Execute] UserInput data stored on request:', userInput);
+            }
+        }
+        
         const startTime = new Date();
         const sessionId = req.headers[HEADER_SESSION_TOKEN] as string;
         const userId = req.headers['x-user-id'] as string; // Optional, if you have user ID in headers
@@ -1538,7 +1558,28 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                     }
 
                     // Resolve parameters
-                    const processedParameters = resolveParameters(parameters, actionResults, debug);
+                    let processedParameters = resolveParameters(parameters, actionResults, debug, req);
+                    
+                    // Enhanced parameter processing: validation and type conversion
+                    try {
+                        // 1. Validate parameters first
+                        validateParameters(
+                            processedParameters,
+                            action?.parameterMetadata
+                        );
+
+                        // 2. Convert parameter types
+                        if (action?.parameterMetadata) {
+                            for (const [key, value] of Object.entries(processedParameters)) {
+                                const metadata = action.parameterMetadata[key];
+                                if (metadata) {
+                                    processedParameters[key] = convertParameter(value, metadata);
+                                }
+                            }
+                        }
+                    } catch (validationError: any) {
+                        throw new Error(createFriendlyError(validationError, toolName));
+                    }
 
                     if ((action?.map ?? false) === true) {
                         const arrayParams = Object.entries(processedParameters).find(
@@ -1574,10 +1615,15 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                         }
                     }
                 } catch (actionError) {
-                    const errorMessage = actionError instanceof Error ? actionError.message : String(actionError);
-                    console.error(`Error in action "${actionId}":`, errorMessage);
-                    errors.push({ actionId, error: errorMessage });
-                    actionResults[actionId] = { error: errorMessage, failed: true }; // Store error state
+                    // Use friendly error messages  
+                    const toolName = action?.tool.replace(/^functions\./, '') || '';
+                    const friendlyMessage = actionError instanceof Error 
+                        ? createFriendlyError(actionError, toolName)
+                        : String(actionError);
+                    
+                    console.error(`Error in action "${actionId}":`, friendlyMessage);
+                    errors.push({ actionId, error: friendlyMessage });
+                    actionResults[actionId] = { error: friendlyMessage, failed: true }; // Store error state
                 }
             }
 
@@ -1743,11 +1789,98 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     return router;
 };
 
+// Enhanced parameter processing with validation and type conversion
+function convertParameter(value: any, metadata?: any): any {
+    if (!metadata?.type) return value;
+    
+    switch (metadata.type) {
+        case 'number':
+            const num = Number(value);
+            if (isNaN(num)) throw new Error(`Cannot convert "${value}" to number`);
+            return num;
+            
+        case 'boolean':
+            if (typeof value === 'string') {
+                return value.toLowerCase() === 'true';
+            }
+            return Boolean(value);
+            
+        case 'string':
+            return String(value);
+            
+        default:
+            return value;
+    }
+}
+
+function validateParameters(params: Record<string, any>, parameterMetadata?: Record<string, any>): void {
+    const errors: string[] = [];
+    
+    for (const [key, metadata] of Object.entries(parameterMetadata || {})) {
+        const value = params[key];
+        
+        // Required check
+        if (metadata.required && (value === undefined || value === null || value === '')) {
+            errors.push(`Parameter '${key}' is required`);
+            continue;
+        }
+        
+        // Enum validation
+        if (metadata.enum && value && !metadata.enum.includes(value)) {
+            errors.push(`Parameter '${key}' must be one of: ${metadata.enum.join(', ')}`);
+        }
+        
+        // Type-specific validation
+        if (metadata.type === 'number' && value !== undefined) {
+            const num = Number(value);
+            if (isNaN(num)) {
+                errors.push(`Parameter '${key}' must be a valid number`);
+            }
+        }
+    }
+    
+    if (errors.length > 0) {
+        throw new Error(`Validation failed: ${errors.join('; ')}`);
+    }
+}
+
+function createFriendlyError(error: Error, tool: string): string {
+    const message = error.message.toLowerCase();
+    
+    if (message.includes('not found')) {
+        return `Could not find the requested resource. Please check the ID and try again.`;
+    }
+    
+    if (message.includes('validation failed')) {
+        return error.message; // Already user-friendly from validation
+    }
+    
+    if (message.includes('invalid email')) {
+        return `Please enter a valid email address.`;
+    }
+    
+    if (message.includes('already exists')) {
+        return `This item already exists. Please use a different value.`;
+    }
+    
+    if (message.includes('permission') || message.includes('unauthorized')) {
+        return `You don't have permission to perform this action.`;
+    }
+    
+    if (message.includes('cannot convert') || message.includes('must be')) {
+        return error.message; // Already user-friendly from validation
+    }
+    
+    // Generic fallback
+    return `An unexpected error occurred while calling the function "${tool}". ${error.message}`;
+}
+
 // Helper function to resolve parameters by replacing references with actual values from previous action results.
 function resolveParameters(
     parameters: Record<string, any> | undefined,
     actionResults: Record<string, any>,
-    debug: boolean
+    debug: boolean,
+    req?: any
 ): Record<string, any> {
     if (!parameters) return {};
     const processedParameters: Record<string, any> = { ...parameters };
@@ -1758,9 +1891,36 @@ function resolveParameters(
         }
 
         try {
-            // Check for unresolved userInput parameters - these should have been replaced by the UI
+            // Handle userInput parameters - try to resolve from request body or workflow data
             if (value.startsWith('userInput.')) {
-                throw new Error(`Unresolved userInput parameter: ${value} - this should have been replaced by the UI with actual form data`);
+                const userInputKey = value.replace('userInput.', '');
+                
+                if (debug) {
+                    console.log(`Resolving userInput parameter: ${userInputKey}`);
+                    console.log('Request body structure:', {
+                        hasUserInput: !!(req?.body?.userInput),
+                        hasWorkflowUserInput: !!(req?.body?.workflow?.userInput),
+                        userInputKeys: req?.body?.userInput ? Object.keys(req.body.userInput) : [],
+                        workflowUserInputKeys: req?.body?.workflow?.userInput ? Object.keys(req.body.workflow.userInput) : []
+                    });
+                }
+                
+                // Check if the workflow has userInput data in the request body
+                if (req && req.body && req.body.userInput && req.body.userInput[userInputKey] !== undefined) {
+                    processedParameters[key] = req.body.userInput[userInputKey];
+                    if (debug) console.log(`✓ Resolved ${userInputKey} = ${req.body.userInput[userInputKey]}`);
+                    continue;
+                }
+                
+                // Also check direct on the workflow object
+                if (req && req.body && req.body.workflow && req.body.workflow.userInput && req.body.workflow.userInput[userInputKey] !== undefined) {
+                    processedParameters[key] = req.body.workflow.userInput[userInputKey];
+                    if (debug) console.log(`✓ Resolved ${userInputKey} = ${req.body.workflow.userInput[userInputKey]}`);
+                    continue;
+                }
+                
+                // If we can't resolve it, throw a helpful error
+                throw new Error(`Missing required input: ${userInputKey}. Please provide this value in the form.`);
             }
 
             // Split the reference into parts and validate
@@ -1775,9 +1935,10 @@ function resolveParameters(
                 throw new Error(`Invalid reference format: ${value} - missing action reference`);
             }
 
-            // Check if this is a userInput reference that wasn't handled by UI
+            // Check if this is a userInput reference that wasn't handled above
             if (actionRef === 'userInput') {
-                throw new Error(`Unresolved userInput parameter: ${value} - this should have been replaced by the UI with actual form data`);
+                const userInputKey = pathParts.join('.');
+                throw new Error(`Missing required input: ${userInputKey}. Please provide this value in the form.`);
             }
 
             // Handle array operations
