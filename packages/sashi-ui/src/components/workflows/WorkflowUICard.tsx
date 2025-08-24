@@ -440,7 +440,16 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
 
       console.log('🔍 [CSV Debug] Final workflow being sent to server:', JSON.stringify(workflowWithFormData, null, 2));
 
-      const response = await sendExecuteWorkflow(apiUrl, workflowWithFormData);
+      // Send the workflow with userInput data for the backend to resolve
+      const workflowExecutionPayload = {
+        workflow: workflow.workflow, // Send original workflow with userInput.* parameters
+        userInput: formData, // Send form data separately for backend resolution
+        debug: true // Enable debug mode to see parameter resolution
+      };
+
+      console.log('🔍 [Form Debug] Workflow execution payload:', JSON.stringify(workflowExecutionPayload, null, 2));
+
+      const response = await sendExecuteWorkflow(apiUrl, workflowExecutionPayload);
 
       if (response.data.success) {
         // Cast the results to UI WorkflowResult type to handle type differences

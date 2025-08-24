@@ -1,6 +1,4 @@
 import {
-    AIArray,
-    AIFunction,
     AIObject,
     registerFunctionIntoAI
 } from "@sashimo/lib"
@@ -200,36 +198,33 @@ const EmailResultObject = new AIObject("EmailResult", "result of email sending o
         required: false
     })
 
-// AI Functions
-const SendEmailFunction = new AIFunction("send_email", "send a custom email to a recipient")
-    .args(
-        {
-            name: "to",
+// Register all email functions using the new format
+registerFunctionIntoAI({
+    name: "send_email",
+    description: "send a custom email to a recipient",
+    parameters: {
+        to: {
+            type: "string",
             description: "recipient email address",
-            type: "string",
             required: true
         },
-        {
-            name: "subject",
+        subject: {
+            type: "string",
             description: "email subject line",
-            type: "string",
             required: true
         },
-        {
-            name: "body",
+        body: {
+            type: "string",
             description: "email body content",
-            type: "string",
             required: true
         },
-        {
-            name: "isHtml",
-            description: "whether the body contains HTML content",
+        isHtml: {
             type: "boolean",
+            description: "whether the body contains HTML content",
             required: false
         }
-    )
-    .returns(EmailResultObject)
-    .implement(async (to: string, subject: string, body: string, isHtml: boolean = false) => {
+    },
+    handler: async ({ to, subject, body, isHtml = false }) => {
         const timestamp = new Date().toISOString()
         const emailId = generateEmailId()
 
@@ -312,31 +307,30 @@ const SendEmailFunction = new AIFunction("send_email", "send a custom email to a
                 error
             }
         }
-    })
+    }
+})
 
-const SendTemplateEmailFunction = new AIFunction("send_template_email", "send an email using a predefined template")
-    .args(
-        {
-            name: "templateId",
+registerFunctionIntoAI({
+    name: "send_template_email",
+    description: "send an email using a predefined template",
+    parameters: {
+        templateId: {
+            type: "string",
             description: "the ID of the email template to use",
-            type: "string",
             required: true
         },
-        {
-            name: "to",
+        to: {
+            type: "string",
             description: "recipient email address",
-            type: "string",
             required: true
         },
-        {
-            name: "variables",
-            description: "template variables as JSON string (e.g., '{\"userName\":\"John\",\"appName\":\"MyApp\"}')",
+        variables: {
             type: "string",
+            description: "template variables as JSON string (e.g., '{\"userName\":\"John\",\"appName\":\"MyApp\"}')",
             required: false
         }
-    )
-    .returns(EmailResultObject)
-    .implement(async (templateId: string, to: string, variables: string = '{}') => {
+    },
+    handler: async ({ templateId, to, variables = '{}' }) => {
         const timestamp = new Date().toISOString()
         const emailId = generateEmailId()
 
@@ -393,7 +387,7 @@ const SendTemplateEmailFunction = new AIFunction("send_template_email", "send an
 
         // Simulate sending
         const isSuccess = Math.random() > 0.1
-        
+
         if (isSuccess) {
             const messageId = `msg_${emailId}`
             const logEntry: EmailLog = {
@@ -437,67 +431,45 @@ const SendTemplateEmailFunction = new AIFunction("send_template_email", "send an
                 error
             }
         }
-    })
+    }
+})
 
-const GetEmailTemplatesFunction = new AIFunction("get_email_templates", "retrieve all available email templates")
-    .returns(new AIArray("templates", "available email templates", EmailTemplateObject))
-    .implement(async () => {
+registerFunctionIntoAI({
+    name: "get_email_templates",
+    description: "retrieve all available email templates",
+    parameters: {},
+    handler: async () => {
         return emailTemplates
-    })
+    }
+})
 
-const GetEmailLogsFunction = new AIFunction("get_email_logs", "retrieve email sending logs")
-    .args({
-        name: "limit",
-        description: "maximum number of logs to return (default: 50)",
-        type: "number",
-        required: false
-    })
-    .returns(new AIArray("logs", "email sending logs", EmailLogObject))
-    .implement(async (limit: number = 50) => {
+registerFunctionIntoAI({
+    name: "get_email_logs",
+    description: "retrieve email sending logs",
+    parameters: {
+        limit: {
+            type: "number",
+            description: "maximum number of logs to return (default: 50)",
+            required: false
+        }
+    },
+    handler: async ({ limit = 50 }) => {
         return emailLogs
             .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
             .slice(0, limit)
-    })
+    }
+})
 
-const GetEmailStatsFunction = new AIFunction("get_email_stats", "get email sending statistics")
-    .returns(new AIObject("EmailStats", "email sending statistics", true)
-        .field({
-            name: "total",
-            description: "total emails sent",
-            type: "number",
-            required: true
-        })
-        .field({
-            name: "sent",
-            description: "successfully sent emails",
-            type: "number",
-            required: true
-        })
-        .field({
-            name: "failed",
-            description: "failed emails",
-            type: "number",
-            required: true
-        })
-        .field({
-            name: "successRate",
-            description: "success rate percentage",
-            type: "number",
-            required: true
-        })
-        .field({
-            name: "lastActivity",
-            description: "timestamp of last email activity",
-            type: "string",
-            required: false
-        })
-    )
-    .implement(async () => {
+registerFunctionIntoAI({
+    name: "get_email_stats",
+    description: "get email sending statistics",
+    parameters: {},
+    handler: async () => {
         const total = emailLogs.length
         const sent = emailLogs.filter(log => log.status === 'sent').length
         const failed = emailLogs.filter(log => log.status === 'failed').length
         const successRate = total > 0 ? Math.round((sent / total) * 100) : 0
-        const lastActivity = emailLogs.length > 0 
+        const lastActivity = emailLogs.length > 0
             ? emailLogs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0]?.timestamp
             : undefined
 
@@ -508,11 +480,5 @@ const GetEmailStatsFunction = new AIFunction("get_email_stats", "get email sendi
             successRate,
             lastActivity
         }
-    })
-
-// Register functions
-registerFunctionIntoAI("send_email", SendEmailFunction)
-registerFunctionIntoAI("send_template_email", SendTemplateEmailFunction)
-registerFunctionIntoAI("get_email_templates", GetEmailTemplatesFunction)
-registerFunctionIntoAI("get_email_logs", GetEmailLogsFunction)
-registerFunctionIntoAI("get_email_stats", GetEmailStatsFunction)
+    }
+})

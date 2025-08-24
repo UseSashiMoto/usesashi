@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sashi Node.js Native Server Example</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+            backdrop-filter: blur(10px);
+        }
+        .header {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 2rem;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 2.5rem;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .function-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+        .function-card {
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            border: 1px solid #dee2e6;
+            border-radius: 12px;
+            padding: 1.5rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .function-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+            background: linear-gradient(135deg, #e9ecef, #f8f9fa);
+        }
+        .function-card:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .function-card h3 {
+            margin: 0 0 0.5rem 0;
+            color: #495057;
+            font-size: 1.1rem;
+        }
+        .function-card p {
+            margin: 0;
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+        .response-area {
+            background: #1e1e1e;
+            color: #f8f9fa;
+            padding: 1.5rem;
+            border-radius: 8px;
+            border: 1px solid #343a40;
+            min-height: 250px;
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+            overflow-y: auto;
+            max-height: 500px;
+            line-height: 1.4;
+        }
+        .input-group {
+            display: flex;
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .input-group input {
+            flex: 1;
+            padding: 0.75rem;
+            font-size: 1rem;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        .input-group input:focus {
+            border-color: #667eea;
+        }
+        .btn {
+            padding: 0.75rem 1.5rem;
+            font-size: 1rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 600;
+        }
+        .btn-primary {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+        }
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+        }
+        .status-loading {
+            background: #ffc107;
+            animation: pulse 1.5s infinite;
+        }
+        .status-success {
+            background: #28a745;
+        }
+        .status-error {
+            background: #dc3545;
+        }
+        .info-box {
+            background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+            padding: 1.5rem;
+            border-radius: 8px;
+            border-left: 4px solid #2196f3;
+            margin: 1rem 0;
+        }
+        .warning-box {
+            background: linear-gradient(135deg, #fff3cd, #ffeaa7);
+            padding: 1.5rem;
+            border-radius: 8px;
+            border-left: 4px solid #ffc107;
+            margin: 1rem 0;
+        }
+        .config-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+        .config-item label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #495057;
+        }
+        .config-item input {
+            width: 100%;
+            padding: 0.5rem;
+            border: 2px solid #dee2e6;
+            border-radius: 6px;
+            font-family: monospace;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .server-info {
+            background: linear-gradient(135deg, #d4edda, #a3cfbb);
+            padding: 1rem;
+            border-radius: 8px;
+            border-left: 4px solid #28a745;
+            margin: 1rem 0;
+            font-family: monospace;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚙️ Sashi Node.js Native Server</h1>
+            <p>Direct Node.js HTTP server integration with @sashimo/lib - no frameworks required!</p>
+        </div>
+        
+        <div class="warning-box">
+            <strong>🚀 Getting Started:</strong> Make sure you have started the Node.js server with <code>npm run dev</code> or <code>npm start</code> and it's running on the configured port.
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>Server Configuration</h2>
+        <div class="config-section">
+            <div class="config-item">
+                <label for="serverUrl">Server URL:</label>
+                <input type="text" id="serverUrl" value="http://localhost:3000">
+            </div>
+            <div class="config-item">
+                <label for="sessionToken">Session Token:</label>
+                <input type="text" id="sessionToken" value="nodejs-demo-session">
+            </div>
+        </div>
+        
+        <div class="server-info">
+            <strong>Server Endpoints:</strong><br>
+            • Health Check: <span id="healthUrl">http://localhost:3000/sanity-check</span><br>
+            • Metadata: <span id="metadataUrl">http://localhost:3000/metadata</span><br>
+            • Sashi Bot UI: <span id="botUrl">http://localhost:3000/bot</span><br>
+            • Chat API: <span id="chatUrl">http://localhost:3000/chat</span>
+        </div>
+        
+        <button class="btn btn-secondary" onclick="checkServerHealth()">Check Server Health</button>
+    </div>
+
+    <div class="container">
+        <h2>System Functions</h2>
+        <div class="function-grid">
+            <div class="function-card" onclick="testFunction('Get system info')">
+                <h3>🖥️ System Information</h3>
+                <p>Get detailed Node.js system information including CPU, memory, and OS details</p>
+            </div>
+            <div class="function-card" onclick="testFunction('Get process info')">
+                <h3>⚙️ Process Information</h3>
+                <p>Get current Node.js process details, memory usage, and runtime information</p>
+            </div>
+            <div class="function-card" onclick="testFunction('Get directory listing')">
+                <h3>📁 Directory Listing</h3>
+                <p>List files and directories in the current working directory</p>
+            </div>
+            <div class="function-card" onclick="testFunction('Get environment variables')">
+                <h3>🌍 Environment Variables</h3>
+                <p>Get filtered environment variables (sensitive data excluded)</p>
+            </div>
+            <div class="function-card" onclick="testFunction('Ping server with message Hello from frontend')">
+                <h3>🏓 Ping Server</h3>
+                <p>Test server responsiveness with a custom ping message</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>HTTP Functions</h2>
+        <div class="function-grid">
+            <div class="function-card" onclick="testFunction('Make HTTP request to https://httpbin.org/json')">
+                <h3>🌐 HTTP Request Test</h3>
+                <p>Make a test HTTP request to httpbin.org and see the response</p>
+            </div>
+            <div class="function-card" onclick="testFunction('Check URL status for https://github.com')">
+                <h3>🔍 URL Status Check</h3>
+                <p>Check if GitHub is accessible and get response information</p>
+            </div>
+            <div class="function-card" onclick="testFunction('Get request log')">
+                <h3>📋 Request Log</h3>
+                <p>View the log of recent HTTP requests made by the server</p>
+            </div>
+            <div class="function-card" onclick="testFunction('Clear request log')">
+                <h3>🗑️ Clear Log</h3>
+                <p>Clear the HTTP request log to start fresh</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>Custom Message</h2>
+        <div class="input-group">
+            <input type="text" id="customMessage" placeholder="Enter your message (e.g., 'Get directory listing for /tmp')" />
+            <button class="btn btn-primary" onclick="testCustomMessage()">
+                <span class="status-indicator" id="sendStatus"></span>
+                Send Message
+            </button>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>Response</h2>
+        <div id="response" class="response-area">
+🎯 Ready to test! Click any function above or send a custom message.
+
+💡 Try these example commands:
+• "Get system info"
+• "Make HTTP request to https://api.github.com"
+• "Get directory listing for ."
+• "Ping server with message Hello World"
+• "Check URL status for https://google.com"
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>Available Functions</h2>
+        <div class="info-box">
+            <h3>🖥️ System Functions</h3>
+            <ul>
+                <li><code>get_system_info</code> - Node.js system information (OS, CPU, memory)</li>
+                <li><code>get_process_info</code> - Current process details and memory usage</li>
+                <li><code>get_directory_listing</code> - List files in specified directory</li>
+                <li><code>get_environment_variables</code> - Filtered environment variables</li>
+                <li><code>ping_server</code> - Simple ping with optional message</li>
+            </ul>
+            
+            <h3>🌐 HTTP Functions</h3>
+            <ul>
+                <li><code>make_http_request</code> - Make GET requests to external URLs</li>
+                <li><code>check_url_status</code> - Check URL accessibility and response info</li>
+                <li><code>get_request_log</code> - View recent HTTP request history</li>
+                <li><code>clear_request_log</code> - Clear the request log</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        let isLoading = false;
+
+        function updateServerUrls() {
+            const baseUrl = document.getElementById('serverUrl').value.replace(/\/$/, '');
+            document.getElementById('healthUrl').textContent = `${baseUrl}/sanity-check`;
+            document.getElementById('metadataUrl').textContent = `${baseUrl}/metadata`;
+            document.getElementById('botUrl').textContent = `${baseUrl}/bot`;
+            document.getElementById('chatUrl').textContent = `${baseUrl}/chat`;
+        }
+
+        // Update URLs when server URL changes
+        document.getElementById('serverUrl').addEventListener('input', updateServerUrls);
+
+        async function checkServerHealth() {
+            const serverUrl = document.getElementById('serverUrl').value;
+            const responseDiv = document.getElementById('response');
+            
+            responseDiv.textContent = 'Checking server health...';
+            
+            try {
+                const response = await fetch(`${serverUrl}/sanity-check`);
+                const data = await response.json();
+                
+                responseDiv.textContent = `✅ Server Health Check\n\n${JSON.stringify(data, null, 2)}`;
+            } catch (error) {
+                responseDiv.textContent = `❌ Server Health Check Failed\n\nError: ${error.message}\n\nMake sure the Node.js server is running on ${serverUrl}`;
+            }
+        }
+
+        async function testFunction(message) {
+            if (isLoading) return;
+            
+            const responseDiv = document.getElementById('response');
+            const serverUrl = document.getElementById('serverUrl').value;
+            const sessionToken = document.getElementById('sessionToken').value;
+            
+            isLoading = true;
+            updateLoadingState(true);
+            
+            responseDiv.textContent = `🔄 Processing: "${message}"\n\nSending request to server...`;
+            
+            try {
+                const response = await fetch(`${serverUrl}/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-sashi-session-token': sessionToken
+                    },
+                    body: JSON.stringify({
+                        type: '/chat/message',
+                        inquiry: message,
+                        previous: []
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                
+                let displayText = '';
+                if (data.output && data.output.content) {
+                    displayText = `✅ Success!\n\n${data.output.content}`;
+                } else {
+                    displayText = `✅ Response received:\n\n${JSON.stringify(data, null, 2)}`;
+                }
+                
+                responseDiv.textContent = displayText;
+                updateLoadingState(false, true);
+                
+            } catch (error) {
+                responseDiv.textContent = `❌ Error: ${error.message}\n\nPlease check that:\n• Server is running on ${serverUrl}\n• OPENAI_API_KEY is configured\n• Network connection is available`;
+                updateLoadingState(false, false);
+            }
+            
+            isLoading = false;
+        }
+
+        function testCustomMessage() {
+            const message = document.getElementById('customMessage').value.trim();
+            if (!message) {
+                alert('Please enter a message');
+                return;
+            }
+            
+            testFunction(message);
+            document.getElementById('customMessage').value = '';
+        }
+
+        function updateLoadingState(loading, success = null) {
+            const statusIndicator = document.getElementById('sendStatus');
+            
+            if (loading) {
+                statusIndicator.className = 'status-indicator status-loading';
+            } else if (success === true) {
+                statusIndicator.className = 'status-indicator status-success';
+            } else if (success === false) {
+                statusIndicator.className = 'status-indicator status-error';
+            } else {
+                statusIndicator.className = 'status-indicator';
+            }
+        }
+
+        // Handle Enter key in custom message input
+        document.getElementById('customMessage').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !isLoading) {
+                testCustomMessage();
+            }
+        });
+
+        // Disable function cards when loading
+        function setFunctionCardsState(disabled) {
+            const cards = document.querySelectorAll('.function-card');
+            cards.forEach(card => {
+                if (disabled) {
+                    card.style.pointerEvents = 'none';
+                    card.style.opacity = '0.6';
+                } else {
+                    card.style.pointerEvents = 'auto';
+                    card.style.opacity = '1';
+                }
+            });
+        }
+
+        // Initial setup
+        updateServerUrls();
+        
+        // Show a welcome message after page load
+        setTimeout(() => {
+            console.log('🚀 Sashi Node.js Example loaded successfully!');
+            console.log('💡 Open the browser developer tools to see this message');
+        }, 1000);
+    </script>
+</body>
+</html>

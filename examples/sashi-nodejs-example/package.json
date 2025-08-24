@@ -1,0 +1,29 @@
+{
+  "name": "sashi-nodejs-example",
+  "version": "1.0.0",
+  "description": "Native Node.js HTTP server example for @sashimo/lib",
+  "main": "dist/index.js",
+  "private": true,
+  "scripts": {
+    "start": "node dist/index.js",
+    "build": "tsc",
+    "dev": "nodemon src/index.ts",
+    "dev:build": "tsc --watch",
+    "serve": "node dist/index.js",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@sashimo/lib": "*",
+    "dotenv": "^16.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "nodemon": "^3.0.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

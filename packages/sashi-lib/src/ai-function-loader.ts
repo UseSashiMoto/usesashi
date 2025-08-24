@@ -375,9 +375,9 @@ export class AIFunction {
         | z.ZodNull
         | z.ZodAny
         | z.ZodOptional<any> => {
-        
+
         let schema: any;
-        
+
         if (param instanceof AIArray) {
             schema = z.array(this.validateAIField(param.getItemType()));
         } else if (param instanceof AIObject) {
@@ -546,7 +546,7 @@ export class AIFunction {
 
             // Create validation schema for provided arguments only
             const paramSchemas = this._params.slice(0, paddedArgs.length).map(this.validateAIField);
-            
+
             if (paramSchemas.length === 0) {
                 // No parameters expected or provided
                 const result = await this._implementation();
@@ -596,9 +596,9 @@ export class AIFunction {
                         const paramIndex = parseInt(path);
                         const param = this._params[paramIndex];
                         const paramName = param instanceof AIArray ? param.getName() :
-                                         param instanceof AIObject ? param.getName() :
-                                         param instanceof AIFieldEnum ? param.getName() :
-                                         param?.name || path;
+                            param instanceof AIObject ? param.getName() :
+                                param instanceof AIFieldEnum ? param.getName() :
+                                    param?.name || path;
                         return `Field "${paramName}": ${error.message}`;
                     })
                     .join('\n');
@@ -688,17 +688,20 @@ export function setHubUrl(url: string) {
 }
 
 export function registerFunctionIntoAI<F extends AIFunction>(
-    name: string,
+    _name: string,
     fn: F
 ) {
-    const isVisualization = fn instanceof VisualizationFunction;
+    if (!fn.getName()) {
+        throw new Error(`Function ${_name} has no name`);
+    }
     functionRegistry.set(fn.getName(), fn);
     functionAttributes.set(fn.getName(), {
         active: true,
-        isVisualization: isVisualization,
+        isVisualization: false,
         isHidden: fn.isHidden(),
     });
 }
+
 
 export function registerRepoFunctionsIntoAI<F extends AIFunction>(
     fn: RepoFunctionMetadata,

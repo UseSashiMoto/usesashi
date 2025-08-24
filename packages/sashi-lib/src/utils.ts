@@ -57,9 +57,9 @@ export const trim_array = (arr: string | any[], max_length = 20) => {
 };
 
 export const createSessionToken = async (
-  req: Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>,
-  res: Response<any, Record<string, any>>,
-  getSession?: (req: Request, res: Response) => Promise<string>
+  req: any,
+  res: any,
+  getSession?: (req: any, res: any) => Promise<string>
 ) => {
   if (getSession) {
     return await getSession(req, res);

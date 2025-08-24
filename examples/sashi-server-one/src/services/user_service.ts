@@ -1,11 +1,46 @@
 import {
-    AIArray,
-    AIFunction,
     AIObject,
     registerFunctionIntoAI
 } from "@sashimo/lib"
-import generateDB from "your-db"
-import { Data } from "your-db/lib/types"
+
+// In-memory database types and implementation
+interface Data<T> {
+    id: number
+    data: T
+}
+
+class InMemoryDB<T> {
+    private store: Map<number, Data<T>> = new Map()
+
+    constructor(initialData: Data<T>[] = []) {
+        initialData.forEach(item => {
+            this.store.set(item.id, item)
+        })
+    }
+
+    getAll(): Data<T>[] {
+        return Array.from(this.store.values())
+    }
+
+    getById(id: number): Data<T> | undefined {
+        return this.store.get(id)
+    }
+
+    add(item: Data<T>): void {
+        this.store.set(item.id, item)
+    }
+
+    update(id: number, data: T): void {
+        const existing = this.store.get(id)
+        if (existing) {
+            this.store.set(id, { id, data })
+        }
+    }
+
+    remove(id: number): boolean {
+        return this.store.delete(id)
+    }
+}
 
 export interface User {
     name: string
@@ -40,7 +75,7 @@ const data: Data<User>[] = [
         }
     }
 ]
-const myDB = generateDB<User>(data)
+const myDB = new InMemoryDB<User>(data)
 
 export const getAllUsers = async () => {
     return myDB.getAll()
@@ -85,30 +120,28 @@ const UserObject = new AIObject("User", "a user in the system", true)
         required: true
     })
 
-const GetUserByIdFunction = new AIFunction("get_user_by_id", " get a user by id")
-    .args({
-        name: "userId",
-        description: "a users id",
-        type: "number",
-        required: true
-    })
-    .returns(UserObject)
-    .implement(async (userId: number) => {
+registerFunctionIntoAI({
+    name: "get_user_by_id",
+    description: "get a user by id",
+    parameters: {
+        userId: {
+            type: "number",
+            description: "a users id",
+            required: true
+        }
+    },
+    handler: async ({ userId }) => {
         const user = await getUserById(userId)
         return user
-    })
+    }
+})
 
-const GetAllUserFunction = new AIFunction(
-    "get_all_users",
-    "gets all the users in the system",
-    "",
-)
-
-    .returns(new AIArray("users", "all users", UserObject))
-    .implement(async () => {
+registerFunctionIntoAI({
+    name: "get_all_users",
+    description: "gets all the users in the system",
+    parameters: {},
+    handler: async () => {
         const users = await getAllUsers()
         return users.map((user) => ({ ...user.data, id: user.id }))
-    })
-
-registerFunctionIntoAI("get_user_by_id", GetUserByIdFunction)
-registerFunctionIntoAI("get_all_users", GetAllUserFunction)
+    }
+})

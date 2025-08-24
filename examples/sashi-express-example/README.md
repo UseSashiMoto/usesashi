@@ -1,12 +1,12 @@
-# 🧪 Sashi Integration Test App
+# 🚀 Sashi Express.js Example
 
-A comprehensive testing environment for all Sashi packages, demonstrating real-world usage patterns and providing a unified development experience.
+A comprehensive Express.js application demonstrating how to integrate @sashimo/lib with real-world usage patterns and features.
 
 ## 🚀 Quick Deploy
 
-Deploy this integration test to Vercel with one click:
+Deploy this Express.js example to Vercel with one click:
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FUseSashiMoto%2Fusesashi%2Ftree%2Fmain%2Fexamples%2Fsashi-integration-test&env=OPENAI_API_KEY&envDescription=Required%20environment%20variables%20for%20Sashi%20integration&envLink=https%3A%2F%2Fgithub.com%2FUseSashiMoto%2Fusesashi%2Fblob%2Fmain%2Fexamples%2Fsashi-integration-test%2F.env.example)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FUseSashiMoto%2Fusesashi%2Ftree%2Fmain%2Fexamples%2Fsashi-express-example&env=OPENAI_API_KEY&envDescription=Required%20environment%20variables%20for%20Sashi%20Express%20example&envLink=https%3A%2F%2Fgithub.com%2FUseSashiMoto%2Fusesashi%2Fblob%2Fmain%2Fexamples%2Fsashi-express-example%2F.env.example)
 
 ### Required Environment Variables for Vercel
 

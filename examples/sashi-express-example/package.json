@@ -1,7 +1,7 @@
 {
-    "name": "sashi-integration-test",
+    "name": "sashi-express-example",
     "version": "1.0.0",
-    "description": "Comprehensive integration test app for all Sashi packages",
+    "description": "Express.js example application for @sashimo/lib",
     "main": "dist/index.js",
     "private": true,
     "license": "MIT",
@@ -39,7 +39,6 @@
         "axios": "^1.7.7",
         "cors": "^2.8.5",
         "body-parser": "^1.19.0",
-        "your-db": "^1.0.3",
         "typescript": "^5.4.5"
     }
 }
