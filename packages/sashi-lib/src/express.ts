@@ -12,12 +12,12 @@ export interface ExpressMiddlewareOptions extends Omit<GenericMiddlewareOptions,
 
 export const createExpressMiddleware = (options: ExpressMiddlewareOptions) => {
   const adapter = new ExpressAdapter()
-  
+
   // Create the generic middleware with Express adapter
   const genericRouter = createGenericMiddleware({
     ...options,
     adapter
-  })
+  }) as any
 
   // Convert generic router to Express router
   // This is a simplified conversion - in a real implementation, 
@@ -26,14 +26,14 @@ export const createExpressMiddleware = (options: ExpressMiddlewareOptions) => {
     // Convert Express req/res to generic format
     const httpReq = adapter.adaptRequest(req)
     const httpRes = adapter.adaptResponse(res)
-    
+
     // Find matching route
     const route = genericRouter.matchRoute(httpReq.method, httpReq.path)
-    
+
     if (route) {
       // Extract parameters if it's a parameterized route
       httpReq.params = genericRouter.extractParams(route.path, httpReq.path)
-      
+
       // Execute middleware chain
       const executeMiddleware = async (index = 0) => {
         if (index < (route.middleware?.length || 0)) {
@@ -44,7 +44,7 @@ export const createExpressMiddleware = (options: ExpressMiddlewareOptions) => {
           await route.handler(httpReq, httpRes)
         }
       }
-      
+
       executeMiddleware().catch(next)
     } else {
       next() // Route not found, pass to next middleware
@@ -55,10 +55,10 @@ export const createExpressMiddleware = (options: ExpressMiddlewareOptions) => {
   Object.assign(expressRouter, {
     // Provide access to the generic router for advanced usage
     genericRouter,
-    
+
     // Helper method to get all routes (useful for debugging)
     getRoutes: () => genericRouter.getRoutes(),
-    
+
     // Helper method to manually add routes
     addRoute: (method: string, path: string, handler: any) => {
       const httpHandler = (req: any, res: any) => {
@@ -66,7 +66,7 @@ export const createExpressMiddleware = (options: ExpressMiddlewareOptions) => {
         const httpRes = adapter.adaptResponse(res)
         return handler(httpReq, httpRes)
       }
-      
+
       switch (method.toUpperCase()) {
         case 'GET':
           genericRouter.get(path, httpHandler)

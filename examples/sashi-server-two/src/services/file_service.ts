@@ -1,6 +1,4 @@
 import {
-    AIArray,
-    AIFunction,
     AIObject,
     registerFunctionIntoAI
 } from "@sashimo/lib"
@@ -237,118 +235,111 @@ const FileStatsObject = new AIObject("FileStats", "file system statistics", true
         required: true
     })
 
-// AI Functions
-const GetAllFilesFunction = new AIFunction("get_all_files", "retrieve all files in the system")
-    .returns(new AIArray("files", "complete list of all files", FileMetadataObject))
-    .implement(async () => {
+// Register all file functions using the new format
+registerFunctionIntoAI({
+    name: "get_all_files",
+    description: "retrieve all files in the system",
+    parameters: {},
+    handler: async () => {
         return fileStorage
-    })
+    }
+})
 
-const GetFileByIdFunction = new AIFunction("get_file_by_id", "retrieve a specific file by its ID")
-    .args({
-        name: "fileId",
-        description: "the unique identifier of the file",
-        type: "string",
-        required: true
-    })
-    .returns(FileMetadataObject)
-    .implement(async (fileId: string) => {
+registerFunctionIntoAI({
+    name: "get_file_by_id",
+    description: "retrieve a specific file by its ID",
+    parameters: {
+        fileId: {
+            type: "string",
+            description: "the unique identifier of the file",
+            required: true
+        }
+    },
+    handler: async ({ fileId }) => {
         const file = fileStorage.find(f => f.id === fileId)
         if (!file) {
             throw new Error(`File with ID ${fileId} not found`)
         }
         return file
-    })
+    }
+})
 
-const SearchFilesFunction = new AIFunction("search_files", "search for files by name, type, or tags")
-    .args(
-        {
-            name: "query",
-            description: "search query (searches in filename, type, and tags)",
+registerFunctionIntoAI({
+    name: "search_files",
+    description: "search for files by name, type, or tags",
+    parameters: {
+        query: {
             type: "string",
+            description: "search query (searches in filename, type, and tags)",
             required: true
         },
-        {
-            name: "fileType",
-            description: "filter by file type category (image, document, video, audio, other)",
+        fileType: {
             type: "string",
+            description: "filter by file type category (image, document, video, audio, other)",
             required: false
         },
-        {
-            name: "isPublic",
-            description: "filter by public/private status",
+        isPublic: {
             type: "boolean",
+            description: "filter by public/private status",
             required: false
         }
-    )
-    .returns(new AIArray("files", "files matching the search criteria", FileMetadataObject))
-    .implement(async (query: string, fileType?: string, isPublic?: boolean) => {
+    },
+    handler: async ({ query, fileType, isPublic }) => {
         let results = fileStorage.filter(file => {
-            const matchesQuery = 
+            const matchesQuery =
                 file.name.toLowerCase().includes(query.toLowerCase()) ||
                 file.type.toLowerCase().includes(query.toLowerCase()) ||
                 file.tags.some(tag => tag.toLowerCase().includes(query.toLowerCase()))
-            
+
             const matchesType = !fileType || getFileTypeCategory(file.type) === fileType
             const matchesVisibility = isPublic === undefined || file.isPublic === isPublic
-            
+
             return matchesQuery && matchesType && matchesVisibility
         })
 
         return results
-    })
+    }
+})
 
-const UploadFileFunction = new AIFunction("upload_file", "simulate uploading a new file")
-    .args(
-        {
-            name: "filename",
+registerFunctionIntoAI({
+    name: "upload_file",
+    description: "simulate uploading a new file",
+    parameters: {
+        filename: {
+            type: "string",
             description: "name of the file to upload",
-            type: "string",
             required: true
         },
-        {
-            name: "fileType",
+        fileType: {
+            type: "string",
             description: "MIME type of the file",
-            type: "string",
             required: true
         },
-        {
-            name: "size",
-            description: "size of the file in bytes",
+        size: {
             type: "number",
+            description: "size of the file in bytes",
             required: true
         },
-        {
-            name: "uploadedBy",
-            description: "email of the user uploading the file",
+        uploadedBy: {
             type: "string",
+            description: "email of the user uploading the file",
             required: true
         },
-        {
-            name: "isPublic",
-            description: "whether the file should be publicly accessible",
+        isPublic: {
             type: "boolean",
+            description: "whether the file should be publicly accessible",
             required: false
         },
-        {
-            name: "tags",
-            description: "comma-separated tags for the file",
+        tags: {
             type: "string",
+            description: "comma-separated tags for the file",
             required: false
         }
-    )
-    .returns(FileUploadResultObject)
-    .implement(async (
-        filename: string,
-        fileType: string,
-        size: number,
-        uploadedBy: string,
-        isPublic: boolean = true,
-        tags: string = ""
-    ) => {
+    },
+    handler: async ({ filename, fileType, size, uploadedBy, isPublic = true, tags = "" }) => {
         const fileId = generateFileId()
         const timestamp = new Date().toISOString()
-        
+
         // Validate inputs
         if (!filename || filename.trim().length === 0) {
             return {
@@ -403,7 +394,7 @@ const UploadFileFunction = new AIFunction("upload_file", "simulate uploading a n
 
         if (uploadSuccess) {
             fileStorage.push(metadata)
-            
+
             console.log('📁 [File Service] File uploaded:', {
                 id: fileId,
                 name: filename,
@@ -425,32 +416,22 @@ const UploadFileFunction = new AIFunction("upload_file", "simulate uploading a n
                 error: "Upload failed due to server error"
             }
         }
-    })
+    }
+})
 
-const DeleteFileFunction = new AIFunction("delete_file", "delete a file from the system")
-    .args({
-        name: "fileId",
-        description: "the unique identifier of the file to delete",
-        type: "string",
-        required: true
-    })
-    .returns(new AIObject("DeleteResult", "result of delete operation", true)
-        .field({
-            name: "success",
-            description: "whether the deletion was successful",
-            type: "boolean",
-            required: true
-        })
-        .field({
-            name: "message",
-            description: "result message",
+registerFunctionIntoAI({
+    name: "delete_file",
+    description: "delete a file from the system",
+    parameters: {
+        fileId: {
             type: "string",
+            description: "the unique identifier of the file to delete",
             required: true
-        })
-    )
-    .implement(async (fileId: string) => {
+        }
+    },
+    handler: async ({ fileId }) => {
         const fileIndex = fileStorage.findIndex(f => f.id === fileId)
-        
+
         if (fileIndex === -1) {
             return {
                 success: false,
@@ -460,7 +441,7 @@ const DeleteFileFunction = new AIFunction("delete_file", "delete a file from the
 
         const file = fileStorage[fileIndex]!
         fileStorage.splice(fileIndex, 1)
-        
+
         console.log('🗑️ [File Service] File deleted:', {
             id: fileId,
             name: file.name,
@@ -471,11 +452,14 @@ const DeleteFileFunction = new AIFunction("delete_file", "delete a file from the
             success: true,
             message: `File '${file.name}' has been deleted successfully`
         }
-    })
+    }
+})
 
-const GetFileStatsFunction = new AIFunction("get_file_stats", "get comprehensive file system statistics")
-    .returns(FileStatsObject)
-    .implement(async () => {
+registerFunctionIntoAI({
+    name: "get_file_stats",
+    description: "get comprehensive file system statistics",
+    parameters: {},
+    handler: async () => {
         const totalFiles = fileStorage.length
         const totalSize = fileStorage.reduce((sum, file) => sum + file.size, 0)
         const publicFiles = fileStorage.filter(f => f.isPublic).length
@@ -498,33 +482,32 @@ const GetFileStatsFunction = new AIFunction("get_file_stats", "get comprehensive
             totalDownloads,
             byType
         }
-    })
+    }
+})
 
-const UpdateFileMetadataFunction = new AIFunction("update_file_metadata", "update file metadata and tags")
-    .args(
-        {
-            name: "fileId",
-            description: "the unique identifier of the file",
+registerFunctionIntoAI({
+    name: "update_file_metadata",
+    description: "update file metadata and tags",
+    parameters: {
+        fileId: {
             type: "string",
+            description: "the unique identifier of the file",
             required: true
         },
-        {
-            name: "isPublic",
-            description: "whether the file should be public",
+        isPublic: {
             type: "boolean",
+            description: "whether the file should be public",
             required: false
         },
-        {
-            name: "tags",
-            description: "comma-separated tags for the file",
+        tags: {
             type: "string",
+            description: "comma-separated tags for the file",
             required: false
         }
-    )
-    .returns(FileMetadataObject)
-    .implement(async (fileId: string, isPublic?: boolean, tags?: string) => {
+    },
+    handler: async ({ fileId, isPublic, tags }) => {
         const file = fileStorage.find(f => f.id === fileId)
-        
+
         if (!file) {
             throw new Error(`File with ID ${fileId} not found`)
         }
@@ -549,13 +532,5 @@ const UpdateFileMetadataFunction = new AIFunction("update_file_metadata", "updat
         })
 
         return file
-    })
-
-// Register functions
-registerFunctionIntoAI("get_all_files", GetAllFilesFunction)
-registerFunctionIntoAI("get_file_by_id", GetFileByIdFunction)
-registerFunctionIntoAI("search_files", SearchFilesFunction)
-registerFunctionIntoAI("upload_file", UploadFileFunction)
-registerFunctionIntoAI("delete_file", DeleteFileFunction)
-registerFunctionIntoAI("get_file_stats", GetFileStatsFunction)
-registerFunctionIntoAI("update_file_metadata", UpdateFileMetadataFunction)
+    }
+})

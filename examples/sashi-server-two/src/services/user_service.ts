@@ -1,6 +1,4 @@
 import {
-    AIArray,
-    AIFunction,
     AIObject,
     registerFunctionIntoAI
 } from "@sashimo/lib"
@@ -258,51 +256,57 @@ const UserObject = new AIObject("User", "a user in the system", true)
         required: false
     })
 
-// AI Functions
-const GetUserByIdFunction = new AIFunction("get_user_by_id", "retrieve a specific user by their ID")
-    .args({
-        name: "userId",
-        description: "the unique identifier of the user",
-        type: "number",
-        required: true
-    })
-    .returns(UserObject)
-    .implement(async (userId: number) => {
+
+
+// Register all functions using the new format
+registerFunctionIntoAI({
+    name: "get_user_by_id",
+    description: "retrieve a specific user by their ID",
+    parameters: {
+        userId: {
+            type: "number",
+            description: "the unique identifier of the user",
+            required: true
+        }
+    },
+    handler: async ({ userId }) => {
         const user = await getUserById(userId)
         if (!user) throw new Error(`User with id ${userId} not found`)
         return { ...user.data, id: user.id }
-    })
+    }
+})
 
-const GetAllUsersFunction = new AIFunction("get_all_users", "retrieve all users in the system")
-    .returns(new AIArray("users", "complete list of all users", UserObject))
-    .implement(async () => {
+registerFunctionIntoAI({
+    name: "get_all_users",
+    description: "retrieve all users in the system",
+    parameters: {},
+    handler: async () => {
         const users = await getAllUsers()
         return users.map((user) => ({ ...user.data, id: user.id }))
-    })
+    }
+})
 
-const CreateUserFunction = new AIFunction("create_user", "create a new user account")
-    .args(
-        {
-            name: "name",
+registerFunctionIntoAI({
+    name: "create_user",
+    description: "create a new user account",
+    parameters: {
+        name: {
+            type: "string",
             description: "the full name of the new user",
-            type: "string",
             required: true
         },
-        {
-            name: "email",
+        email: {
+            type: "string",
             description: "the email address for the new user",
-            type: "string",
             required: true
         },
-        {
-            name: "role",
-            description: "the role for the new user (admin, user, moderator)",
+        role: {
             type: "string",
+            description: "the role for the new user (admin, user, moderator)",
             required: false
         }
-    )
-    .returns(UserObject)
-    .implement(async (name: string, email: string, role?: string) => {
+    },
+    handler: async ({ name, email, role }) => {
         // Validate email format
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
         if (!emailRegex.test(email)) {
@@ -326,37 +330,35 @@ const CreateUserFunction = new AIFunction("create_user", "create a new user acco
         const created = await addUser(newUser)
         if (!created) throw new Error("Failed to create user")
         return { ...created.data, id: created.id }
-    })
+    }
+})
 
-const UpdateUserFunction = new AIFunction("update_user", "update an existing user's information")
-    .args(
-        {
-            name: "userId",
-            description: "the ID of the user to update",
+registerFunctionIntoAI({
+    name: "update_user",
+    description: "update an existing user's information",
+    parameters: {
+        userId: {
             type: "number",
+            description: "the ID of the user to update",
             required: true
         },
-        {
-            name: "name",
+        name: {
+            type: "string",
             description: "the new name for the user",
-            type: "string",
             required: false
         },
-        {
-            name: "email",
+        email: {
+            type: "string",
             description: "the new email for the user",
-            type: "string",
             required: false
         },
-        {
-            name: "role",
-            description: "the new role for the user",
+        role: {
             type: "string",
+            description: "the new role for the user",
             required: false
         }
-    )
-    .returns(UserObject)
-    .implement(async (userId: number, name?: string, email?: string, role?: string) => {
+    },
+    handler: async ({ userId, name, email, role }) => {
         const updates: Partial<User> = {}
         if (name) updates.name = name
         if (email) {
@@ -371,48 +373,49 @@ const UpdateUserFunction = new AIFunction("update_user", "update an existing use
         const updated = await updateUser(userId, updates)
         if (!updated) throw new Error(`Failed to update user ${userId}`)
         return { ...updated.data, id: updated.id }
-    })
+    }
+})
 
-const DeactivateUserFunction = new AIFunction("deactivate_user", "deactivate a user account")
-    .args({
-        name: "userId",
-        description: "the ID of the user to deactivate",
-        type: "number",
-        required: true
-    })
-    .returns(UserObject)
-    .implement(async (userId: number) => {
+registerFunctionIntoAI({
+    name: "deactivate_user",
+    description: "deactivate a user account",
+    parameters: {
+        userId: {
+            type: "number",
+            description: "the ID of the user to deactivate",
+            required: true
+        }
+    },
+    handler: async ({ userId }) => {
         const updated = await deactivateUser(userId)
         if (!updated) throw new Error(`Failed to deactivate user ${userId}`)
         return { ...updated.data, id: updated.id }
-    })
+    }
+})
 
-const GetUsersByRoleFunction = new AIFunction("get_users_by_role", "retrieve all users with a specific role")
-    .args({
-        name: "role",
-        description: "the role to filter by (admin, user, moderator)",
-        type: "string",
-        required: true
-    })
-    .returns(new AIArray("users", "users with the specified role", UserObject))
-    .implement(async (role: string) => {
+registerFunctionIntoAI({
+    name: "get_users_by_role",
+    description: "retrieve all users with a specific role",
+    parameters: {
+        role: {
+            type: "string",
+            description: "the role to filter by (admin, user, moderator)",
+            required: true
+        }
+    },
+    handler: async ({ role }) => {
         const users = await getUsersByRole(role)
         return users.map((user) => ({ ...user.data, id: user.id }))
-    })
+    }
+})
 
-const GetActiveUsersFunction = new AIFunction("get_active_users", "retrieve all active users")
-    .returns(new AIArray("users", "all active users in the system", UserObject))
-    .implement(async () => {
+registerFunctionIntoAI({
+    name: "get_active_users",
+    description: "retrieve all active users",
+    parameters: {},
+    handler: async () => {
         const users = await getAllUsers()
         const activeUsers = users.filter(user => user.data.isActive !== false)
         return activeUsers.map((user) => ({ ...user.data, id: user.id }))
-    })
-
-// Register all functions
-registerFunctionIntoAI("get_user_by_id", GetUserByIdFunction)
-registerFunctionIntoAI("get_all_users", GetAllUsersFunction)
-registerFunctionIntoAI("create_user", CreateUserFunction)
-registerFunctionIntoAI("update_user", UpdateUserFunction)
-registerFunctionIntoAI("deactivate_user", DeactivateUserFunction)
-registerFunctionIntoAI("get_users_by_role", GetUsersByRoleFunction)
-registerFunctionIntoAI("get_active_users", GetActiveUsersFunction)
+    }
+})

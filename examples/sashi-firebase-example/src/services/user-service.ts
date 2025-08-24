@@ -1,4 +1,4 @@
-import { registerFunction } from "@sashimo/lib"
+import { AIFieldEnum, AIFunction, registerFunctionIntoAI } from "@sashimo/lib";
 
 // Firebase-style user data (could be from Firestore)
 const users = [
@@ -8,34 +8,24 @@ const users = [
   { id: "user_4", name: "David Serverless", email: "david@firebase.com", role: "moderator", active: true, createdAt: "2024-01-04" },
 ]
 
-registerFunction({
-  name: "get_all_firebase_users",
-  description: "Retrieve all users from Firebase backend",
-  parameters: {},
-  handler: async () => {
+const GetAllFirebaseUsersFunction = new AIFunction("get_all_firebase_users", "Retrieve all users from Firebase backend")
+  .implement(async () => {
     return {
       users: users,
       total: users.length,
       active: users.filter(u => u.active).length,
       source: "Firebase Functions"
     }
-  }
-})
+  });
 
-registerFunction({
-  name: "get_firebase_user_by_id",
-  description: "Get a specific user by their Firebase ID",
-  parameters: {
-    type: "object",
-    properties: {
-      userId: {
-        type: "string",
-        description: "The Firebase ID of the user to retrieve"
-      }
-    },
-    required: ["userId"]
-  },
-  handler: async ({ userId }: { userId: string }) => {
+const GetFirebaseUserByIdFunction = new AIFunction("get_firebase_user_by_id", "Get a specific user by their Firebase ID")
+  .args({
+    name: "userId",
+    type: "string",
+    description: "The Firebase ID of the user to retrieve",
+    required: true
+  })
+  .implement(async (userId: string) => {
     const user = users.find(u => u.id === userId)
     if (!user) {
       throw new Error(`User with ID ${userId} not found in Firebase`)
@@ -44,38 +34,29 @@ registerFunction({
       ...user,
       source: "Firebase Functions"
     }
-  }
-})
+  });
 
-registerFunction({
-  name: "create_firebase_user",
-  description: "Create a new user in Firebase backend",
-  parameters: {
-    type: "object",
-    properties: {
-      name: {
-        type: "string",
-        description: "User's full name"
-      },
-      email: {
-        type: "string",
-        description: "User's email address"
-      },
-      role: {
-        type: "string",
-        description: "User's role",
-        enum: ["user", "moderator", "admin"]
-      }
-    },
-    required: ["name", "email"]
-  },
-  handler: async ({ name, email, role = "user" }: { name: string, email: string, role?: string }) => {
+const CreateFirebaseUserFunction = new AIFunction("create_firebase_user", "Create a new user in Firebase backend")
+  .args({
+    name: "name",
+    type: "string",
+    description: "User's full name",
+    required: true
+  })
+  .args({
+    name: "email",
+    type: "string",
+    description: "User's email address",
+    required: true
+  })
+  .args(new AIFieldEnum("role", "User's role", ["user", "moderator", "admin"], false))
+  .implement(async (name: string, email: string, role?: string) => {
     const newId = `user_${Date.now()}`
     const newUser = {
       id: newId,
       name,
       email,
-      role,
+      role: role || "user",
       active: true,
       createdAt: new Date().toISOString().split('T')[0]
     }
@@ -85,47 +66,42 @@ registerFunction({
       user: newUser,
       source: "Firebase Functions"
     }
-  }
-})
+  });
 
-registerFunction({
-  name: "get_firebase_active_users",
-  description: "Get all active users from Firebase",
-  parameters: {},
-  handler: async () => {
+const GetFirebaseActiveUsersFunction = new AIFunction("get_firebase_active_users", "Get all active users from Firebase")
+  .implement(async () => {
     const activeUsers = users.filter(u => u.active)
     return {
       users: activeUsers,
       count: activeUsers.length,
       source: "Firebase Functions"
     }
-  }
-})
+  });
 
-registerFunction({
-  name: "deactivate_firebase_user",
-  description: "Deactivate a user in Firebase",
-  parameters: {
-    type: "object",
-    properties: {
-      userId: {
-        type: "string", 
-        description: "The Firebase ID of the user to deactivate"
-      }
-    },
-    required: ["userId"]
-  },
-  handler: async ({ userId }: { userId: string }) => {
+const DeactivateFirebaseUserFunction = new AIFunction("deactivate_firebase_user", "Deactivate a user in Firebase")
+  .args({
+    name: "userId",
+    type: "string",
+    description: "The Firebase ID of the user to deactivate",
+    required: true
+  })
+  .implement(async (userId: string) => {
     const userIndex = users.findIndex(u => u.id === userId)
     if (userIndex === -1) {
       throw new Error(`User with ID ${userId} not found in Firebase`)
     }
-    
+
     users[userIndex].active = false
     return {
       message: `User ${userId} deactivated successfully`,
       user: users[userIndex],
       source: "Firebase Functions"
     }
-  }
-})
+  });
+
+// Register all functions properly with AIFunction instances
+registerFunctionIntoAI("get_all_firebase_users", GetAllFirebaseUsersFunction);
+registerFunctionIntoAI("get_firebase_user_by_id", GetFirebaseUserByIdFunction);
+registerFunctionIntoAI("create_firebase_user", CreateFirebaseUserFunction);
+registerFunctionIntoAI("get_firebase_active_users", GetFirebaseActiveUsersFunction);
+registerFunctionIntoAI("deactivate_firebase_user", DeactivateFirebaseUserFunction);

@@ -1,4 +1,4 @@
-import { registerFunction } from "@sashimo/lib"
+import { registerFunctionIntoAI } from "@sashimo/lib"
 import * as http from 'http'
 import * as https from 'https'
 import * as url from 'url'
@@ -13,7 +13,7 @@ const requestLog: Array<{
   timestamp: string
 }> = []
 
-registerFunction({
+registerFunctionIntoAI({
   name: "make_http_request",
   description: "Make an HTTP GET request to a specified URL",
   parameters: {
@@ -37,7 +37,7 @@ registerFunction({
       const parsedUrl = url.parse(targetUrl)
       const isHttps = parsedUrl.protocol === 'https:'
       const httpModule = isHttps ? https : http
-      
+
       const options = {
         hostname: parsedUrl.hostname,
         port: parsedUrl.port || (isHttps ? 443 : 80),
@@ -48,14 +48,14 @@ registerFunction({
           'User-Agent': 'Sashi-Node.js-Example/1.0.0'
         }
       }
-      
+
       const req = httpModule.request(options, (res) => {
         let data = ''
-        
+
         res.on('data', (chunk) => {
           data += chunk
         })
-        
+
         res.on('end', () => {
           const responseTime = Date.now() - startTime
           const logEntry = {
@@ -67,12 +67,12 @@ registerFunction({
             timestamp: new Date().toISOString()
           }
           requestLog.push(logEntry)
-          
+
           // Keep only last 100 requests
           if (requestLog.length > 100) {
             requestLog.shift()
           }
-          
+
           resolve({
             url: targetUrl,
             status: res.statusCode,
@@ -85,22 +85,22 @@ registerFunction({
           })
         })
       })
-      
+
       req.on('error', (error) => {
         reject(new Error(`HTTP request failed: ${error.message}`))
       })
-      
+
       req.on('timeout', () => {
         req.destroy()
         reject(new Error(`Request timeout after ${timeout}ms`))
       })
-      
+
       req.end()
     })
   }
 })
 
-registerFunction({
+registerFunctionIntoAI({
   name: "get_request_log",
   description: "Get the log of recent HTTP requests made by the server",
   parameters: {
@@ -117,7 +117,7 @@ registerFunction({
     const recentRequests = requestLog
       .slice(-limit)
       .reverse()
-    
+
     return {
       requests: recentRequests,
       count: recentRequests.length,
@@ -127,14 +127,14 @@ registerFunction({
   }
 })
 
-registerFunction({
+registerFunctionIntoAI({
   name: "clear_request_log",
   description: "Clear the HTTP request log",
   parameters: {},
   handler: async () => {
     const clearedCount = requestLog.length
     requestLog.length = 0
-    
+
     return {
       message: "Request log cleared successfully",
       clearedEntries: clearedCount,
@@ -143,7 +143,7 @@ registerFunction({
   }
 })
 
-registerFunction({
+registerFunctionIntoAI({
   name: "check_url_status",
   description: "Check if a URL is accessible and return basic information",
   parameters: {
@@ -163,7 +163,7 @@ registerFunction({
         const parsedUrl = url.parse(targetUrl)
         const isHttps = parsedUrl.protocol === 'https:'
         const httpModule = isHttps ? https : http
-        
+
         const options = {
           hostname: parsedUrl.hostname,
           port: parsedUrl.port || (isHttps ? 443 : 80),
@@ -174,10 +174,10 @@ registerFunction({
             'User-Agent': 'Sashi-Node.js-Example/1.0.0'
           }
         }
-        
+
         const req = httpModule.request(options, (res) => {
           const responseTime = Date.now() - startTime
-          
+
           resolve({
             url: targetUrl,
             accessible: true,
@@ -192,7 +192,7 @@ registerFunction({
             }
           })
         })
-        
+
         req.on('error', (error) => {
           resolve({
             url: targetUrl,
@@ -201,7 +201,7 @@ registerFunction({
             responseTime: Date.now() - startTime
           })
         })
-        
+
         req.on('timeout', () => {
           req.destroy()
           resolve({
@@ -211,10 +211,10 @@ registerFunction({
             responseTime: Date.now() - startTime
           })
         })
-        
+
         req.end()
       })
-      
+
       return {
         ...result,
         timestamp: new Date().toISOString(),

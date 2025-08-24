@@ -1,7 +1,7 @@
 {
   "name": "sashi-nextjs-example",
   "version": "1.0.0",
-  "description": "Next.js example application for @sashimo/lib with both API Routes and App Router",
+  "description": "Next.js example application for @sashimo/lib using App Router",
   "private": true,
   "scripts": {
     "dev": "next dev",

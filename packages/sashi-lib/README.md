@@ -19,7 +19,7 @@ Sashi is the core TypeScript/JavaScript library that powers the Sashi workflow s
 
 ### 1. Function Registration
 
-- Provides a `registerFunction()` API to declare named functions, their parameters, and return types
+- Provides a `registerFunctionIntoAI()` API to declare named functions, their parameters, and return types
 - Supports:
     - Zod-based parameter schemas
     - Sync and async functions

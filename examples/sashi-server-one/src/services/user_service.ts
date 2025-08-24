@@ -1,6 +1,4 @@
 import {
-    AIArray,
-    AIFunction,
     AIObject,
     registerFunctionIntoAI
 } from "@sashimo/lib"
@@ -122,30 +120,28 @@ const UserObject = new AIObject("User", "a user in the system", true)
         required: true
     })
 
-const GetUserByIdFunction = new AIFunction("get_user_by_id", " get a user by id")
-    .args({
-        name: "userId",
-        description: "a users id",
-        type: "number",
-        required: true
-    })
-    .returns(UserObject)
-    .implement(async (userId: number) => {
+registerFunctionIntoAI({
+    name: "get_user_by_id",
+    description: "get a user by id",
+    parameters: {
+        userId: {
+            type: "number",
+            description: "a users id",
+            required: true
+        }
+    },
+    handler: async ({ userId }) => {
         const user = await getUserById(userId)
         return user
-    })
+    }
+})
 
-const GetAllUserFunction = new AIFunction(
-    "get_all_users",
-    "gets all the users in the system",
-    "",
-)
-
-    .returns(new AIArray("users", "all users", UserObject))
-    .implement(async () => {
+registerFunctionIntoAI({
+    name: "get_all_users",
+    description: "gets all the users in the system",
+    parameters: {},
+    handler: async () => {
         const users = await getAllUsers()
         return users.map((user) => ({ ...user.data, id: user.id }))
-    })
-
-registerFunctionIntoAI("get_user_by_id", GetUserByIdFunction)
-registerFunctionIntoAI("get_all_users", GetAllUserFunction)
+    }
+})

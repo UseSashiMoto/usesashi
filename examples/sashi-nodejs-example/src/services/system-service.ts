@@ -1,9 +1,9 @@
-import { registerFunction } from "@sashimo/lib"
-import * as os from 'os'
+import { registerFunctionIntoAI } from "@sashimo/lib"
 import * as fs from 'fs'
+import * as os from 'os'
 import * as path from 'path'
 
-registerFunction({
+registerFunctionIntoAI({
   name: "get_system_info",
   description: "Get detailed Node.js system information",
   parameters: {},
@@ -41,13 +41,13 @@ registerFunction({
   }
 })
 
-registerFunction({
+registerFunctionIntoAI({
   name: "get_process_info",
   description: "Get current Node.js process information",
   parameters: {},
   handler: async () => {
     const memUsage = process.memoryUsage()
-    
+
     return {
       pid: process.pid,
       ppid: process.ppid,
@@ -75,7 +75,7 @@ registerFunction({
   }
 })
 
-registerFunction({
+registerFunctionIntoAI({
   name: "get_directory_listing",
   description: "Get listing of files and directories in the current working directory",
   parameters: {
@@ -97,13 +97,13 @@ registerFunction({
     try {
       const fullPath = path.resolve(directory)
       const items = fs.readdirSync(fullPath)
-      
+
       const filteredItems = showHidden ? items : items.filter(item => !item.startsWith('.'))
-      
+
       const itemDetails = filteredItems.map(item => {
         const itemPath = path.join(fullPath, item)
         const stats = fs.statSync(itemPath)
-        
+
         return {
           name: item,
           type: stats.isDirectory() ? 'directory' : 'file',
@@ -112,7 +112,7 @@ registerFunction({
           permissions: stats.mode.toString(8).slice(-3)
         }
       })
-      
+
       return {
         directory: fullPath,
         items: itemDetails,
@@ -125,7 +125,7 @@ registerFunction({
   }
 })
 
-registerFunction({
+registerFunctionIntoAI({
   name: "get_environment_variables",
   description: "Get environment variables (filtered for security)",
   parameters: {},
@@ -138,7 +138,7 @@ registerFunction({
         acc[key] = value || ''
         return acc
       }, {} as Record<string, string>)
-    
+
     // Include some safe environment variables even if they contain sensitive keywords
     const safeEnvVars = ['NODE_ENV', 'PORT', 'HOST', 'DEBUG']
     safeEnvVars.forEach(key => {
@@ -146,7 +146,7 @@ registerFunction({
         filteredEnv[key] = process.env[key]!
       }
     })
-    
+
     return {
       environment: filteredEnv,
       count: Object.keys(filteredEnv).length,
@@ -156,7 +156,7 @@ registerFunction({
   }
 })
 
-registerFunction({
+registerFunctionIntoAI({
   name: "ping_server",
   description: "Simple ping function to test server responsiveness",
   parameters: {

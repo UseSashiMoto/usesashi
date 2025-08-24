@@ -1,4 +1,4 @@
-import { registerFunction } from "@sashimo/lib"
+import { registerFunctionIntoAI } from "@sashimo/lib"
 
 // Firebase Analytics-style data
 const events = [
@@ -18,7 +18,7 @@ const metrics = {
   avgSessionDuration: 420 // seconds
 }
 
-registerFunction({
+registerFunctionIntoAI({
   name: "track_firebase_event",
   description: "Track an analytics event in Firebase",
   parameters: {
@@ -41,10 +41,10 @@ registerFunction({
     },
     required: ["eventType", "userId"]
   },
-  handler: async ({ eventType, userId, data = {} }: { 
-    eventType: string, 
-    userId: string, 
-    data?: Record<string, any> 
+  handler: async ({ eventType, userId, data = {} }: {
+    eventType: string,
+    userId: string,
+    data?: Record<string, any>
   }) => {
     const newEvent = {
       id: `evt_${Date.now()}`,
@@ -54,7 +54,7 @@ registerFunction({
       data
     }
     events.push(newEvent)
-    
+
     return {
       message: "Event tracked successfully in Firebase Analytics",
       event: newEvent,
@@ -63,7 +63,7 @@ registerFunction({
   }
 })
 
-registerFunction({
+registerFunctionIntoAI({
   name: "get_firebase_analytics_dashboard",
   description: "Get Firebase Analytics dashboard metrics",
   parameters: {},
@@ -79,7 +79,7 @@ registerFunction({
   }
 })
 
-registerFunction({
+registerFunctionIntoAI({
   name: "get_firebase_events_by_type",
   description: "Get Firebase Analytics events filtered by type",
   parameters: {
@@ -102,7 +102,7 @@ registerFunction({
       .filter(e => e.type === eventType)
       .slice(-limit)
       .reverse()
-    
+
     return {
       events: filteredEvents,
       count: filteredEvents.length,
@@ -112,7 +112,7 @@ registerFunction({
   }
 })
 
-registerFunction({
+registerFunctionIntoAI({
   name: "get_firebase_user_events",
   description: "Get all events for a specific user from Firebase Analytics",
   parameters: {
@@ -135,7 +135,7 @@ registerFunction({
       .filter(e => e.userId === userId)
       .slice(-limit)
       .reverse()
-    
+
     return {
       events: userEvents,
       count: userEvents.length,
@@ -145,7 +145,7 @@ registerFunction({
   }
 })
 
-registerFunction({
+registerFunctionIntoAI({
   name: "get_firebase_conversion_funnel",
   description: "Get conversion funnel data from Firebase Analytics",
   parameters: {},
@@ -156,7 +156,7 @@ registerFunction({
       { step: "form_submit", count: events.filter(e => e.type === "form_submit").length },
       { step: "conversion", count: events.filter(e => e.type === "conversion").length }
     ]
-    
+
     // Calculate conversion rates
     const funnelWithRates = funnelSteps.map((step, index) => {
       const conversionRate = index === 0 ? 100 : (step.count / funnelSteps[0].count) * 100
@@ -165,7 +165,7 @@ registerFunction({
         conversionRate: Math.round(conversionRate * 100) / 100
       }
     })
-    
+
     return {
       funnel: funnelWithRates,
       totalConversions: funnelSteps[funnelSteps.length - 1].count,

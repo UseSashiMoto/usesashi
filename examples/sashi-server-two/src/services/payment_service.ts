@@ -1,6 +1,4 @@
 import {
-    AIArray,
-    AIFunction,
     AIObject,
     registerFunctionIntoAI
 } from "@sashimo/lib"
@@ -317,48 +315,38 @@ const SubscriptionObject = new AIObject("Subscription", "subscription informatio
         required: true
     })
 
-// AI Functions
-const ProcessPaymentFunction = new AIFunction("process_payment", "process a one-time payment")
-    .args(
-        {
-            name: "userId",
+// Register all payment functions using the new format
+registerFunctionIntoAI({
+    name: "process_payment",
+    description: "process a one-time payment",
+    parameters: {
+        userId: {
+            type: "string",
             description: "user making the payment",
-            type: "string",
             required: true
         },
-        {
-            name: "amount",
-            description: "payment amount in cents",
+        amount: {
             type: "number",
+            description: "payment amount in cents",
             required: true
         },
-        {
-            name: "currency",
-            description: "currency code (default: USD)",
+        currency: {
             type: "string",
+            description: "currency code (default: USD)",
             required: false
         },
-        {
-            name: "paymentMethodId",
-            description: "payment method to use",
+        paymentMethodId: {
             type: "string",
+            description: "payment method to use",
             required: true
         },
-        {
-            name: "description",
-            description: "payment description",
+        description: {
             type: "string",
+            description: "payment description",
             required: true
         }
-    )
-    .returns(TransactionObject)
-    .implement(async (
-        userId: string,
-        amount: number,
-        currency: string = 'USD',
-        paymentMethodId: string,
-        description: string
-    ) => {
+    },
+    handler: async ({ userId, amount, currency = 'USD', paymentMethodId, description }) => {
         const transactionId = generateId('txn')
         const timestamp = new Date().toISOString()
 
@@ -405,31 +393,30 @@ const ProcessPaymentFunction = new AIFunction("process_payment", "process a one-
         })
 
         return transaction
-    })
+    }
+})
 
-const GetUserTransactionsFunction = new AIFunction("get_user_transactions", "retrieve transactions for a user")
-    .args(
-        {
-            name: "userId",
-            description: "user ID to get transactions for",
+registerFunctionIntoAI({
+    name: "get_user_transactions",
+    description: "retrieve transactions for a user",
+    parameters: {
+        userId: {
             type: "string",
+            description: "user ID to get transactions for",
             required: true
         },
-        {
-            name: "limit",
-            description: "maximum number of transactions to return",
+        limit: {
             type: "number",
+            description: "maximum number of transactions to return",
             required: false
         },
-        {
-            name: "status",
-            description: "filter by transaction status",
+        status: {
             type: "string",
+            description: "filter by transaction status",
             required: false
         }
-    )
-    .returns(new AIArray("transactions", "user transactions", TransactionObject))
-    .implement(async (userId: string, limit: number = 50, status?: string) => {
+    },
+    handler: async ({ userId, limit = 50, status }) => {
         let userTransactions = transactions.filter(txn => txn.userId === userId)
 
         if (status) {
@@ -439,63 +426,50 @@ const GetUserTransactionsFunction = new AIFunction("get_user_transactions", "ret
         return userTransactions
             .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
             .slice(0, limit)
-    })
+    }
+})
 
-const AddPaymentMethodFunction = new AIFunction("add_payment_method", "add a new payment method for a user")
-    .args(
-        {
-            name: "userId",
+registerFunctionIntoAI({
+    name: "add_payment_method",
+    description: "add a new payment method for a user",
+    parameters: {
+        userId: {
+            type: "string",
             description: "user to add payment method for",
-            type: "string",
             required: true
         },
-        {
-            name: "type",
+        type: {
+            type: "string",
             description: "payment method type (credit_card, debit_card, paypal, bank_transfer)",
-            type: "string",
             required: true
         },
-        {
-            name: "last4",
+        last4: {
+            type: "string",
             description: "last 4 digits of card (for card types)",
-            type: "string",
             required: false
         },
-        {
-            name: "brand",
+        brand: {
+            type: "string",
             description: "card brand (for card types)",
-            type: "string",
             required: false
         },
-        {
-            name: "expiryMonth",
+        expiryMonth: {
+            type: "number",
             description: "card expiry month (for card types)",
-            type: "number",
             required: false
         },
-        {
-            name: "expiryYear",
+        expiryYear: {
+            type: "number",
             description: "card expiry year (for card types)",
-            type: "number",
             required: false
         },
-        {
-            name: "setAsDefault",
-            description: "whether to set as default payment method",
+        setAsDefault: {
             type: "boolean",
+            description: "whether to set as default payment method",
             required: false
         }
-    )
-    .returns(PaymentMethodObject)
-    .implement(async (
-        userId: string,
-        type: string,
-        last4?: string,
-        brand?: string,
-        expiryMonth?: number,
-        expiryYear?: number,
-        setAsDefault: boolean = false
-    ) => {
+    },
+    handler: async ({ userId, type, last4, brand, expiryMonth, expiryYear, setAsDefault = false }) => {
         const paymentMethodId = generateId('pm')
         const timestamp = new Date().toISOString()
 
@@ -546,61 +520,55 @@ const AddPaymentMethodFunction = new AIFunction("add_payment_method", "add a new
         })
 
         return paymentMethod
-    })
+    }
+})
 
-const GetUserPaymentMethodsFunction = new AIFunction("get_user_payment_methods", "retrieve payment methods for a user")
-    .args({
-        name: "userId",
-        description: "user ID to get payment methods for",
-        type: "string",
-        required: true
-    })
-    .returns(new AIArray("paymentMethods", "user payment methods", PaymentMethodObject))
-    .implement(async (userId: string) => {
+registerFunctionIntoAI({
+    name: "get_user_payment_methods",
+    description: "retrieve payment methods for a user",
+    parameters: {
+        userId: {
+            type: "string",
+            description: "user ID to get payment methods for",
+            required: true
+        }
+    },
+    handler: async ({ userId }) => {
         return paymentMethods.filter(pm => pm.userId === userId)
-    })
+    }
+})
 
-const CreateSubscriptionFunction = new AIFunction("create_subscription", "create a new subscription for a user")
-    .args(
-        {
-            name: "userId",
+registerFunctionIntoAI({
+    name: "create_subscription",
+    description: "create a new subscription for a user",
+    parameters: {
+        userId: {
+            type: "string",
             description: "user to create subscription for",
-            type: "string",
             required: true
         },
-        {
-            name: "planId",
+        planId: {
+            type: "string",
             description: "subscription plan identifier",
-            type: "string",
             required: true
         },
-        {
-            name: "amount",
-            description: "subscription amount in cents",
+        amount: {
             type: "number",
+            description: "subscription amount in cents",
             required: true
         },
-        {
-            name: "interval",
+        interval: {
+            type: "string",
             description: "billing interval (month or year)",
-            type: "string",
             required: true
         },
-        {
-            name: "currency",
-            description: "currency code (default: USD)",
+        currency: {
             type: "string",
+            description: "currency code (default: USD)",
             required: false
         }
-    )
-    .returns(SubscriptionObject)
-    .implement(async (
-        userId: string,
-        planId: string,
-        amount: number,
-        interval: string,
-        currency: string = 'USD'
-    ) => {
+    },
+    handler: async ({ userId, planId, amount, interval, currency = 'USD' }) => {
         const subscriptionId = generateId('sub')
         const timestamp = new Date().toISOString()
 
@@ -656,45 +624,47 @@ const CreateSubscriptionFunction = new AIFunction("create_subscription", "create
         })
 
         return subscription
-    })
+    }
+})
 
-const GetUserSubscriptionsFunction = new AIFunction("get_user_subscriptions", "retrieve subscriptions for a user")
-    .args({
-        name: "userId",
-        description: "user ID to get subscriptions for",
-        type: "string",
-        required: true
-    })
-    .returns(new AIArray("subscriptions", "user subscriptions", SubscriptionObject))
-    .implement(async (userId: string) => {
-        return subscriptions.filter(sub => sub.userId === userId)
-    })
-
-const RefundTransactionFunction = new AIFunction("refund_transaction", "process a refund for a transaction")
-    .args(
-        {
-            name: "transactionId",
-            description: "transaction ID to refund",
+registerFunctionIntoAI({
+    name: "get_user_subscriptions",
+    description: "retrieve subscriptions for a user",
+    parameters: {
+        userId: {
             type: "string",
+            description: "user ID to get subscriptions for",
+            required: true
+        }
+    },
+    handler: async ({ userId }) => {
+        return subscriptions.filter(sub => sub.userId === userId)
+    }
+})
+
+registerFunctionIntoAI({
+    name: "refund_transaction",
+    description: "process a refund for a transaction",
+    parameters: {
+        transactionId: {
+            type: "string",
+            description: "transaction ID to refund",
             required: true
         },
-        {
-            name: "amount",
-            description: "refund amount in cents (leave empty for full refund)",
+        amount: {
             type: "number",
+            description: "refund amount in cents (leave empty for full refund)",
             required: false
         },
-        {
-            name: "reason",
-            description: "reason for the refund",
+        reason: {
             type: "string",
+            description: "reason for the refund",
             required: false
         }
-    )
-    .returns(TransactionObject)
-    .implement(async (transactionId: string, amount?: number, reason?: string) => {
+    },
+    handler: async ({ transactionId, amount, reason }) => {
         const originalTransaction = transactions.find(txn => txn.id === transactionId)
-        
+
         if (!originalTransaction) {
             throw new Error("Transaction not found")
         }
@@ -704,7 +674,7 @@ const RefundTransactionFunction = new AIFunction("refund_transaction", "process 
         }
 
         const refundAmount = amount || originalTransaction.amount
-        
+
         if (refundAmount > originalTransaction.amount) {
             throw new Error("Refund amount cannot exceed original transaction amount")
         }
@@ -723,7 +693,7 @@ const RefundTransactionFunction = new AIFunction("refund_transaction", "process 
             description: `Refund for ${originalTransaction.description}${reason ? ` - ${reason}` : ''}`,
             createdAt: timestamp,
             processedAt: timestamp,
-            metadata: { 
+            metadata: {
                 originalTransactionId: transactionId,
                 reason: reason || 'Refund requested'
             }
@@ -744,13 +714,5 @@ const RefundTransactionFunction = new AIFunction("refund_transaction", "process 
         })
 
         return refundTransaction
-    })
-
-// Register functions
-registerFunctionIntoAI("process_payment", ProcessPaymentFunction)
-registerFunctionIntoAI("get_user_transactions", GetUserTransactionsFunction)
-registerFunctionIntoAI("add_payment_method", AddPaymentMethodFunction)
-registerFunctionIntoAI("get_user_payment_methods", GetUserPaymentMethodsFunction)
-registerFunctionIntoAI("create_subscription", CreateSubscriptionFunction)
-registerFunctionIntoAI("get_user_subscriptions", GetUserSubscriptionsFunction)
-registerFunctionIntoAI("refund_transaction", RefundTransactionFunction)
+    }
+})

@@ -1,17 +1,17 @@
 // Native Node.js HTTP server entry point
-import { createGenericMiddleware, GenericMiddlewareOptions } from './generic-middleware'
-import { HttpRequest, HttpResponse, HttpAdapter, HttpHandler } from './types/http'
 import * as http from 'http'
 import * as https from 'https'
-import * as url from 'url'
 import * as querystring from 'querystring'
+import * as url from 'url'
+import { createGenericMiddleware, GenericMiddlewareOptions } from './generic-middleware'
+import { HttpAdapter, HttpHandler, HttpRequest, HttpResponse } from './types/http'
 
 // Node.js HTTP adapter for native http.IncomingMessage and http.ServerResponse
 class NodeHttpAdapter implements HttpAdapter {
   adaptRequest(req: http.IncomingMessage): HttpRequest {
     const parsedUrl = url.parse(req.url || '/', true)
     const protocol = (req.socket as any)?.encrypted ? 'https' : 'http'
-    
+
     return {
       method: req.method || 'GET',
       url: req.url || '/',
@@ -19,7 +19,7 @@ class NodeHttpAdapter implements HttpAdapter {
       headers: req.headers,
       body: (req as any).body, // Will be set by body parser
       params: {}, // Will be set by router
-      query: parsedUrl.query || {},
+      query: (parsedUrl.query || {}) as Record<string, string | string[]>,
       protocol,
       hostname: req.headers.host?.split(':')[0] || 'localhost'
     }
@@ -62,7 +62,7 @@ class NodeHttpAdapter implements HttpAdapter {
       try {
         const httpReq = this.adaptRequest(req)
         const httpRes = this.adaptResponse(res)
-        
+
         await Promise.resolve(httpHandler(httpReq, httpRes))
       } catch (error) {
         console.error('Node.js handler error:', error)
@@ -90,15 +90,15 @@ export interface NodeMiddlewareOptions extends Omit<GenericMiddlewareOptions, 'a
 const parseBody = async (req: http.IncomingMessage): Promise<any> => {
   return new Promise((resolve, reject) => {
     let body = ''
-    
+
     req.on('data', (chunk) => {
       body += chunk.toString()
     })
-    
+
     req.on('end', () => {
       try {
         const contentType = req.headers['content-type'] || ''
-        
+
         if (contentType.includes('application/json')) {
           resolve(body ? JSON.parse(body) : {})
         } else if (contentType.includes('application/x-www-form-urlencoded')) {
@@ -110,7 +110,7 @@ const parseBody = async (req: http.IncomingMessage): Promise<any> => {
         reject(new Error('Failed to parse request body'))
       }
     })
-    
+
     req.on('error', reject)
   })
 }
@@ -118,11 +118,11 @@ const parseBody = async (req: http.IncomingMessage): Promise<any> => {
 // Create Node.js HTTP handler
 export const createNodeHttpHandler = (options: NodeMiddlewareOptions) => {
   const adapter = new NodeHttpAdapter()
-  
+
   const genericRouter = createGenericMiddleware({
     ...options,
     adapter
-  })
+  }) as any
 
   return async (req: http.IncomingMessage, res: http.ServerResponse) => {
     try {
@@ -140,14 +140,14 @@ export const createNodeHttpHandler = (options: NodeMiddlewareOptions) => {
 
       const httpReq = adapter.adaptRequest(req)
       const httpRes = adapter.adaptResponse(res)
-      
+
       // Find matching route
       const route = genericRouter.matchRoute(httpReq.method, httpReq.path)
-      
+
       if (route) {
         // Extract parameters
         httpReq.params = genericRouter.extractParams(route.path, httpReq.path)
-        
+
         // Execute middleware chain
         const executeMiddleware = async (index = 0) => {
           if (index < (route.middleware?.length || 0)) {
@@ -157,7 +157,7 @@ export const createNodeHttpHandler = (options: NodeMiddlewareOptions) => {
             await route.handler(httpReq, httpRes)
           }
         }
-        
+
         await executeMiddleware()
       } else {
         res.statusCode = 404
@@ -181,7 +181,7 @@ export const createNodeHttpServer = (
   serverOptions?: http.ServerOptions
 ) => {
   const handler = createNodeHttpHandler(options)
-  return http.createServer(serverOptions, handler)
+  return http.createServer(serverOptions || {}, handler)
 }
 
 // Create a complete HTTPS server
@@ -202,17 +202,17 @@ export const startServer = (
   }
 ) => {
   const { port = 3000, hostname = 'localhost', https: httpsOptions, ...middlewareOptions } = options
-  
-  const server = httpsOptions 
+
+  const server = httpsOptions
     ? createNodeHttpsServer(middlewareOptions, httpsOptions)
     : createNodeHttpServer(middlewareOptions)
-  
+
   return new Promise<http.Server | https.Server>((resolve, reject) => {
     server.listen(port, hostname, () => {
       console.log(`Sashi server listening on ${httpsOptions ? 'https' : 'http'}://${hostname}:${port}`)
       resolve(server)
     })
-    
+
     server.on('error', reject)
   })
 }

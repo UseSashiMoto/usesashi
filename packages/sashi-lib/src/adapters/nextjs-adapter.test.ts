@@ -59,7 +59,8 @@ describe('NextApiAdapter', () => {
         setHeader: jest.fn(),
         getHeader: jest.fn(),
         redirect: jest.fn(),
-        headersSent: false
+        headersSent: false,
+        end: jest.fn()
       }
     })
 
@@ -119,7 +120,8 @@ describe('NextApiAdapter', () => {
         setHeader: jest.fn(),
         getHeader: jest.fn(),
         redirect: jest.fn(),
-        headersSent: false
+        headersSent: false,
+        end: jest.fn()
       }
 
       await nextHandler(mockReq, mockRes)
@@ -142,7 +144,8 @@ describe('NextApiAdapter', () => {
         getHeader: jest.fn(),
         redirect: jest.fn(),
         send: jest.fn(),
-        headersSent: false
+        headersSent: false,
+        end: jest.fn()
       }
 
       await nextHandler(mockReq, mockRes)
@@ -240,7 +243,7 @@ describe('NextAppRouterAdapter', () => {
         url: 'https://example.com/api/test',
         headers: {
           get: () => null,
-          forEach: () => {}
+          forEach: () => { }
         },
         json: jest.fn(),
         text: jest.fn(),
@@ -266,7 +269,7 @@ describe('NextAppRouterAdapter', () => {
         url: 'https://example.com/api/test',
         headers: {
           get: () => null,
-          forEach: () => {}
+          forEach: () => { }
         },
         json: jest.fn(),
         text: jest.fn(),

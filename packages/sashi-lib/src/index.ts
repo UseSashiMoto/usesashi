@@ -14,5 +14,17 @@ export * from "./adapters/express-adapter"
 export * from "./adapters/firebase-adapter"
 export * from "./adapters/nextjs-adapter"
 
+// Framework-specific exports
+export { createExpressMiddleware, createMiddleware } from "./express"
+export {
+    createFirebaseCallableFunction, createFirebaseHttpFunction, createFirebaseRewriteFunction,
+    createFirebaseV2Function
+} from "./firebase"
+export {
+    createNextApiHandler,
+    createNextAppHandler,
+    createSingleMethodHandler
+} from "./nextjs"
+
 
 

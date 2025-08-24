@@ -1,5 +1,5 @@
-import { ExpressAdapter } from './express-adapter'
 import { HttpRequest, HttpResponse } from '../types/http'
+import { ExpressAdapter } from './express-adapter'
 
 // Mock Express types for testing without adding Express dependency
 interface MockExpressRequest {
@@ -34,7 +34,7 @@ describe('ExpressAdapter', () => {
 
   beforeEach(() => {
     adapter = new ExpressAdapter()
-    
+
     mockExpressReq = {
       method: 'GET',
       url: '/test?param=value',
@@ -138,9 +138,9 @@ describe('ExpressAdapter', () => {
 
     it('should forward status calls', () => {
       const httpRes: HttpResponse = adapter.adaptResponse(mockExpressRes)
-      
+
       const result = httpRes.status(404)
-      
+
       expect(mockExpressRes.status).toHaveBeenCalledWith(404)
       expect(result).toBe(httpRes) // Should return itself for chaining
     })
@@ -148,58 +148,58 @@ describe('ExpressAdapter', () => {
     it('should forward json calls', () => {
       const httpRes: HttpResponse = adapter.adaptResponse(mockExpressRes)
       const data = { message: 'test' }
-      
+
       httpRes.json(data)
-      
+
       expect(mockExpressRes.json).toHaveBeenCalledWith(data)
     })
 
     it('should forward send calls', () => {
       const httpRes: HttpResponse = adapter.adaptResponse(mockExpressRes)
-      
+
       httpRes.send('test response')
-      
+
       expect(mockExpressRes.send).toHaveBeenCalledWith('test response')
     })
 
     it('should forward setHeader calls', () => {
       const httpRes: HttpResponse = adapter.adaptResponse(mockExpressRes)
-      
+
       httpRes.setHeader('Content-Type', 'application/json')
-      
+
       expect(mockExpressRes.setHeader).toHaveBeenCalledWith('Content-Type', 'application/json')
     })
 
     it('should forward getHeader calls', () => {
       mockExpressRes.getHeader = jest.fn().mockReturnValue('application/json')
       const httpRes: HttpResponse = adapter.adaptResponse(mockExpressRes)
-      
+
       const result = httpRes.getHeader('Content-Type')
-      
+
       expect(mockExpressRes.getHeader).toHaveBeenCalledWith('Content-Type')
       expect(result).toBe('application/json')
     })
 
     it('should forward redirect calls', () => {
       const httpRes: HttpResponse = adapter.adaptResponse(mockExpressRes)
-      
+
       httpRes.redirect('/new-url')
-      
+
       expect(mockExpressRes.redirect).toHaveBeenCalledWith('/new-url')
     })
 
     it('should forward type calls', () => {
       const httpRes: HttpResponse = adapter.adaptResponse(mockExpressRes)
-      
+
       httpRes.type('text/html')
-      
+
       expect(mockExpressRes.type).toHaveBeenCalledWith('text/html')
     })
 
     it('should preserve headersSent property', () => {
       mockExpressRes.headersSent = true
       const httpRes: HttpResponse = adapter.adaptResponse(mockExpressRes)
-      
+
       expect(httpRes.headersSent).toBe(true)
     })
   })
@@ -208,7 +208,7 @@ describe('ExpressAdapter', () => {
     it('should create Express-compatible handler', () => {
       const mockHttpHandler = jest.fn()
       const expressHandler = adapter.createHandler(mockHttpHandler)
-      
+
       expect(typeof expressHandler).toBe('function')
     })
 
@@ -216,11 +216,11 @@ describe('ExpressAdapter', () => {
       const mockHttpHandler = jest.fn()
       const mockNext = jest.fn()
       const expressHandler = adapter.createHandler(mockHttpHandler)
-      
+
       await expressHandler(mockExpressReq, mockExpressRes, mockNext)
-      
+
       expect(mockHttpHandler).toHaveBeenCalled()
-      
+
       // Verify the adapted objects were passed
       const [httpReq, httpRes] = mockHttpHandler.mock.calls[0]
       expect(httpReq.method).toBe(mockExpressReq.method)
@@ -232,9 +232,9 @@ describe('ExpressAdapter', () => {
       const mockHttpHandler = jest.fn().mockResolvedValue(undefined)
       const mockNext = jest.fn()
       const expressHandler = adapter.createHandler(mockHttpHandler)
-      
+
       await expressHandler(mockExpressReq, mockExpressRes, mockNext)
-      
+
       expect(mockHttpHandler).toHaveBeenCalled()
     })
 
@@ -243,21 +243,21 @@ describe('ExpressAdapter', () => {
       const mockHttpHandler = jest.fn().mockRejectedValue(error)
       const mockNext = jest.fn()
       const expressHandler = adapter.createHandler(mockHttpHandler)
-      
+
       await expressHandler(mockExpressReq, mockExpressRes, mockNext)
-      
+
       expect(mockNext).toHaveBeenCalledWith(error)
     })
 
     it('should call next when provided', async () => {
-      const mockHttpHandler = jest.fn((req, res, next) => {
-        if (next) next()
-      })
+      const mockHttpHandler = jest.fn((req, res) => {
+        // Mock handler logic
+      }) as any
       const mockNext = jest.fn()
       const expressHandler = adapter.createHandler(mockHttpHandler)
-      
+
       await expressHandler(mockExpressReq, mockExpressRes, mockNext)
-      
+
       expect(mockNext).toHaveBeenCalled()
     })
   })

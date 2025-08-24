@@ -13,25 +13,25 @@ export interface NextMiddlewareOptions extends Omit<GenericMiddlewareOptions, 'a
 // For Next.js API Routes (pages/api)
 export const createNextApiHandler = (options: NextMiddlewareOptions) => {
   const adapter = new NextApiAdapter()
-  
+
   const genericRouter = createGenericMiddleware({
     ...options,
     adapter
-  })
+  }) as any
 
   // Return a Next.js API handler
   return async (req: any, res: any) => {
     try {
       const httpReq = adapter.adaptRequest(req)
       const httpRes = adapter.adaptResponse(res)
-      
+
       // Find matching route
       const route = genericRouter.matchRoute(httpReq.method, httpReq.path)
-      
+
       if (route) {
         // Extract parameters
         httpReq.params = genericRouter.extractParams(route.path, httpReq.path)
-        
+
         // Execute middleware chain
         const executeMiddleware = async (index = 0) => {
           if (index < (route.middleware?.length || 0)) {
@@ -41,7 +41,7 @@ export const createNextApiHandler = (options: NextMiddlewareOptions) => {
             await route.handler(httpReq, httpRes)
           }
         }
-        
+
         await executeMiddleware()
       } else {
         res.status(404).json({ error: 'Not found' })
@@ -58,11 +58,11 @@ export const createNextApiHandler = (options: NextMiddlewareOptions) => {
 // For Next.js App Router (app/api)
 export const createNextAppHandler = (options: NextMiddlewareOptions) => {
   const adapter = new NextAppRouterAdapter()
-  
+
   const genericRouter = createGenericMiddleware({
     ...options,
     adapter
-  })
+  }) as any
 
   // Create handlers for each HTTP method
   const createMethodHandler = (method: string) => {
@@ -70,15 +70,15 @@ export const createNextAppHandler = (options: NextMiddlewareOptions) => {
       try {
         const httpReq = adapter.adaptRequest(request as any)
         const httpRes = adapter.adaptResponse({} as any) // App Router uses different response handling
-        
+
         // Override method to match the specific handler
         httpReq.method = method
-        
+
         const route = genericRouter.matchRoute(method, httpReq.path)
-        
+
         if (route) {
           httpReq.params = genericRouter.extractParams(route.path, httpReq.path)
-          
+
           let responseData: any = null
           let statusCode = 200
           const responseHeaders: Record<string, string> = {}
@@ -119,7 +119,7 @@ export const createNextAppHandler = (options: NextMiddlewareOptions) => {
               await route.handler(httpReq, appRouterRes as any)
             }
           }
-          
+
           await executeMiddleware()
 
           // Create Response object
@@ -129,8 +129,8 @@ export const createNextAppHandler = (options: NextMiddlewareOptions) => {
               headers: responseHeaders
             })
           } else if (responseData !== null) {
-            const body = typeof responseData === 'string' 
-              ? responseData 
+            const body = typeof responseData === 'string'
+              ? responseData
               : JSON.stringify(responseData)
             return new Response(body, {
               status: statusCode,
@@ -168,7 +168,7 @@ export const createNextAppHandler = (options: NextMiddlewareOptions) => {
     DELETE: createMethodHandler('DELETE'),
     PATCH: createMethodHandler('PATCH'),
     OPTIONS: createMethodHandler('OPTIONS'),
-    
+
     // Helper to get all handlers at once
     handlers: {
       GET: createMethodHandler('GET'),

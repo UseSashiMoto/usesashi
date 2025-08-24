@@ -1,6 +1,4 @@
 import {
-    AIArray,
-    AIFunction,
     AIObject,
     registerFunctionIntoAI
 } from "@sashimo/lib"
@@ -305,48 +303,38 @@ const AnalyticsSummaryObject = new AIObject("AnalyticsSummary", "analytics summa
         required: true
     })
 
-// AI Functions
-const TrackEventFunction = new AIFunction("track_event", "record a new analytics event")
-    .args(
-        {
-            name: "eventType",
+// Register all analytics functions using the new format
+registerFunctionIntoAI({
+    name: "track_event",
+    description: "record a new analytics event",
+    parameters: {
+        eventType: {
+            type: "string",
             description: "type of event to track",
-            type: "string",
             required: true
         },
-        {
-            name: "userId",
+        userId: {
+            type: "string",
             description: "ID of the user performing the action",
-            type: "string",
             required: false
         },
-        {
-            name: "sessionId",
+        sessionId: {
+            type: "string",
             description: "current session identifier",
-            type: "string",
-            required: true
-        },
-        {
-            name: "properties",
-            description: "event properties as JSON string",
-            type: "string",
             required: false
         },
-        {
-            name: "source",
-            description: "source of the event (web, mobile, api)",
+        properties: {
             type: "string",
+            description: "event properties as JSON string",
+            required: false
+        },
+        source: {
+            type: "string",
+            description: "source of the event (web, mobile, api)",
             required: false
         }
-    )
-    .returns(AnalyticsEventObject)
-    .implement(async (
-        eventType: string,
-        userId?: string,
-        sessionId: string = `sess_${Date.now()}`,
-        properties: string = '{}',
-        source: string = 'web'
-    ) => {
+    },
+    handler: async ({ eventType, userId, sessionId = `sess_${Date.now()}`, properties = '{}', source = 'web' }) => {
         const eventId = generateEventId()
         const timestamp = new Date().toISOString()
 
@@ -379,117 +367,144 @@ const TrackEventFunction = new AIFunction("track_event", "record a new analytics
         })
 
         return event
-    })
+    }
+})
 
-const GetDashboardMetricsFunction = new AIFunction("get_dashboard_metrics", "retrieve key dashboard metrics")
-    .args({
-        name: "category",
-        description: "filter metrics by category (users, engagement, revenue, conversion)",
-        type: "string",
-        required: false
-    })
-    .returns(new AIArray("metrics", "dashboard metrics with trend data", DashboardMetricObject))
-    .implement(async (category?: string) => {
+registerFunctionIntoAI({
+    name: "get_dashboard_metrics",
+    description: "retrieve key dashboard metrics",
+    parameters: {
+        category: {
+            type: "string",
+            description: "filter metrics by category (users, engagement, revenue, conversion)",
+            required: false
+        }
+    },
+    handler: async ({ category }) => {
         if (category) {
             return dashboardMetrics.filter(metric => metric.category === category)
         }
         return dashboardMetrics
-    })
+    }
+})
 
-const GetDashboardMetricsByCategoryFunction = new AIFunction("get_dashboard_metrics_by_category", "retrieve dashboard metrics filtered by category")
-    .args({
-        name: "category",
-        description: "filter metrics by category (users, engagement, revenue, conversion)",
-        type: "string",
-        required: true
-    })
-    .returns(new AIArray("metrics", "dashboard metrics with trend data", DashboardMetricObject))
-    .implement(async (category: string) => {
+registerFunctionIntoAI({
+    name: "get_dashboard_metrics_by_category",
+    description: "retrieve dashboard metrics filtered by category",
+    parameters: {
+        category: {
+            type: "string",
+            description: "filter metrics by category (users, engagement, revenue, conversion)",
+            required: true
+        }
+    },
+    handler: async ({ category }) => {
         return dashboardMetrics.filter(metric => metric.category === category)
-    })
+    }
+})
 
-const GetUserEngagementFunction = new AIFunction("get_user_engagement", "retrieve user engagement data for the last 30 days")
-    .returns(new AIArray("engagement", "daily user engagement metrics", UserEngagementObject))
-    .implement(async () => {
+registerFunctionIntoAI({
+    name: "get_user_engagement",
+    description: "retrieve user engagement data for the last 30 days",
+    parameters: {},
+    handler: async () => {
         return generateMockEngagementData(30)
-    })
+    }
+})
 
-const GetUserEngagementCustomFunction = new AIFunction("get_user_engagement_custom", "retrieve user engagement data for a custom number of days")
-    .args({
-        name: "days",
-        description: "number of days to retrieve data for (1-365)",
-        type: "number",
-        required: true
-    })
-    .returns(new AIArray("engagement", "daily user engagement metrics", UserEngagementObject))
-    .implement(async (days: number) => {
+registerFunctionIntoAI({
+    name: "get_user_engagement_custom",
+    description: "retrieve user engagement data for a custom number of days",
+    parameters: {
+        days: {
+            type: "number",
+            description: "number of days to retrieve data for (1-365)",
+            required: true
+        }
+    },
+    handler: async ({ days }) => {
         if (days < 1 || days > 365) {
             throw new Error("Days must be between 1 and 365")
         }
         return generateMockEngagementData(days)
-    })
+    }
+})
 
-const GetRecentEventsFunction = new AIFunction("get_recent_events", "retrieve the 50 most recent analytics events")
-    .returns(new AIArray("events", "recent analytics events", AnalyticsEventObject))
-    .implement(async () => {
+registerFunctionIntoAI({
+    name: "get_recent_events",
+    description: "retrieve the 50 most recent analytics events",
+    parameters: {},
+    handler: async () => {
         return analyticsEvents
             .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
             .slice(0, 50)
-    })
+    }
+})
 
-const GetRecentEventsCustomFunction = new AIFunction("get_recent_events_custom", "retrieve recent analytics events with custom limit")
-    .args({
-        name: "limit",
-        description: "maximum number of events to return",
-        type: "number",
-        required: true
-    })
-    .returns(new AIArray("events", "recent analytics events", AnalyticsEventObject))
-    .implement(async (limit: number) => {
+registerFunctionIntoAI({
+    name: "get_recent_events_custom",
+    description: "retrieve recent analytics events with custom limit",
+    parameters: {
+        limit: {
+            type: "number",
+            description: "maximum number of events to return",
+            required: true
+        }
+    },
+    handler: async ({ limit }) => {
         return analyticsEvents
             .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
             .slice(0, Math.max(1, Math.min(limit, 1000))) // Limit between 1-1000
-    })
+    }
+})
 
-const GetEventsByTypeFunction = new AIFunction("get_events_by_type", "retrieve analytics events filtered by event type")
-    .args({
-        name: "eventType",
-        description: "event type to filter by",
-        type: "string",
-        required: true
-    })
-    .returns(new AIArray("events", "analytics events of specified type", AnalyticsEventObject))
-    .implement(async (eventType: string) => {
+registerFunctionIntoAI({
+    name: "get_events_by_type",
+    description: "retrieve analytics events filtered by event type",
+    parameters: {
+        eventType: {
+            type: "string",
+            description: "event type to filter by",
+            required: true
+        }
+    },
+    handler: async ({ eventType }) => {
         return analyticsEvents
             .filter(event => event.eventType === eventType)
             .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
             .slice(0, 100) // Reasonable default limit
-    })
+    }
+})
 
-const GetEventsByUserFunction = new AIFunction("get_events_by_user", "retrieve analytics events for a specific user")
-    .args({
-        name: "userId",
-        description: "user ID to filter events by",
-        type: "string",
-        required: true
-    })
-    .returns(new AIArray("events", "analytics events for the specified user", AnalyticsEventObject))
-    .implement(async (userId: string) => {
+registerFunctionIntoAI({
+    name: "get_events_by_user",
+    description: "retrieve analytics events for a specific user",
+    parameters: {
+        userId: {
+            type: "string",
+            description: "user ID to filter events by",
+            required: true
+        }
+    },
+    handler: async ({ userId }) => {
         return analyticsEvents
             .filter(event => event.userId === userId)
             .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
             .slice(0, 100) // Reasonable default limit
-    })
+    }
+})
 
-const GetAnalyticsSummaryFunction = new AIFunction("get_analytics_summary", "get comprehensive analytics summary")
-    .args({
-        name: "hours",
-        description: "number of hours to analyze (default: 24)",
-        type: "number",
-        required: false
-    })
-    .returns(AnalyticsSummaryObject)
-    .implement(async (hours: number = 24) => {
+registerFunctionIntoAI({
+    name: "get_analytics_summary",
+    description: "get comprehensive analytics summary",
+    parameters: {
+        hours: {
+            type: "number",
+            description: "number of hours to analyze (default: 24)",
+            required: false
+        }
+    },
+    handler: async ({ hours = 24 }) => {
         const cutoffTime = new Date(Date.now() - hours * 60 * 60 * 1000)
         const recentEvents = analyticsEvents.filter(
             event => new Date(event.timestamp) > cutoffTime
@@ -520,42 +535,20 @@ const GetAnalyticsSummaryFunction = new AIFunction("get_analytics_summary", "get
             averageSessionDuration,
             timeRange: `Last ${hours} hours`
         }
-    })
+    }
+})
 
-const GetConversionFunnelFunction = new AIFunction("get_conversion_funnel", "analyze conversion funnel metrics")
-    .args({
-        name: "funnelSteps",
-        description: "comma-separated list of funnel steps to analyze",
-        type: "string",
-        required: false
-    })
-    .returns(new AIObject("ConversionFunnel", "conversion funnel analysis", true)
-        .field({
-            name: "steps",
-            description: "funnel steps with conversion data",
-            type: "array",
-            required: true
-        })
-        .field({
-            name: "overallConversionRate",
-            description: "overall conversion rate percentage",
-            type: "number",
-            required: true
-        })
-        .field({
-            name: "totalUsers",
-            description: "total users who entered the funnel",
-            type: "number",
-            required: true
-        })
-        .field({
-            name: "completedUsers",
-            description: "users who completed the entire funnel",
-            type: "number",
-            required: true
-        })
-    )
-    .implement(async (funnelSteps: string = "page_view,user_signup,feature_used") => {
+registerFunctionIntoAI({
+    name: "get_conversion_funnel",
+    description: "analyze conversion funnel metrics",
+    parameters: {
+        funnelSteps: {
+            type: "string",
+            description: "comma-separated list of funnel steps to analyze",
+            required: false
+        }
+    },
+    handler: async ({ funnelSteps = "page_view,user_signup,feature_used" }) => {
         const steps = funnelSteps.split(',').map(s => s.trim())
 
         // Mock funnel data generation
@@ -585,17 +578,5 @@ const GetConversionFunnelFunction = new AIFunction("get_conversion_funnel", "ana
             totalUsers: 1000,
             completedUsers
         }
-    })
-
-// Register functions
-registerFunctionIntoAI("track_event", TrackEventFunction)
-registerFunctionIntoAI("get_dashboard_metrics", GetDashboardMetricsFunction)
-registerFunctionIntoAI("get_dashboard_metrics_by_category", GetDashboardMetricsByCategoryFunction)
-registerFunctionIntoAI("get_user_engagement", GetUserEngagementFunction)
-registerFunctionIntoAI("get_user_engagement_custom", GetUserEngagementCustomFunction)
-registerFunctionIntoAI("get_recent_events", GetRecentEventsFunction)
-registerFunctionIntoAI("get_recent_events_custom", GetRecentEventsCustomFunction)
-registerFunctionIntoAI("get_events_by_type", GetEventsByTypeFunction)
-registerFunctionIntoAI("get_events_by_user", GetEventsByUserFunction)
-registerFunctionIntoAI("get_analytics_summary", GetAnalyticsSummaryFunction)
-registerFunctionIntoAI("get_conversion_funnel", GetConversionFunnelFunction)
+    }
+})

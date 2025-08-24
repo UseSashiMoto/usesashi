@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 
-export default function AppRouterPage() {
+export default function Home() {
   const [response, setResponse] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -13,7 +13,7 @@ export default function AppRouterPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-sashi-session-token': 'app-router-demo-session'
+          'x-sashi-session-token': 'nextjs-demo-session'
         },
         body: JSON.stringify({
           type: '/chat/message',
@@ -40,27 +40,31 @@ export default function AppRouterPage() {
     { name: 'Get Active Users', message: 'Show me only active users' },
     { name: 'Get All Content', message: 'Get all content items' },
     { name: 'Search Content', message: 'Search for content about "Next.js"' },
-    { name: 'Create User', message: 'Create a new user named "App Router User" with email approuter@example.com' },
-    { name: 'Create Content', message: 'Create a new tutorial titled "App Router Guide" about Next.js App Router by "Next.js Team"' },
+    { name: 'Create User', message: 'Create a new user named "Test User" with email test@example.com' },
+    { name: 'Create Content', message: 'Create a new blog post titled "Test Article" about Next.js by "Test Author"' },
   ]
 
   return (
     <main style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
-      <h1>🚀 Sashi Next.js App Router Example</h1>
-      <p>This page demonstrates the App Router implementation of Sashi integration.</p>
+      <h1>🚀 Sashi Next.js Example</h1>
+      <p>This example demonstrates how to integrate Sashi with Next.js using the App Router.</p>
       
       <div style={{ marginBottom: '2rem', padding: '1rem', background: '#e8f4f8', borderRadius: '8px' }}>
-        <h3>🎯 App Router Features</h3>
+        <h3>🎯 Features</h3>
         <ul>
-          <li>Uses the new <code>app/</code> directory structure</li>
-          <li>Server and Client Components</li>
-          <li>Built-in layouts and nested routing</li>
-          <li>API endpoint: <code>/api/sashi-app/*</code></li>
+          <li>✅ Next.js 14+ App Router</li>
+          <li>✅ TypeScript support</li>
+          <li>✅ AI-powered chat interface</li>
+          <li>✅ User and content management</li>
+          <li>✅ RESTful API endpoints via <code>/api/sashi-app/*</code></li>
         </ul>
       </div>
 
       <div style={{ marginBottom: '2rem' }}>
-        <h2>Test Functions</h2>
+        <h2>🧪 Test Functions</h2>
+        <p style={{ color: '#666', marginBottom: '1rem' }}>
+          Click any button below to test the AI-powered functions, or type your own message.
+        </p>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
           {testFunctions.map((func, index) => (
             <button
@@ -69,11 +73,14 @@ export default function AppRouterPage() {
               disabled={loading}
               style={{
                 padding: '1rem',
-                border: '1px solid #ccc',
+                border: '1px solid #ddd',
                 borderRadius: '8px',
-                backgroundColor: '#f5f5f5',
+                backgroundColor: loading ? '#f9f9f9' : '#fff',
                 cursor: loading ? 'not-allowed' : 'pointer',
-                opacity: loading ? 0.6 : 1
+                opacity: loading ? 0.6 : 1,
+                transition: 'all 0.2s ease',
+                fontSize: '0.9rem',
+                fontWeight: '500'
               }}
             >
               {func.name}
@@ -83,12 +90,19 @@ export default function AppRouterPage() {
       </div>
 
       <div style={{ marginBottom: '2rem' }}>
-        <h2>Custom Message</h2>
+        <h2>💬 Custom Message</h2>
         <div style={{ display: 'flex', gap: '1rem' }}>
           <input
             type="text"
-            placeholder="Enter your message..."
-            style={{ flex: 1, padding: '0.5rem', fontSize: '1rem' }}
+            placeholder="Ask anything about users or content..."
+            style={{ 
+              flex: 1, 
+              padding: '0.75rem', 
+              fontSize: '1rem',
+              border: '1px solid #ddd',
+              borderRadius: '6px',
+              outline: 'none'
+            }}
             onKeyPress={(e) => {
               if (e.key === 'Enter') {
                 sendMessage((e.target as HTMLInputElement).value)
@@ -99,38 +113,62 @@ export default function AppRouterPage() {
           <button
             onClick={() => {
               const input = document.querySelector('input[type="text"]') as HTMLInputElement
-              sendMessage(input.value)
-              input.value = ''
+              if (input.value.trim()) {
+                sendMessage(input.value)
+                input.value = ''
+              }
             }}
             disabled={loading}
-            style={{ padding: '0.5rem 1rem', fontSize: '1rem' }}
+            style={{ 
+              padding: '0.75rem 1.5rem', 
+              fontSize: '1rem',
+              backgroundColor: '#0070f3',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              opacity: loading ? 0.6 : 1
+            }}
           >
             {loading ? 'Sending...' : 'Send'}
           </button>
         </div>
       </div>
 
-      <div>
-        <h2>Response</h2>
+      <div style={{ marginBottom: '2rem' }}>
+        <h2>📋 Response</h2>
         <pre style={{
-          background: '#f5f5f5',
+          background: '#f8f9fa',
+          border: '1px solid #e9ecef',
           padding: '1rem',
           borderRadius: '8px',
           overflow: 'auto',
           maxHeight: '400px',
-          whiteSpace: 'pre-wrap'
+          whiteSpace: 'pre-wrap',
+          fontSize: '0.9rem',
+          lineHeight: '1.5'
         }}>
-          {response || 'No response yet. Click a button or send a message above.'}
+          {response || 'No response yet. Click a button or send a message above to get started.'}
         </pre>
       </div>
 
-      <div style={{ marginTop: '2rem' }}>
-        <h3>🔗 Navigation</h3>
-        <p>
-          <a href="/" style={{ color: '#0070f3', textDecoration: 'underline' }}>
-            ← Back to Pages Router example
-          </a>
-        </p>
+      <div style={{ marginTop: '2rem', padding: '1rem', background: '#f0f8ff', borderRadius: '8px', borderLeft: '4px solid #0070f3' }}>
+        <h3>📚 Quick Start Guide</h3>
+        <ol>
+          <li><strong>Try the test buttons</strong> - Each button sends a different AI query</li>
+          <li><strong>Use natural language</strong> - Ask questions like "Show me all users" or "Create a user"</li>
+          <li><strong>Check the API</strong> - Visit <code>/api/sashi-app/bot</code> for the web interface</li>
+          <li><strong>Explore the code</strong> - Check <code>app/api/sashi-app/</code> for implementation details</li>
+        </ol>
+      </div>
+
+      <div style={{ marginTop: '2rem', padding: '1rem', background: '#fff3cd', borderRadius: '8px' }}>
+        <h3>🔗 Available Endpoints</h3>
+        <ul>
+          <li><code>/api/sashi-app/chat</code> - AI chat API endpoint</li>
+          <li><code>/api/sashi-app/bot</code> - Interactive web interface</li>
+          <li><code>/api/sashi-app/functions</code> - Available functions metadata</li>
+        </ul>
       </div>
     </main>
   )

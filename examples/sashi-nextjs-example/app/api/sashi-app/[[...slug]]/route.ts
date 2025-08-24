@@ -2,8 +2,8 @@
 import { createNextAppHandler } from '@sashimo/lib/nextjs'
 
 // Import service modules to register functions
-import '../../../../services/user-service'
 import '../../../../services/content-service'
+import '../../../../services/user-service'
 
 const handlers = createNextAppHandler({
   openAIKey: process.env.OPENAI_API_KEY!,

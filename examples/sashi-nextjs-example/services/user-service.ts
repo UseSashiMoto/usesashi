@@ -1,4 +1,4 @@
-import { registerFunction } from "@sashimo/lib"
+import { AIFieldEnum, AIFunction, registerFunctionIntoAI } from "@sashimo/lib";
 
 // Sample user data for demonstration
 const users = [
@@ -8,70 +8,52 @@ const users = [
   { id: 4, name: "David Wilson", email: "david@example.com", role: "moderator", active: true },
 ]
 
-registerFunction({
-  name: "get_all_users",
-  description: "Retrieve all users in the system",
-  parameters: {},
-  handler: async () => {
+// Create AI Functions using proper AIFunction class
+const GetAllUsersFunction = new AIFunction("get_all_users", "Retrieve all users in the system")
+  .implement(async () => {
     return {
       users: users,
       total: users.length,
       active: users.filter(u => u.active).length
     }
-  }
-})
+  });
 
-registerFunction({
-  name: "get_user_by_id",
-  description: "Get a specific user by their ID",
-  parameters: {
-    type: "object",
-    properties: {
-      userId: {
-        type: "number",
-        description: "The ID of the user to retrieve"
-      }
-    },
-    required: ["userId"]
-  },
-  handler: async ({ userId }: { userId: number }) => {
+const GetUserByIdFunction = new AIFunction("get_user_by_id", "Get a specific user by their ID")
+  .args({
+    name: "userId",
+    type: "number",
+    description: "The ID of the user to retrieve",
+    required: true
+  })
+  .implement(async (userId: number) => {
     const user = users.find(u => u.id === userId)
     if (!user) {
       throw new Error(`User with ID ${userId} not found`)
     }
     return user
-  }
-})
+  });
 
-registerFunction({
-  name: "create_user",
-  description: "Create a new user account",
-  parameters: {
-    type: "object",
-    properties: {
-      name: {
-        type: "string",
-        description: "User's full name"
-      },
-      email: {
-        type: "string",
-        description: "User's email address"
-      },
-      role: {
-        type: "string",
-        description: "User's role",
-        enum: ["user", "moderator", "admin"]
-      }
-    },
-    required: ["name", "email"]
-  },
-  handler: async ({ name, email, role = "user" }: { name: string, email: string, role?: string }) => {
+const CreateUserFunction = new AIFunction("create_user", "Create a new user account")
+  .args({
+    name: "name",
+    type: "string",
+    description: "User's full name",
+    required: true
+  })
+  .args({
+    name: "email",
+    type: "string",
+    description: "User's email address",
+    required: true
+  })
+  .args(new AIFieldEnum("role", "User's role", ["user", "moderator", "admin"], false))
+  .implement(async (name: string, email: string, role?: string) => {
     const newId = Math.max(...users.map(u => u.id)) + 1
     const newUser = {
       id: newId,
       name,
       email,
-      role,
+      role: role || "user",
       active: true
     }
     users.push(newUser)
@@ -79,18 +61,19 @@ registerFunction({
       message: "User created successfully",
       user: newUser
     }
-  }
-})
+  });
 
-registerFunction({
-  name: "get_active_users",
-  description: "Get all active users",
-  parameters: {},
-  handler: async () => {
+const GetActiveUsersFunction = new AIFunction("get_active_users", "Get all active users")
+  .implement(async () => {
     const activeUsers = users.filter(u => u.active)
     return {
       users: activeUsers,
       count: activeUsers.length
     }
-  }
-})
+  });
+
+// Register all functions properly with AIFunction instances
+registerFunctionIntoAI("get_all_users", GetAllUsersFunction);
+registerFunctionIntoAI("get_user_by_id", GetUserByIdFunction);
+registerFunctionIntoAI("create_user", CreateUserFunction);
+registerFunctionIntoAI("get_active_users", GetActiveUsersFunction);

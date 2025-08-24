@@ -1,6 +1,4 @@
 import {
-    AIArray,
-    AIFunction,
     AIObject,
     registerFunctionIntoAI
 } from "@sashimo/lib"
@@ -296,62 +294,48 @@ const ContentCategoryObject = new AIObject("ContentCategory", "content category 
         required: true
     })
 
-// AI Functions
-const CreateContentFunction = new AIFunction("create_content", "create a new content item")
-    .args(
-        {
-            name: "title",
+// Register all content functions using the new format
+registerFunctionIntoAI({
+    name: "create_content",
+    description: "create a new content item",
+    parameters: {
+        title: {
+            type: "string",
             description: "content title",
-            type: "string",
             required: true
         },
-        {
-            name: "content",
+        content: {
+            type: "string",
             description: "main content body",
-            type: "string",
             required: true
         },
-        {
-            name: "type",
+        type: {
+            type: "string",
             description: "content type (article, page, blog_post, documentation)",
-            type: "string",
             required: true
         },
-        {
-            name: "authorId",
+        authorId: {
+            type: "string",
             description: "ID of the content author",
-            type: "string",
             required: true
         },
-        {
-            name: "status",
+        status: {
+            type: "string",
             description: "publication status (draft, published, archived)",
-            type: "string",
             required: false
         },
-        {
-            name: "tags",
+        tags: {
+            type: "string",
             description: "comma-separated tags",
-            type: "string",
             required: false
         },
-        {
-            name: "excerpt",
-            description: "content excerpt or summary",
+        excerpt: {
             type: "string",
+            description: "content excerpt or summary",
             required: false
         }
-    )
-    .returns(ContentItemObject)
-    .implement(async (
-        title: string,
-        content: string,
-        type: string,
-        authorId: string,
-        status: string = 'draft',
-        tags: string = '',
-        excerpt?: string
-    ) => {
+    },
+    handler: async ({ title, content, type, authorId, status = 'draft', tags = '', excerpt }) => {
         const contentId = generateContentId()
         const timestamp = new Date().toISOString()
 
@@ -408,54 +392,69 @@ const CreateContentFunction = new AIFunction("create_content", "create a new con
         })
 
         return newContent
-    })
+    }
+})
 
-const GetAllContentFunction = new AIFunction("get_all_content", "retrieve all content items")
-    .returns(new AIArray("content", "all content items", ContentItemObject))
-    .implement(async () => {
+registerFunctionIntoAI({
+    name: "get_all_content",
+    description: "retrieve all content items",
+    parameters: {},
+    handler: async () => {
         // Sort by creation date (newest first)
         const sortedContent = [...contentItems].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         return sortedContent
-    })
+    }
+})
 
-const GetPublishedContentFunction = new AIFunction("get_published_content", "retrieve only published content items")
-    .returns(new AIArray("content", "published content items", ContentItemObject))
-    .implement(async () => {
+registerFunctionIntoAI({
+    name: "get_published_content",
+    description: "retrieve only published content items",
+    parameters: {},
+    handler: async () => {
         const publishedContent = contentItems.filter(item => item.status === 'published')
         return publishedContent.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    })
+    }
+})
 
-const GetDraftContentFunction = new AIFunction("get_draft_content", "retrieve only draft content items")
-    .returns(new AIArray("content", "draft content items", ContentItemObject))
-    .implement(async () => {
+registerFunctionIntoAI({
+    name: "get_draft_content",
+    description: "retrieve only draft content items",
+    parameters: {},
+    handler: async () => {
         const draftContent = contentItems.filter(item => item.status === 'draft')
         return draftContent.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    })
+    }
+})
 
-const GetContentByTypeFunction = new AIFunction("get_content_by_type", "retrieve content items by type")
-    .args({
-        name: "type",
-        description: "content type (article, page, blog_post, documentation)",
-        type: "string",
-        required: true
-    })
-    .returns(new AIArray("content", "content items of specified type", ContentItemObject))
-    .implement(async (type: string) => {
+registerFunctionIntoAI({
+    name: "get_content_by_type",
+    description: "retrieve content items by type",
+    parameters: {
+        type: {
+            type: "string",
+            description: "content type (article, page, blog_post, documentation)",
+            required: true
+        }
+    },
+    handler: async ({ type }) => {
         const filteredContent = contentItems.filter(item => item.type === type)
         return filteredContent.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    })
+    }
+})
 
-const GetContentByIdFunction = new AIFunction("get_content_by_id", "retrieve a specific content item by ID")
-    .args({
-        name: "contentId",
-        description: "unique content identifier",
-        type: "string",
-        required: true
-    })
-    .returns(ContentItemObject)
-    .implement(async (contentId: string) => {
+registerFunctionIntoAI({
+    name: "get_content_by_id",
+    description: "retrieve a specific content item by ID",
+    parameters: {
+        contentId: {
+            type: "string",
+            description: "unique content identifier",
+            required: true
+        }
+    },
+    handler: async ({ contentId }) => {
         const content = contentItems.find(item => item.id === contentId)
-        
+
         if (!content) {
             throw new Error(`Content with ID ${contentId} not found`)
         }
@@ -470,45 +469,42 @@ const GetContentByIdFunction = new AIFunction("get_content_by_id", "retrieve a s
         })
 
         return content
-    })
+    }
+})
 
-const UpdateContentFunction = new AIFunction("update_content", "update an existing content item")
-    .args(
-        {
-            name: "contentId",
-            description: "ID of content to update",
+registerFunctionIntoAI({
+    name: "update_content",
+    description: "update an existing content item",
+    parameters: {
+        contentId: {
             type: "string",
+            description: "ID of content to update",
             required: true
         },
-        {
-            name: "title",
+        title: {
+            type: "string",
             description: "new title",
-            type: "string",
             required: false
         },
-        {
-            name: "content",
+        content: {
+            type: "string",
             description: "new content body",
-            type: "string",
             required: false
         },
-        {
-            name: "status",
+        status: {
+            type: "string",
             description: "new status",
-            type: "string",
             required: false
         },
-        {
-            name: "tags",
-            description: "new comma-separated tags",
+        tags: {
             type: "string",
+            description: "new comma-separated tags",
             required: false
         }
-    )
-    .returns(ContentItemObject)
-    .implement(async (contentId: string, title?: string, content?: string, status?: string, tags?: string) => {
+    },
+    handler: async ({ contentId, title, content, status, tags }) => {
         const contentItem = contentItems.find(item => item.id === contentId)
-        
+
         if (!contentItem) {
             throw new Error(`Content with ID ${contentId} not found`)
         }
@@ -523,7 +519,7 @@ const UpdateContentFunction = new AIFunction("update_content", "update an existi
                 throw new Error("Invalid status")
             }
             contentItem.status = status as any
-            
+
             // Set published date if publishing for the first time
             if (status === 'published' && !contentItem.publishedAt) {
                 contentItem.publishedAt = timestamp
@@ -542,19 +538,22 @@ const UpdateContentFunction = new AIFunction("update_content", "update an existi
         })
 
         return contentItem
-    })
+    }
+})
 
-const PublishContentFunction = new AIFunction("publish_content", "publish a draft content item")
-    .args({
-        name: "contentId",
-        description: "ID of content to publish",
-        type: "string",
-        required: true
-    })
-    .returns(ContentItemObject)
-    .implement(async (contentId: string) => {
+registerFunctionIntoAI({
+    name: "publish_content",
+    description: "publish a draft content item",
+    parameters: {
+        contentId: {
+            type: "string",
+            description: "ID of content to publish",
+            required: true
+        }
+    },
+    handler: async ({ contentId }) => {
         const contentItem = contentItems.find(item => item.id === contentId)
-        
+
         if (!contentItem) {
             throw new Error(`Content with ID ${contentId} not found`)
         }
@@ -575,43 +574,42 @@ const PublishContentFunction = new AIFunction("publish_content", "publish a draf
         })
 
         return contentItem
-    })
+    }
+})
 
-const SearchContentFunction = new AIFunction("search_content", "search content by title, content, or tags")
-    .args(
-        {
-            name: "query",
-            description: "search query",
+registerFunctionIntoAI({
+    name: "search_content",
+    description: "search content by title, content, or tags",
+    parameters: {
+        query: {
             type: "string",
+            description: "search query",
             required: true
         },
-        {
-            name: "type",
-            description: "filter by content type",
+        type: {
             type: "string",
+            description: "filter by content type",
             required: false
         },
-        {
-            name: "status",
-            description: "filter by status (default: published)",
+        status: {
             type: "string",
+            description: "filter by status (default: published)",
             required: false
         }
-    )
-    .returns(new AIArray("results", "content items matching search", ContentItemObject))
-    .implement(async (query: string, type?: string, status: string = 'published') => {
+    },
+    handler: async ({ query, type, status = 'published' }) => {
         const searchTerm = query.toLowerCase()
-        
+
         let results = contentItems.filter(item => {
-            const matchesQuery = 
+            const matchesQuery =
                 item.title.toLowerCase().includes(searchTerm) ||
                 item.content.toLowerCase().includes(searchTerm) ||
                 item.tags.some(tag => tag.toLowerCase().includes(searchTerm)) ||
                 (item.metadata.excerpt && item.metadata.excerpt.toLowerCase().includes(searchTerm))
-            
+
             const matchesType = !type || item.type === type
             const matchesStatus = !status || item.status === status
-            
+
             return matchesQuery && matchesType && matchesStatus
         })
 
@@ -619,10 +617,10 @@ const SearchContentFunction = new AIFunction("search_content", "search content b
         results.sort((a, b) => {
             const aTitle = a.title.toLowerCase().includes(searchTerm)
             const bTitle = b.title.toLowerCase().includes(searchTerm)
-            
+
             if (aTitle && !bTitle) return -1
             if (!aTitle && bTitle) return 1
-            
+
             // Secondary sort by view count
             return b.viewCount - a.viewCount
         })
@@ -635,48 +633,14 @@ const SearchContentFunction = new AIFunction("search_content", "search content b
         })
 
         return results
-    })
+    }
+})
 
-const GetContentStatsFunction = new AIFunction("get_content_stats", "get content statistics and metrics")
-    .returns(new AIObject("ContentStats", "content statistics", true)
-        .field({
-            name: "totalItems",
-            description: "total number of content items",
-            type: "number",
-            required: true
-        })
-        .field({
-            name: "byStatus",
-            description: "content count by status",
-            type: "object",
-            required: true
-        })
-        .field({
-            name: "byType",
-            description: "content count by type",
-            type: "object",
-            required: true
-        })
-        .field({
-            name: "totalViews",
-            description: "total views across all content",
-            type: "number",
-            required: true
-        })
-        .field({
-            name: "totalLikes",
-            description: "total likes across all content",
-            type: "number",
-            required: true
-        })
-        .field({
-            name: "mostPopular",
-            description: "most viewed content item",
-            type: "object",
-            required: false
-        })
-    )
-    .implement(async () => {
+registerFunctionIntoAI({
+    name: "get_content_stats",
+    description: "get content statistics and metrics",
+    parameters: {},
+    handler: async () => {
         const totalItems = contentItems.length
         const totalViews = contentItems.reduce((sum, item) => sum + item.viewCount, 0)
         const totalLikes = contentItems.reduce((sum, item) => sum + item.likeCount, 0)
@@ -694,7 +658,7 @@ const GetContentStatsFunction = new AIFunction("get_content_stats", "get content
         }, {} as Record<string, number>)
 
         // Find most popular
-        const mostPopular = contentItems.reduce((max, item) => 
+        const mostPopular = contentItems.reduce((max, item) =>
             item.viewCount > (max?.viewCount || 0) ? item : max, contentItems[0] || null)
 
         return {
@@ -710,16 +674,5 @@ const GetContentStatsFunction = new AIFunction("get_content_stats", "get content
                 likeCount: mostPopular.likeCount
             } : null
         }
-    })
-
-// Register functions
-registerFunctionIntoAI("create_content", CreateContentFunction)
-registerFunctionIntoAI("get_all_content", GetAllContentFunction)
-registerFunctionIntoAI("get_published_content", GetPublishedContentFunction)
-registerFunctionIntoAI("get_draft_content", GetDraftContentFunction)
-registerFunctionIntoAI("get_content_by_type", GetContentByTypeFunction)
-registerFunctionIntoAI("get_content_by_id", GetContentByIdFunction)
-registerFunctionIntoAI("update_content", UpdateContentFunction)
-registerFunctionIntoAI("publish_content", PublishContentFunction)
-registerFunctionIntoAI("search_content", SearchContentFunction)
-registerFunctionIntoAI("get_content_stats", GetContentStatsFunction)
+    }
+})
