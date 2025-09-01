@@ -7,7 +7,7 @@ This document provides practical examples of how to implement secure authenticat
 JWT tokens provide stateless, secure session management with built-in expiration.
 
 ```typescript
-import { createMiddleware } from "@usesashi/sashi-lib"
+import { createMiddleware } from "@sashimo/lib"
 import express from "express"
 import jwt from "jsonwebtoken"
 
