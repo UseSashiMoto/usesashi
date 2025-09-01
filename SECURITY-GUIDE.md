@@ -39,7 +39,7 @@ Sashi uses a multi-layered security approach:
 JWT tokens provide stateless, secure session management with built-in expiration.
 
 ```typescript
-import { createMiddleware } from "@usesashi/sashi-lib"
+import { createMiddleware } from "@sashimo/lib"
 import jwt from "jsonwebtoken"
 
 const JWT_SECRET = process.env.SESSION_SECRET || "your-secret-key-here"
@@ -237,13 +237,11 @@ axios.interceptors.request.use((config) => {
 ### Common Issues
 
 1. **401 Unauthorized**: Session token missing or invalid
-
     - Check if token is being sent in headers
     - Verify token hasn't expired
     - Ensure validation function is working correctly
 
 2. **CORS Errors**: Cross-origin request blocked
-
     - Configure CORS properly in middleware
     - Ensure origin is allowlisted
 

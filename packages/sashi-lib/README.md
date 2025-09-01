@@ -82,7 +82,7 @@ npm install @sashimo/lib
 ## 🔧 Basic Usage
 
 ```typescript
-import { createMiddleware, AIFunction } from "@usesashi/sashi-lib"
+import { createMiddleware, AIFunction } from "@sashimo/lib"
 
 // Create a function
 const getUsers = new AIFunction("get_users", "Get all users")
