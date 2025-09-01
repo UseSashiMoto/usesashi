@@ -74,7 +74,7 @@ Functions are registered with:
 ## 📦 Installation
 
 ```bash
-npm install @usesashi/sashi-lib
+npm install @sashimo/lib
 ```
 
 > **Important**: This library requires `zod` version 3.25.67 or lower. Installing with a higher version may cause compatibility issues.
