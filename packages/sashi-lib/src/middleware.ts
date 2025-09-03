@@ -1622,7 +1622,6 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         const baseUrlWithoutBot = req.baseUrl.replace(/\/bot$/, '');
         const apiBaseUrl = sashiServerUrl ?? `${req.protocol}://${req.get('host')}${baseUrlWithoutBot}`;
 
-        console.log("apiBaseUrl", sashiServerUrl, `${req.protocol}://${req.get('host')}${baseUrlWithoutBot}`)
         res.type('text/html').send(
             createSashiHtml(apiBaseUrl, sessionToken)
         );
