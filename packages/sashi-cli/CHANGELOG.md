@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.5.0
+
+### Minor Changes
+
+- 99dc748: fixing readme
+
 ## 3.4.0
 
 ### Minor Changes
