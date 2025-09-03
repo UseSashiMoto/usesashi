@@ -1,5 +1,11 @@
 # sashi-lib
 
+## 8.6.0
+
+### Minor Changes
+
+- 99dc748: fixing readme
+
 ## 8.5.0
 
 ### Minor Changes

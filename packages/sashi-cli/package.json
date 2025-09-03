@@ -1,6 +1,6 @@
 {
     "name": "@sashimo/cli",
-    "version": "3.4.0",
+    "version": "3.5.0",
     "description": "CLI tool for installing and setting up Sashi in Next.js and Node.js projects",
     "main": "dist-simple/simple-index.js",
     "bin": {
