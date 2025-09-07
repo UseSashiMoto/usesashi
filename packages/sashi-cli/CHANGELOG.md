@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.5.0
+
+### Minor Changes
+
+- 99dc748: fixing readme
+- c942b4b: update openai/agent
+
 ## 3.4.0
 
 ### Minor Changes
