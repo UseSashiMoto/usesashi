@@ -1,5 +1,12 @@
 # @sashi/client
 
+## 8.6.0
+
+### Minor Changes
+
+- 99dc748: fixing readme
+- c942b4b: update openai/agent
+
 ## 8.5.0
 
 ### Minor Changes
