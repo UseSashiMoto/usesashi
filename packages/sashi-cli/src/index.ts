@@ -22,8 +22,8 @@ program
     .option('-f, --framework <framework>', 'Target framework (nextjs, nodejs, express)', 'auto')
     .option('-t, --typescript', 'Use TypeScript setup', false)
     .option('-y, --yes', 'Skip prompts and use defaults', false)
-    .option('--api-key <key>', 'OpenAI API key')
-    .option('--hub-url <url>', 'Sashi Hub URL (optional)')
+    .option('--openai-api-key <key>', 'OpenAI API key')
+    .option('--hub-url <url>', 'Sashi Hub URL (defaults to https://hub.usesashi.com)')
     .action(setupCommand);
 
 // Init command - for new projects
@@ -33,8 +33,8 @@ program
     .option('-f, --framework <framework>', 'Target framework (nextjs, nodejs, express)', 'nextjs')
     .option('-t, --typescript', 'Use TypeScript', true)
     .option('-y, --yes', 'Skip prompts and use defaults', false)
-    .option('--api-key <key>', 'OpenAI API key')
-    .option('--hub-url <url>', 'Sashi Hub URL (optional)')
+    .option('--openai-api-key <key>', 'OpenAI API key')
+    .option('--hub-url <url>', 'Sashi Hub URL (defaults to https://hub.usesashi.com)')
     .action(initCommand);
 
 // Add command - add Sashi middleware
