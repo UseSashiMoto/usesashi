@@ -4,10 +4,19 @@ import { ensureUrlProtocol } from '../utils/url';
 import { MessageItem, Metadata, RepoMetadata } from './models';
 export const APP_STORAGE_KEY = 'sashi-state-storage';
 
+interface HubStatus {
+  connected: boolean;
+  authenticated: boolean;
+  userId?: string;
+  hasApiKey: boolean;
+  error?: string;
+}
+
 interface MessageState {
   messages: MessageItem[];
   metadata: Metadata;
-  connectedToHub: boolean;
+  connectedToHub: boolean; // Keep for backward compatibility
+  hubStatus: HubStatus;
   connectedToGithub: boolean;
   githubConfig?: GitHubConfig;
   apiUrl?: string;
@@ -21,7 +30,8 @@ interface MessageState {
   setHubUrl: (hubUrl: string) => void;
   addMessage: (newmessage: MessageItem) => void;
   setMetadata: (metadata: Metadata) => void;
-  setConnectedToHub: (connected: boolean) => void;
+  setConnectedToHub: (connected: boolean) => void; // Keep for backward compatibility
+  setHubStatus: (status: HubStatus) => void;
   setConnectedToGithub: (connected: boolean) => void;
   setGithubConfig: (config?: GitHubConfig) => void;
   clearMessages: () => void;
@@ -42,6 +52,11 @@ const useAppStore = create<MessageState>()(
   persist(
     (set, get) => ({
       connectedToHub: false,
+      hubStatus: {
+        connected: false,
+        authenticated: false,
+        hasApiKey: false,
+      },
       connectedToGithub: false,
       githubConfig: undefined,
       apiUrl: undefined,
@@ -49,6 +64,11 @@ const useAppStore = create<MessageState>()(
       apiToken: undefined,
       hubUrl: undefined,
       setConnectedToHub: (connected: boolean) => set({ connectedToHub: connected }),
+      setHubStatus: (status: HubStatus) =>
+        set({
+          hubStatus: status,
+          connectedToHub: status.connected, // Update legacy field for backward compatibility
+        }),
       setConnectedToGithub: (connected: boolean) => set({ connectedToGithub: connected }),
       setGithubConfig: (config?: GitHubConfig) => set({ githubConfig: config }),
       setHubUrl: (hubUrl: string) => set({ hubUrl: ensureUrlProtocol(hubUrl) }),
