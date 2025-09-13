@@ -78,6 +78,7 @@ app.use(
     createMiddleware({
         openAIKey: process.env.OPENAI_API_KEY || '',
         hubUrl: process.env.HUB_URL || 'http://localhost:3050',
+        apiSecretKey: ""
     })
 )
 

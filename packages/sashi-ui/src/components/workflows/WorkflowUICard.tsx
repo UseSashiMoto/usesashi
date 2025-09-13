@@ -314,6 +314,192 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
     );
   };
 
+  // Render array field with dynamic add/remove functionality
+  const renderArrayField = (field: WorkflowUIComponent, formDataKey: string, fieldValue: any) => {
+    const arrayValue = Array.isArray(fieldValue) ? fieldValue : [];
+    const subItems = field.subItems || [];
+    const minItems = field.minItems || 0;
+    const maxItems = field.maxItems || 20;
+    const defaultCount = field.defaultItemCount || Math.max(1, minItems);
+
+    // Initialize array with default items if empty
+    React.useEffect(() => {
+      if (arrayValue.length === 0 && defaultCount > 0) {
+        const defaultItems = Array(defaultCount)
+          .fill(null)
+          .map(() => {
+            const item: Record<string, any> = {};
+            subItems.forEach((subItem) => {
+              item[subItem.key] = subItem.type === 'number' ? 0 : '';
+            });
+            return item;
+          });
+        handleInputChange(formDataKey, defaultItems);
+      }
+    }, []);
+
+    const addItem = () => {
+      if (arrayValue.length < maxItems) {
+        const newItem: Record<string, any> = {};
+        subItems.forEach((subItem) => {
+          newItem[subItem.key] = subItem.type === 'number' ? 0 : '';
+        });
+        handleInputChange(formDataKey, [...arrayValue, newItem]);
+      }
+    };
+
+    const removeItem = (index: number) => {
+      if (arrayValue.length > minItems) {
+        const newArray = arrayValue.filter((_, i) => i !== index);
+        handleInputChange(formDataKey, newArray);
+      }
+    };
+
+    const updateItemField = (itemIndex: number, fieldKey: string, value: any) => {
+      const updatedArray = [...arrayValue];
+      updatedArray[itemIndex] = { ...updatedArray[itemIndex], [fieldKey]: value };
+      handleInputChange(formDataKey, updatedArray);
+    };
+
+    const renderSubItemField = (subItem: WorkflowUISubItem, itemIndex: number, value: any) => {
+      const fieldId = `${formDataKey}-${itemIndex}-${subItem.key}`;
+
+      switch (subItem.type) {
+        case 'string':
+          return (
+            <Input
+              id={fieldId}
+              placeholder={subItem.placeholder || subItem.label}
+              value={value || ''}
+              onChange={(e) => updateItemField(itemIndex, subItem.key, e.target.value)}
+              required={subItem.required}
+            />
+          );
+        case 'number':
+          return (
+            <Input
+              id={fieldId}
+              type="number"
+              placeholder={subItem.placeholder || subItem.label}
+              value={value || ''}
+              onChange={(e) => updateItemField(itemIndex, subItem.key, parseFloat(e.target.value))}
+              required={subItem.required}
+              min={subItem.validation?.min}
+              max={subItem.validation?.max}
+            />
+          );
+        case 'text':
+          return (
+            <Textarea
+              id={fieldId}
+              placeholder={subItem.placeholder || subItem.label}
+              value={value || ''}
+              onChange={(e) => updateItemField(itemIndex, subItem.key, e.target.value)}
+              required={subItem.required}
+              rows={2}
+            />
+          );
+        case 'boolean':
+          return (
+            <div className="flex items-center space-x-2">
+              <Switch
+                id={fieldId}
+                checked={!!value}
+                onCheckedChange={(checked) => updateItemField(itemIndex, subItem.key, checked)}
+              />
+              <Label htmlFor={fieldId}>{value ? 'Yes' : 'No'}</Label>
+            </div>
+          );
+        case 'enum':
+          return (
+            <Select
+              value={value || ''}
+              onValueChange={(selectedValue) => updateItemField(itemIndex, subItem.key, selectedValue)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={subItem.placeholder || `Select ${subItem.label}`} />
+              </SelectTrigger>
+              <SelectContent>
+                {(subItem.enumValues || []).map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          );
+        default:
+          return (
+            <Input
+              id={fieldId}
+              placeholder={subItem.placeholder || subItem.label}
+              value={value || ''}
+              onChange={(e) => updateItemField(itemIndex, subItem.key, e.target.value)}
+              required={subItem.required}
+            />
+          );
+      }
+    };
+
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <Label className="text-sm font-medium">
+            {field.label} {field.required && <span className="text-red-500">*</span>}
+          </Label>
+          <div className="text-xs text-gray-500">
+            {arrayValue.length} of {maxItems} items
+          </div>
+        </div>
+
+        {arrayValue.map((item, index) => (
+          <div key={index} className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-3">
+            <div className="flex items-center justify-between mb-2">
+              <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Item {index + 1}</Label>
+              {arrayValue.length > minItems && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => removeItem(index)}
+                  className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              )}
+            </div>
+
+            <div className="grid gap-3 grid-cols-1">
+              {subItems.map((subItem) => (
+                <div key={subItem.key} className="space-y-1">
+                  <Label
+                    htmlFor={`${formDataKey}-${index}-${subItem.key}`}
+                    className="text-xs text-gray-600 dark:text-gray-400"
+                  >
+                    {subItem.label} {subItem.required && <span className="text-red-500">*</span>}
+                  </Label>
+                  {renderSubItemField(subItem, index, item[subItem.key])}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+
+        {arrayValue.length < maxItems && (
+          <Button type="button" variant="outline" size="sm" onClick={addItem} className="w-full">
+            Add {field.label.slice(0, -1) || 'Item'}
+          </Button>
+        )}
+
+        {minItems > 0 && arrayValue.length < minItems && (
+          <div className="text-xs text-amber-600 dark:text-amber-400">
+            Minimum {minItems} item{minItems !== 1 ? 's' : ''} required
+          </div>
+        )}
+      </div>
+    );
+  };
+
   // Execute workflow with form data
   const handleExecute = async () => {
     // Otherwise, use internal execution logic for chat workflows
@@ -376,7 +562,25 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
                     console.log(`🔍 [CSV Debug] Extracted values for field "${fieldName}":`, extractedValues);
                     updatedParams[key] = extractedValues;
                   } else {
-                    console.log(`🔍 [CSV Debug] Not a CSV field or not string type for "${formFieldKey}"`);
+                    // Check if it's an array field
+                    let isArrayField = false;
+                    if (workflow.workflow.ui?.inputComponents) {
+                      const arrayComponent = workflow.workflow.ui.inputComponents.find(
+                        (comp) => comp.key === `userInput.${formFieldKey}` && comp.type === 'array'
+                      );
+                      isArrayField = !!arrayComponent;
+                    }
+
+                    console.log(`🔍 [Array Debug] Is "${formFieldKey}" an array field:`, isArrayField);
+
+                    if (isArrayField && Array.isArray(formData[formFieldKey])) {
+                      // Extract the specific field from each array item
+                      const extractedValues = formData[formFieldKey].map((item: any) => item[fieldName]);
+                      console.log(`🔍 [Array Debug] Extracted values for field "${fieldName}":`, extractedValues);
+                      updatedParams[key] = extractedValues;
+                    } else {
+                      console.log(`🔍 [Debug] Not a CSV or array field, or incompatible type for "${formFieldKey}"`);
+                    }
                   }
                 } else {
                   console.log(`🔍 [CSV Debug] No form data found for "${formFieldKey}"`);
@@ -404,8 +608,12 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
                     const parsedData = parseCSV(formData[formFieldKey]);
                     console.log(`🔍 [CSV Debug] Parsed CSV data for "${key}":`, parsedData);
                     updatedParams[key] = parsedData;
+                  } else if (paramMetadata?.type === 'array' && Array.isArray(formData[formFieldKey])) {
+                    // Use array data directly for execution
+                    console.log(`🔍 [Array Debug] Using array form data for "${key}":`, formData[formFieldKey]);
+                    updatedParams[key] = formData[formFieldKey];
                   } else {
-                    console.log(`🔍 [CSV Debug] Using raw form data for "${key}":`, formData[formFieldKey]);
+                    console.log(`🔍 [Debug] Using raw form data for "${key}":`, formData[formFieldKey]);
                     updatedParams[key] = formData[formFieldKey];
                   }
                 } else {

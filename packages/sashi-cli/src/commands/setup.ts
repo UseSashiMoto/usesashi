@@ -1,15 +1,18 @@
 import chalk from 'chalk';
 import { execa } from 'execa';
+import fs from 'fs-extra';
 import inquirer from 'inquirer';
 import ora from 'ora';
+import path from 'path';
 import { detectProject, getDevInstallCommand, getInstallCommand } from '../utils/detector';
+import { handleHubRegistration, validateHubUrl } from '../utils/hub';
 import { createConfigFiles } from '../utils/templates';
 
 interface SetupOptions {
     framework?: string;
     typescript?: boolean;
     yes?: boolean;
-    apiKey?: string;
+    openAIAPIKey?: string;
     hubUrl?: string;
 }
 
@@ -26,10 +29,16 @@ export async function setupCommand(options: SetupOptions) {
         console.log(chalk.gray(`TypeScript: ${projectInfo.hasTypeScript ? 'Yes' : 'No'}`));
         console.log(chalk.gray(`Package Manager: ${projectInfo.packageManager}\n`));
 
+        // Validate hub URL if provided
+        if (options.hubUrl && !validateHubUrl(options.hubUrl)) {
+            console.error(chalk.red('❌ Invalid hub URL format'));
+            process.exit(1);
+        }
+
         // Confirm or override detected settings
         let finalFramework = options.framework === 'auto' ? projectInfo.framework : options.framework;
         let useTypeScript = options.typescript ?? projectInfo.hasTypeScript;
-        let apiKey = options.apiKey;
+        let openAIAPIKey = options.openAIAPIKey;
         let hubUrl = options.hubUrl;
 
         if (!options.yes) {
@@ -55,27 +64,29 @@ export async function setupCommand(options: SetupOptions) {
                     type: 'input',
                     name: 'apiKey',
                     message: 'OpenAI API Key (required):',
-                    validate: (input) => input.trim() ? true : 'API key is required',
-                    when: !apiKey
+                    validate: (input: string) => input.trim() ? true : 'API key is required',
+                    when: !openAIAPIKey
                 },
                 {
                     type: 'input',
                     name: 'hubUrl',
                     message: 'Sashi Hub URL (optional, press enter to skip):',
+                    validate: (input: string) => {
+                        if (!input) return true; // Optional field
+                        return validateHubUrl(input) ? true : 'Please enter a valid URL';
+                    },
                     when: !hubUrl
                 }
             ]);
 
             finalFramework = answers.framework;
             useTypeScript = answers.typescript;
-            apiKey = answers.apiKey || apiKey;
+            openAIAPIKey = answers.openAIAPIKey || openAIAPIKey;
             hubUrl = answers.hubUrl || hubUrl;
         }
 
-        if (!apiKey) {
-            console.error(chalk.red('❌ OpenAI API key is required'));
-            process.exit(1);
-        }
+        // Use provided OpenAI API key or placeholder
+        const finalOpenAIAPIKey = openAIAPIKey || 'your-openai-api-key-here';
 
         // Install packages
         const installSpinner = ora('Installing Sashi packages...').start();
@@ -116,8 +127,9 @@ export async function setupCommand(options: SetupOptions) {
             await createConfigFiles({
                 framework: finalFramework as any,
                 typescript: useTypeScript,
-                apiKey,
+                apiKey: finalOpenAIAPIKey,
                 hubUrl,
+                hubApiKey: undefined, // Will be set after hub registration
                 rootDir: projectInfo.rootDir
             });
 
@@ -127,12 +139,51 @@ export async function setupCommand(options: SetupOptions) {
             throw error;
         }
 
+        // Optional hub registration after main setup is complete
+        let hubApiKey: string | undefined;
+        if (!options.yes) {
+            try {
+                hubApiKey = await handleHubRegistration({
+                    hubUrl,
+                    skipPrompt: false
+                }) || undefined;
+
+                if (hubApiKey) {
+                    // Update the .env.local file with the hub API key
+                    const envPath = path.join(projectInfo.rootDir, '.env.local');
+                    let envContent = await fs.readFile(envPath, 'utf-8');
+                    envContent = envContent.replace(
+                        'HUB_API_SECRET_KEY=your-hub-secret-key-here',
+                        `HUB_API_SECRET_KEY=${hubApiKey}`
+                    );
+                    await fs.writeFile(envPath, envContent);
+                }
+            } catch (error) {
+                // Hub registration failed, but setup is still successful
+                console.log(chalk.yellow('⚠️ Hub registration failed, but your project setup is complete!'));
+            }
+        }
+
         // Success message
         console.log(chalk.green.bold('\n✅ Sashi setup completed successfully!\n'));
 
         console.log(chalk.yellow('Next steps:'));
-        console.log('1. Add your OpenAI API key to your environment variables');
-        console.log('2. Start your development server');
+        if (!openAIAPIKey) {
+            console.log('1. Add your OpenAI API key to .env.local');
+            console.log('   Get your key from: https://platform.openai.com/api-keys');
+        } else {
+            console.log('1. Your OpenAI API key has been added to .env.local');
+        }
+
+        if (hubApiKey) {
+            console.log('2. ✅ Hub registration successful - enhanced features enabled!');
+            console.log('3. Start your development server');
+        } else {
+            console.log('2. Start your development server');
+            if (!options.yes) {
+                console.log('3. Hub registration was skipped - you can run setup again to enable enhanced features');
+            }
+        }
 
         if (finalFramework === 'nextjs') {
             console.log('3. Visit /sashi in your browser to access the admin panel');

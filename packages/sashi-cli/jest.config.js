@@ -18,5 +18,36 @@ module.exports = {
     coverageDirectory: 'coverage',
     coverageReporters: ['text', 'lcov', 'html'],
     setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
-    testTimeout: 30000
+    testTimeout: 60000, // Increased timeout for E2E tests
+    // Separate configuration for E2E tests
+    projects: [
+        {
+            displayName: 'unit',
+            preset: 'ts-jest',
+            testEnvironment: 'node',
+            transform: {
+                '^.+\\.ts$': 'ts-jest',
+            },
+            testMatch: [
+                '<rootDir>/tests/setup.test.ts',
+                '<rootDir>/tests/init.test.ts', 
+                '<rootDir>/tests/check.test.ts',
+                '<rootDir>/tests/integration.test.ts'
+            ],
+            setupFilesAfterEnv: ['<rootDir>/tests/setup.ts']
+        },
+        {
+            displayName: 'e2e',
+            preset: 'ts-jest',
+            testEnvironment: 'node',
+            transform: {
+                '^.+\\.ts$': 'ts-jest',
+            },
+            testMatch: [
+                '<rootDir>/tests/e2e.test.ts',
+                '<rootDir>/tests/workflow-validation.test.ts'
+            ],
+            setupFilesAfterEnv: ['<rootDir>/tests/setup.ts']
+        }
+    ]
 }; 
