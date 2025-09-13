@@ -170,22 +170,65 @@ const checkAgentsConfiguration = async (openAIKey: string): Promise<boolean> => 
     }
 };
 
-const checkHubConnection = async (hubUrl: string, apiSecretKey?: string): Promise<boolean> => {
+interface HubConnectionStatus {
+    connected: boolean;
+    authenticated: boolean;
+    userId?: string;
+    error?: string;
+}
+
+const checkHubConnection = async (hubUrl: string, apiSecretKey?: string): Promise<HubConnectionStatus> => {
     try {
         const response = await fetch(`${hubUrl}/ping`, {
             headers: apiSecretKey ? {
                 [HEADER_API_TOKEN]: apiSecretKey,
             } : undefined,
         });
-        return response.status === 200;
+
+        if (response.status === 200) {
+            const data = await response.json();
+
+            // Check if this is the new authentication-aware ping endpoint
+            if (data.hasOwnProperty('authenticated')) {
+                // New format: { message: "pong", authenticated: boolean, userId?: string, error?: string }
+                return {
+                    connected: true,
+                    authenticated: data.authenticated || false,
+                    userId: data.userId,
+                    error: data.error
+                };
+            } else {
+                // Legacy format: { message: "pong" }
+                // If we have an API key, we can't verify authentication with legacy endpoint
+                return {
+                    connected: true,
+                    authenticated: false, // Can't determine with legacy endpoint
+                    userId: undefined,
+                    error: apiSecretKey ? 'Legacy ping endpoint - cannot verify authentication' : undefined
+                };
+            }
+        } else {
+            return {
+                connected: false,
+                authenticated: false,
+                error: `HTTP ${response.status}`
+            };
+        }
     } catch (error) {
-        return false;
+        return {
+            connected: false,
+            authenticated: false,
+            error: error instanceof Error ? error.message : 'Connection failed'
+        };
     }
 };
 
 // Hub connection cache class
 class HubConnectionCache {
     private isConnected: boolean = false;
+    private isAuthenticated: boolean = false;
+    private userId?: string;
+    private connectionError?: string;
     private lastChecked: number = 0;
     private checkInterval: number = 30000; // 30 seconds
     private hubUrl: string;
@@ -224,17 +267,27 @@ class HubConnectionCache {
 
     // Force refresh the connection status
     async refreshConnection(): Promise<boolean> {
-        if (!this.hubUrl || !this.apiSecretKey) {
+        if (!this.hubUrl) {
             this.isConnected = false;
+            this.isAuthenticated = false;
+            this.userId = undefined;
+            this.connectionError = 'No hub URL configured';
             return false;
         }
 
         this.isChecking = true;
         try {
-            this.isConnected = await checkHubConnection(this.hubUrl, this.apiSecretKey);
+            const status = await checkHubConnection(this.hubUrl, this.apiSecretKey);
+            this.isConnected = status.connected;
+            this.isAuthenticated = status.authenticated;
+            this.userId = status.userId;
+            this.connectionError = status.error;
             this.lastChecked = Date.now();
         } catch (error) {
             this.isConnected = false;
+            this.isAuthenticated = false;
+            this.userId = undefined;
+            this.connectionError = error instanceof Error ? error.message : 'Unknown error';
         } finally {
             this.isChecking = false;
         }
@@ -245,16 +298,32 @@ class HubConnectionCache {
     // Mark connection as failed (called when requests fail)
     markConnectionFailed(): void {
         this.isConnected = false;
+        this.isAuthenticated = false;
+        this.userId = undefined;
+        this.connectionError = 'Connection failed';
         this.lastChecked = 0; // Force next check
     }
 
-    // Get connection info for debugging
+    // Get connection info for debugging and frontend display
     getConnectionInfo() {
         return {
             isConnected: this.isConnected,
+            isAuthenticated: this.isAuthenticated,
+            userId: this.userId,
+            error: this.connectionError,
             lastChecked: new Date(this.lastChecked).toISOString(),
             hasCredentials: !!(this.hubUrl && this.apiSecretKey),
             hubUrl: this.hubUrl
+        };
+    }
+
+    // Get authentication status specifically
+    getAuthenticationStatus() {
+        return {
+            authenticated: this.isAuthenticated,
+            userId: this.userId,
+            hasApiKey: !!this.apiSecretKey,
+            error: this.connectionError
         };
     }
 }
@@ -355,11 +424,13 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         try {
             const agentsConfigured = await checkAgentsConfiguration(openAIKey);
             // Run all checks in parallel
-            const [openAIConnected, hubConnected] = await Promise.all([
+            const [openAIConnected, hubConnectionStatus] = await Promise.all([
 
                 checkOpenAI(),
                 checkHubConnection(hubUrl, apiSecretKey)
             ])
+
+            const hubConnected = hubConnectionStatus.connected;
 
             // Clear the loading states
             process.stdout.write('\x1b[3A') // Move up three lines
@@ -473,12 +544,23 @@ export const createMiddleware = (options: MiddlewareOptions) => {
             // Force refresh the connection and return the result
             const connected = await hubConnectionCache.refreshConnection();
             const connectionInfo = hubConnectionCache.getConnectionInfo();
+            const authStatus = hubConnectionCache.getAuthenticationStatus();
+
             res.json({
                 connected,
+                authenticated: authStatus.authenticated,
+                userId: authStatus.userId,
+                hasApiKey: authStatus.hasApiKey,
+                error: authStatus.error,
                 connectionInfo: debug ? connectionInfo : undefined
             });
         } catch (error) {
-            res.json({ connected: false });
+            res.json({
+                connected: false,
+                authenticated: false,
+                hasApiKey: !!apiSecretKey,
+                error: error instanceof Error ? error.message : 'Connection check failed'
+            });
         }
     });
 
@@ -512,13 +594,26 @@ export const createMiddleware = (options: MiddlewareOptions) => {
         const isHubConnected = await hubConnectionCache.isHubConnected();
         if (!isHubConnected) {
             const connectionInfo = hubConnectionCache.getConnectionInfo();
+            const authStatus = hubConnectionCache.getAuthenticationStatus();
             console.error('Hub connection not available:', connectionInfo);
+
+            let errorDetails = 'Unable to connect to hub server.';
+            let errorCode = 'HUB_CONNECTION_FAILED';
+
+            if (!connectionInfo.hasCredentials) {
+                errorDetails = 'Missing hub URL or API secret key. Please check your server configuration.';
+                errorCode = 'HUB_CONFIG_MISSING';
+            } else if (connectionInfo.isConnected && !authStatus.authenticated) {
+                errorDetails = 'Connected to hub but authentication failed. Please check your API key.';
+                errorCode = 'HUB_AUTH_FAILED';
+            }
+
             return res.status(500).json({
                 error: 'Hub server not available',
-                details: !connectionInfo.hasCredentials
-                    ? 'Missing hub URL or API secret key. Please check your server configuration.'
-                    : 'Unable to connect to hub server. Please check your network connection and hub server status.',
-                code: !connectionInfo.hasCredentials ? 'HUB_CONFIG_MISSING' : 'HUB_CONNECTION_FAILED'
+                details: errorDetails,
+                code: errorCode,
+                authenticated: authStatus.authenticated,
+                hasApiKey: authStatus.hasApiKey
             });
         }
 

@@ -6,7 +6,7 @@ import { WorkflowStorage } from '@/utils/workflowStorage';
 import { DashboardIcon, GearIcon, GitHubLogoIcon } from '@radix-ui/react-icons';
 import * as Toast from '@radix-ui/react-toast';
 import axios from 'axios';
-import { ChevronDown, ChevronUp, Github, History, HomeIcon, MessageSquare } from 'lucide-react';
+import { ChevronDown, ChevronUp, ExternalLink, Github, History, HomeIcon, MessageSquare } from 'lucide-react';
 import React, { useEffect, useMemo, useState, type FC, type PropsWithChildren } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from './Button';
@@ -91,10 +91,12 @@ export const Layout: FC<{} & PropsWithChildren> = ({ children }) => {
   const apiUrl = useAppStore((state) => state.apiUrl);
   const metadata: Metadata | undefined = useAppStore((state: { metadata: any }) => state.metadata);
   const connectedToHub: boolean = useAppStore((state: { connectedToHub: any }) => state.connectedToHub);
+  const hubStatus = useAppStore((state: { hubStatus: any }) => state.hubStatus);
   const connectedToGithub: boolean = useAppStore((state: { connectedToGithub: any }) => state.connectedToGithub);
   const githubConfig = useAppStore((state) => state.githubConfig);
   const location = useLocation();
   const setConnectedToHub = useAppStore((state: { setConnectedToHub: any }) => state.setConnectedToHub);
+  const setHubStatus = useAppStore((state: { setHubStatus: any }) => state.setHubStatus);
   const setConnectedToGithub = useAppStore((state: { setConnectedToGithub: any }) => state.setConnectedToGithub);
   const setGithubConfig = useAppStore((state) => state.setGithubConfig);
 
@@ -128,10 +130,22 @@ export const Layout: FC<{} & PropsWithChildren> = ({ children }) => {
         });
         const data = await response.json();
         console.log('hub connection data', data);
-        setConnectedToHub(data.connected);
+
+        setHubStatus({
+          connected: data.connected || false,
+          authenticated: data.authenticated || false,
+          userId: data.userId,
+          hasApiKey: data.hasApiKey || false,
+          error: data.error,
+        });
       } catch (error) {
         console.error('Error checking hub connection', error);
-        setConnectedToHub(false);
+        setHubStatus({
+          connected: false,
+          authenticated: false,
+          hasApiKey: false,
+          error: 'Connection check failed',
+        });
       }
     };
     checkConnectedToHub();
@@ -249,16 +263,81 @@ export const Layout: FC<{} & PropsWithChildren> = ({ children }) => {
 
               <div className="w-full space-y-4">
                 <DashboardIcon className="mb-0.5" height={16} width={16} />
-                <div className="flex items-center space-x-2 mb-4">
+                <div
+                  className={`flex items-center space-x-2 mb-4 p-2 rounded-lg transition-colors ${
+                    hubUrl ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800' : 'cursor-default'
+                  }`}
+                  onClick={() => {
+                    if (hubUrl) {
+                      window.open('https://www.usesashi.com', '_blank', 'noopener,noreferrer');
+                    }
+                  }}
+                  title={hubUrl ? `Open www.usesashi.com in new tab` : 'No hub URL configured'}
+                >
                   <span className="text-sm font-medium">Hub Status:</span>
-                  <div
-                    className={`w-3 h-3 rounded-full ${connectedToHub ? 'bg-green-500' : 'bg-red-500'} shadow-lg ${
-                      connectedToHub ? 'animate-pulse-green' : 'animate-pulse-red'
-                    }`}
-                  ></div>
-                  <span className={`text-sm ${connectedToHub ? 'text-green-500' : 'text-red-500'}`}>
-                    {connectedToHub ? 'Connected' : 'Disconnected'}
-                  </span>
+                  {(() => {
+                    const getHubStatusDisplay = (): {
+                      color: 'red' | 'yellow' | 'green';
+                      text: string;
+                      tooltip: string;
+                    } => {
+                      if (!hubStatus.connected) {
+                        return {
+                          color: 'red' as const,
+                          text: 'Disconnected',
+                          tooltip: 'Disconnected - Hub server is not reachable',
+                        };
+                      }
+
+                      if (!hubStatus.hasApiKey) {
+                        return {
+                          color: 'yellow' as const,
+                          text: 'No API Key',
+                          tooltip: 'Connected - No API key configured',
+                        };
+                      }
+
+                      if (!hubStatus.authenticated) {
+                        return {
+                          color: 'yellow' as const,
+                          text: 'Unauthenticated',
+                          tooltip: 'Connected, Unauthenticated - Invalid API key',
+                        };
+                      }
+
+                      return {
+                        color: 'green' as const,
+                        text: 'Connected',
+                        tooltip: `Connected - Authenticated as user ${hubStatus.userId || 'unknown'}`,
+                      };
+                    };
+
+                    const status = getHubStatusDisplay();
+                    const colorClasses = {
+                      red: { bg: 'bg-red-500', text: 'text-red-500', pulse: 'animate-pulse-red' },
+                      yellow: { bg: 'bg-yellow-500', text: 'text-yellow-500', pulse: 'animate-pulse-yellow' },
+                      green: { bg: 'bg-green-500', text: 'text-green-500', pulse: 'animate-pulse-green' },
+                    };
+
+                    const colors = colorClasses[status.color];
+
+                    return (
+                      <div className="relative group">
+                        <div className="flex items-center space-x-2 cursor-help">
+                          <div className={`w-3 h-3 rounded-full shadow-lg ${colors.bg} ${colors.pulse}`}></div>
+                          <span className={`text-sm ${colors.text}`}>{status.text}</span>
+                        </div>
+                        {/* Status Tooltip */}
+                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-1 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-[60]">
+                          {status.tooltip}
+                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  {hubUrl && (
+                    <ExternalLink className="w-3 h-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 ml-auto" />
+                  )}
                 </div>
                 <div className="flex flex-col space-y-1 mb-4">
                   <div className="flex items-center space-x-2">

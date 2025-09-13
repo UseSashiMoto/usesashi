@@ -15,6 +15,7 @@ const DebugOverlay = () => {
   const apiUrl = useAppStore((state) => state.apiUrl);
   const sessionToken = useAppStore((state) => state.sessionToken);
   const connectedToHub = useAppStore((state) => state.connectedToHub);
+  const hubStatus = useAppStore((state) => state.hubStatus);
   const rehydrated = useAppStore((state) => state.rehydrated);
 
   return (
@@ -22,7 +23,10 @@ const DebugOverlay = () => {
       <div className="space-y-1">
         <div>API URL: {apiUrl || 'Not set'}</div>
         <div>Session: {sessionToken ? '✓' : '✗'}</div>
-        <div>Hub: {connectedToHub ? '✓' : '✗'}</div>
+        <div>
+          Hub: {connectedToHub ? '✓' : '✗'}{' '}
+          {hubStatus.authenticated ? '(Auth ✓)' : hubStatus.connected ? '(Auth ✗)' : ''}
+        </div>
         <div>Rehydrated: {rehydrated ? '✓' : '✗'}</div>
       </div>
     </div>
@@ -52,7 +56,7 @@ export const App = ({ apiUrl: oldApiUrl, sessionToken: initialSessionToken, base
     process.env.NODE_ENV !== 'production' ||
     (typeof window !== 'undefined' && window.location.search.includes('debug=true'));
 
-  const setConnectedToHub = useAppStore((state: { setConnectedToHub: any }) => state.setConnectedToHub);
+  const setHubStatus = useAppStore((state: { setHubStatus: any }) => state.setHubStatus);
 
   useEffect(() => {
     const checkConnectedToHub = async () => {
@@ -67,10 +71,22 @@ export const App = ({ apiUrl: oldApiUrl, sessionToken: initialSessionToken, base
         });
         const data = await response.json();
         console.log('hub connection data', data);
-        setConnectedToHub(data.connected);
+
+        setHubStatus({
+          connected: data.connected || false,
+          authenticated: data.authenticated || false,
+          userId: data.userId,
+          hasApiKey: data.hasApiKey || false,
+          error: data.error,
+        });
       } catch (error) {
         console.error('Error checking hub connection', error);
-        setConnectedToHub(false);
+        setHubStatus({
+          connected: false,
+          authenticated: false,
+          hasApiKey: false,
+          error: 'Connection check failed',
+        });
       }
     };
     checkConnectedToHub();
