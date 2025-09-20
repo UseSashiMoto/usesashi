@@ -335,6 +335,10 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
       // Create a copy of the workflow with form data
       const workflowWithFormData: WorkflowResponse = { ...workflow.workflow };
 
+      // Debug: Log form data before parameter replacement
+      console.log('🔍 [Parameter Debug] Form data before replacement:', formData);
+      console.log('🔍 [Parameter Debug] Workflow actions before replacement:', workflowWithFormData.actions);
+
       // Update actions to include form data
       if (workflowWithFormData.actions) {
         workflowWithFormData.actions = workflowWithFormData.actions.map((action) => {
@@ -379,7 +383,10 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
                     console.log(`🔍 [CSV Debug] Not a CSV field or not string type for "${formFieldKey}"`);
                   }
                 } else {
-                  console.log(`🔍 [CSV Debug] No form data found for "${formFieldKey}"`);
+                  console.error(`❌ Missing form data for array parameter "${formFieldKey}" (${value})`);
+                  // For array operations, default to empty array
+                  console.warn(`⚠️ Using empty array for array parameter "${key}"`);
+                  updatedParams[key] = [];
                 }
               } else {
                 // Handle simple userInput.field parameters
@@ -409,7 +416,25 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
                     updatedParams[key] = formData[formFieldKey];
                   }
                 } else {
-                  console.log(`🔍 [CSV Debug] No form data found for "${formFieldKey}"`);
+                  // CRITICAL: Replace userInput parameter with appropriate default value
+                  console.error(`❌ Missing form data for required parameter "${formFieldKey}" (${value})`);
+
+                  // Determine appropriate default value based on parameter metadata
+                  const paramMetadata = (action as any).parameterMetadata?.[key];
+                  let defaultValue;
+
+                  if (paramMetadata?.type === 'boolean') {
+                    defaultValue = false;
+                  } else if (paramMetadata?.type === 'number') {
+                    defaultValue = 0;
+                  } else if (paramMetadata?.type === 'array' || paramMetadata?.type === 'csv') {
+                    defaultValue = [];
+                  } else {
+                    defaultValue = '';
+                  }
+
+                  console.warn(`⚠️ Using default value for "${key}":`, defaultValue);
+                  updatedParams[key] = defaultValue;
                 }
               }
             }
@@ -450,18 +475,40 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
         setActiveTab('results');
       } else {
         // Handle case where API responds with success: false
-        const errorMessage = response.data.error || (response.data as any).details || 'Workflow execution failed';
+        let errorMessage = response.data.error || (response.data as any).details || 'Workflow execution failed';
+
+        // Check for step errors which might contain parameter errors
+        if (response.data.stepErrors && response.data.stepErrors.length > 0) {
+          const stepErrorDetails = response.data.stepErrors
+            .map((stepError: any) => `${stepError.actionId}: ${stepError.error}`)
+            .join('\n');
+          errorMessage += '\n\nStep Errors:\n' + stepErrorDetails;
+        }
+
+        console.error('❌ Workflow execution failed:', errorMessage);
+        console.error('❌ Full response data:', response.data);
         setExecutionError(errorMessage);
         setActiveTab('results'); // Show results tab to display the error
       }
     } catch (error: any) {
       console.error('Error executing workflow:', error);
-      const errorMessage =
+      console.error('Full error response:', error.response?.data);
+
+      let errorMessage =
         error.response?.data?.error ||
         error.response?.data?.message ||
         error.response?.data?.details ||
         error.message ||
         'An unexpected error occurred while executing the workflow';
+
+      // Check for step errors in HTTP error responses too
+      if (error.response?.data?.stepErrors && error.response.data.stepErrors.length > 0) {
+        const stepErrorDetails = error.response.data.stepErrors
+          .map((stepError: any) => `${stepError.actionId}: ${stepError.error}`)
+          .join('\n');
+        errorMessage += '\n\nStep Errors:\n' + stepErrorDetails;
+      }
+
       setExecutionError(errorMessage);
       setActiveTab('results'); // Show results tab to display the error
     } finally {
@@ -966,7 +1013,21 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
                     </div>
                     <div className="ml-3 flex-1">
                       <h3 className="text-sm font-medium text-red-800 dark:text-red-200">Workflow Execution Failed</h3>
-                      <div className="mt-2 text-sm text-red-700 dark:text-red-300">{executionError}</div>
+                      <div className="mt-2 text-sm text-red-700 dark:text-red-300">
+                        {executionError.split('\n').map((line, index) => (
+                          <div key={index} className={index > 0 ? 'mt-1' : ''}>
+                            {line.startsWith('Step Errors:') ? (
+                              <div className="font-medium mt-2">{line}</div>
+                            ) : line.includes(': ') && line !== executionError.split('\n')[0] ? (
+                              <div className="ml-2 font-mono text-xs bg-red-100 dark:bg-red-900 p-1 rounded">
+                                {line}
+                              </div>
+                            ) : (
+                              <div>{line}</div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                     <button
                       onClick={() => setExecutionError(null)}
