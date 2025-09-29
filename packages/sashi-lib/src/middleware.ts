@@ -1729,21 +1729,41 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     // =============== LINEAR AGENT ENDPOINT ===============
     // Endpoint for Linear to communicate with Sashi agent
     router.post('/linear/agent', sessionValidation, asyncHandler(async (req, res) => {
+        console.log('🤖 [Linear Agent] Request received');
+        console.log('🤖 [Linear Agent] Request body:', JSON.stringify(req.body, null, 2));
+        console.log('🤖 [Linear Agent] Headers:', {
+            'x-sashi-session-token': req.headers['x-sashi-session-token'] ? 'Present' : 'Missing',
+            'content-type': req.headers['content-type']
+        });
+
         const { userPrompt, previousActivities = [] } = req.body;
 
         if (!userPrompt || typeof userPrompt !== 'string') {
+            console.log('🤖 [Linear Agent] ❌ Invalid request: userPrompt validation failed');
             return res.status(400).json({
                 error: 'Invalid request: userPrompt is required and must be a string'
             });
         }
 
+        console.log('🤖 [Linear Agent] ✅ Request validation passed');
+        console.log('🤖 [Linear Agent] User prompt:', userPrompt);
+        console.log('🤖 [Linear Agent] Previous activities count:', previousActivities.length);
+
         try {
+            console.log('🤖 [Linear Agent] 🔍 Fetching GitHub config...');
             // Get GitHub config for the Linear agent
             const githubConfig = await getGithubConfig({ hubUrl, apiSecretKey });
+            console.log('🤖 [Linear Agent] GitHub config:', githubConfig ?
+                `✅ Found (${githubConfig.owner}/${githubConfig.repo})` :
+                '❌ Not found'
+            );
 
+            console.log('🤖 [Linear Agent] 🔧 Creating workflow execution function...');
             // Create workflow execution function that uses local middleware logic
             const executeWorkflowFn = async (workflow: WorkflowResponse, debug: boolean) => {
-                return await executeWorkflowLogic(workflow, debug, {
+                console.log('🤖 [Linear Agent] ⚡ Executing workflow:', workflow.type || 'Unknown type');
+                console.log('🤖 [Linear Agent] ⚡ Workflow actions count:', workflow.actions?.length || 0);
+                const result = await executeWorkflowLogic(workflow, debug, {
                     getFunctionRegistry,
                     resolveParameters,
                     callFunctionFromRegistryFromObject,
@@ -1751,30 +1771,35 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                     createWorkflowExecutionSuccess,
                     createWorkflowExecutionError
                 });
+                console.log('🤖 [Linear Agent] ⚡ Workflow execution completed');
+                return result;
             };
 
+            console.log('🤖 [Linear Agent] 🚀 Initializing Linear agent...');
             // Create Linear agent with proper configuration
-            const { getLinearSashiAgent } = await import('./sashiagent');
-            const linearAgent = getLinearSashiAgent({
-                githubConfig,
-                hubUrl,
-                apiSecretKey,
-                executeWorkflowFn
-            });
+            const { getSashiAgent } = await import('./sashiagent');
+            const linearAgent = getSashiAgent();
+            console.log('🤖 [Linear Agent] ✅ Linear agent initialized');
 
+            console.log('🤖 [Linear Agent] 💭 Processing user request...');
             // Process the user request
-            const response = await linearAgent.handleUserPrompt(userPrompt, previousActivities);
+            const response = await linearAgent.processRequest(userPrompt, previousActivities);
+            console.log('🤖 [Linear Agent] 💭 Agent response type:', response.content.split(':')[0] || 'Unknown');
+            console.log('🤖 [Linear Agent] 💭 Agent response preview:', response.content.substring(0, 100) + (response.content.length > 100 ? '...' : ''));
 
+            console.log('🤖 [Linear Agent] ✅ Sending successful response');
             // Return response in format Linear expects
             res.json({
                 success: true,
-                response: response
+                response: response.content
             });
 
         } catch (error) {
-            console.error('Linear agent error:', error);
+            console.error('🤖 [Linear Agent] ❌ Error occurred:', error);
+            console.error('🤖 [Linear Agent] ❌ Error stack:', error instanceof Error ? error.stack : 'No stack trace');
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
+            console.log('🤖 [Linear Agent] 💥 Sending error response:', errorMessage);
             res.status(500).json({
                 success: false,
                 error: 'Linear agent failed to process request',
