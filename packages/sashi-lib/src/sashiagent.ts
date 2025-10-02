@@ -427,6 +427,262 @@ inputComponents: [
     });
 };
 
+// Workflow Executor Agent - Creates workflows and executes them immediately, returning results in plain English
+const createWorkflowExecutorAgent = (executeWorkflowFn?: (workflow: any, debug: boolean) => Promise<any>) => {
+    const toolSchemas = generateSplitToolSchemas(8000);
+    const toolSchemaString = toolSchemas.map((chunk, index) => {
+        return index === 0
+            ? `Available backend functions:\n${JSON.stringify(chunk, null, 2)}`
+            : `Additional backend functions (part ${index + 1}):\n${JSON.stringify(chunk, null, 2)}`;
+    }).join('\n\n');
+
+    const validateWorkflowTool = tool({
+        name: 'validate_workflow',
+        description: 'Validate a workflow JSON object to ensure it uses valid functions and parameters, and that UI components exist for userInput parameters',
+        strict: false,
+        parameters: {
+            type: "object" as const,
+            properties: {
+                workflow: {
+                    type: "object" as const,
+                    properties: {
+                        type: {
+                            type: "string" as const,
+                            enum: ["workflow"] as const
+                        },
+                        description: {
+                            type: "string" as const
+                        }
+                    }
+                }
+            },
+            required: ["workflow"],
+            additionalProperties: true as const
+        } as any,
+        execute: async ({ workflow }: { workflow: WorkflowResponse }) => {
+            console.log('🔍 validate_workflow tool called with workflow:', {
+                type: workflow.type,
+                actionsCount: workflow.actions?.length || 0,
+                hasUI: !!workflow.ui,
+                inputComponents: workflow.ui?.inputComponents?.length || 0,
+                outputComponents: workflow.ui?.outputComponents?.length || 0,
+                timestamp: new Date().toISOString()
+            });
+
+            const verification = verifyWorkflow(workflow);
+
+            // Additional validation for UI components
+            const uiValidation = {
+                valid: true,
+                errors: [] as string[]
+            };
+
+            // Collect BASE userInput.* parameters from actions (not array operations)
+            const userInputParams = new Set<string>();
+            if (workflow.actions) {
+                for (const action of workflow.actions) {
+                    if (action.parameters) {
+                        for (const [key, value] of Object.entries(action.parameters)) {
+                            if (typeof value === 'string' && value.startsWith('userInput.')) {
+                                // Only collect base parameters, not array operations
+                                if (value.includes('[*]')) {
+                                    // Extract base parameter from array operation
+                                    // e.g., "userInput.csvData[*].email" -> "userInput.csvData"
+                                    const baseParam = value.split('[*]')[0];
+                                    if (baseParam) {
+                                        userInputParams.add(baseParam);
+                                    }
+                                } else {
+                                    // Regular userInput parameter
+                                    userInputParams.add(value);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // For workflow executor, we don't need UI validation since we're executing immediately
+            // Just validate the workflow structure and functions
+
+            const finalResult = {
+                valid: verification.valid,
+                errors: verification.errors,
+                workflow: workflow
+            };
+
+            console.log('🔍 Validation result:', {
+                verificationValid: verification.valid,
+                finalValid: finalResult.valid,
+                totalErrors: finalResult.errors.length,
+                errors: finalResult.errors
+            });
+
+            // If validation fails, throw an error to prevent workflow from being used
+            if (!finalResult.valid) {
+                console.error('❌ WORKFLOW VALIDATION FAILED - Workflow should be rejected:', finalResult.errors);
+                throw new Error(`Workflow validation failed: ${finalResult.errors.join('; ')}`);
+            }
+
+            return finalResult;
+        }
+    });
+
+    const executeWorkflowTool = tool({
+        name: 'execute_workflow_immediately',
+        description: 'Execute a workflow immediately and return the results in plain English with markdown formatting',
+        strict: false,
+        parameters: {
+            type: "object" as const,
+            properties: {
+                workflow: {
+                    type: "object" as const,
+                    properties: {
+                        type: {
+                            type: "string" as const,
+                            enum: ["workflow"] as const
+                        },
+                        description: {
+                            type: "string" as const
+                        }
+                    }
+                },
+                userInputs: {
+                    type: "object" as const,
+                    description: "User input values for the workflow parameters"
+                }
+            },
+            required: ["workflow"],
+            additionalProperties: true as const
+        } as any,
+        execute: async ({ workflow, userInputs = {} }: { workflow: WorkflowResponse, userInputs?: Record<string, any> }) => {
+            console.log('⚡ execute_workflow_immediately called with workflow:', {
+                type: workflow.type,
+                actionsCount: workflow.actions?.length || 0,
+                userInputsProvided: Object.keys(userInputs).length
+            });
+
+            if (!executeWorkflowFn) {
+                console.log('❌ Execution function not available');
+                return {
+                    success: false,
+                    error: 'Workflow execution function not available'
+                };
+            }
+
+            // Merge user inputs into workflow parameters
+            if (Object.keys(userInputs).length > 0 && workflow.actions) {
+                for (const action of workflow.actions) {
+                    if (action.parameters) {
+                        for (const [key, value] of Object.entries(action.parameters)) {
+                            if (typeof value === 'string' && value.startsWith('userInput.')) {
+                                const inputKey = value;
+                                if (userInputs[inputKey]) {
+                                    action.parameters[key] = userInputs[inputKey];
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            console.log('⚡ Executing workflow with merged parameters...');
+            const executionResult = await executeWorkflowFn(workflow, false);
+            console.log('⚡ Workflow execution completed:', {
+                hasResult: !!executionResult,
+                hasError: !!(executionResult?.error),
+                resultType: typeof executionResult
+            });
+
+            if (!executionResult || executionResult.error) {
+                console.log('❌ Execution failed:', executionResult?.error);
+                return {
+                    success: false,
+                    error: `Failed to execute workflow: ${executionResult?.error || 'Unknown execution error'}`
+                };
+            }
+
+            return {
+                success: true,
+                result: executionResult,
+                message: 'Workflow executed successfully'
+            };
+        }
+    });
+
+    return new Agent({
+        name: 'Workflow Executor',
+        instructions: `You are the Workflow Executor agent. Your job is to create complete workflow JSON objects that accomplish the user's goal and IMMEDIATELY EXECUTE them, returning the results in plain English with markdown formatting.
+
+## Available Functions
+${toolSchemaString}
+
+## Your Task
+When handed off a user request:
+1. Analyze the request and determine what needs to be accomplished
+2. Create a complete JSON workflow object with the necessary actions
+3. For workflows that need user input, extract reasonable defaults or ask the user for specific values
+4. IMMEDIATELY execute the workflow using the execute_workflow_immediately tool
+5. Format the results in plain English with markdown formatting
+6. NEVER return just the workflow definition - always execute and return results
+
+## User Input Strategy
+**For workflows that require user input:**
+- If the user provided specific values in their request, use those values
+- If the user didn't provide required values, ask them for the specific information needed
+- For optional parameters, use reasonable defaults when possible
+- Extract parameters from the user's natural language request
+
+**Examples:**
+- "Update user 123 to admin role" → Use userId: 123, role: "admin"
+- "Send email to john@example.com about the meeting" → Use email: "john@example.com", subject: "Meeting", message: extracted from context
+- "Update a user's role" → Ask user: "Which user ID and what role would you like to set?"
+
+## Workflow Creation Rules
+- Create workflows with proper action structure
+- Include parameterMetadata for validation
+- Use appropriate backend functions from the available functions list
+- Set map: true for operations that should process multiple items
+- Validate workflows using validate_workflow tool before execution
+
+## Execution and Response Format
+1. **Always execute workflows immediately** using execute_workflow_immediately tool
+2. **Format results in markdown** with clear sections:
+   - Brief summary of what was accomplished
+   - Detailed results in tables or lists as appropriate
+   - Any important notes or next steps
+
+3. **Never return workflow JSON** to the user - they should only see the results
+
+## Example Response Format:
+\`\`\`markdown
+# Task Completed Successfully
+
+I've successfully updated the user's role as requested.
+
+## Results
+| Field | Value |
+|-------|-------|
+| User ID | 123 |
+| New Role | admin |
+| Status | Updated |
+
+The user's role has been changed and the system has been updated accordingly.
+\`\`\`
+
+## Important Rules:
+- NEVER return workflow JSON definitions to the user
+- ALWAYS execute workflows immediately after creation
+- ALWAYS format results in markdown
+- ALWAYS provide plain English explanations of what was accomplished
+- If execution fails, explain the error in plain English and suggest solutions
+- For missing required parameters, ask the user for specific values rather than creating incomplete workflows
+
+Your goal is to complete the user's task and show them the results, not to show them how the task was accomplished.`,
+        tools: [validateWorkflowTool, executeWorkflowTool]
+    });
+};
+
 // Response Agent - Generates conversational responses with embedded workflows
 const createResponseAgent = () => {
 
@@ -1166,13 +1422,213 @@ const validateGitHubConfig = (config?: GitHubConfig): { isValid: boolean, status
     };
 };
 
-// Main SashiAgent - Router that decides which agents to use
-const createSashiAgent = (workflowPlannerAgent: Agent, responseAgent: Agent, refinerAgent: Agent, githubAgent: Agent, config?: GitHubConfig) => {
+// Unified prompt generator with conditional flags
+const createUnifiedPrompt = (config?: GitHubConfig, apiConfig?: { hubUrl?: string, apiSecretKey?: string, sessionId?: string, executeWorkflowFn?: (workflow: any, debug: boolean) => Promise<any> }, isLinear: boolean = false) => {
     const githubValidation = validateGitHubConfig(config);
     const hasValidGithub = githubValidation.isValid;
 
-    // GitHub status checking tool
-    const checkGitHubStatusTool = tool({
+    return `You are SashiAgent, the main conversational AI assistant that intelligently routes requests to specialized agents${isLinear ? ' for Linear integration' : ''}.
+
+${isLinear ? `## IMPORTANT: Console Logging
+When you use any tools, the system will log detailed information about the execution. Pay attention to these logs for debugging.
+
+## Available Tools Debug Info:
+- list_workflows: Fetches workflows from hub API (${apiConfig?.hubUrl || 'NO HUB URL'})
+- execute_workflow: Executes workflows using local middleware function (${apiConfig?.executeWorkflowFn ? 'FUNCTION AVAILABLE' : 'NO FUNCTION'})
+- check_github_status: Checks GitHub integration status
+
+` : ''}## Your Role
+You are the entry point for all ${isLinear ? 'Linear' : 'user'} requests. Your job is to understand the user's intent and route them to the appropriate specialized agents${isLinear ? ' or use workflow tools directly' : ''} to fulfill their needs.
+
+## GitHub Integration Status
+${githubValidation.status}
+${hasValidGithub ? '✅ GitHub features are AVAILABLE' : '❌ GitHub features are NOT AVAILABLE'}
+
+${!hasValidGithub ? `
+**IMPORTANT**: When users request GitHub/code-related features, you must inform them that GitHub is not properly configured and they need to configure it first. Use the check_github_status tool to provide specific details about what's missing.
+` : ''}
+
+## Core Decision: Workflow vs GitHub vs Conversational Response
+
+${isLinear ? `**Use Workflow Tools** when the user's intent is to:
+- List saved workflows ("show my workflows", "list workflows", "what workflows do I have")
+- Execute/run existing workflows ("run workflow X", "execute workflow Y")
+- Get details about workflow execution results
+
+` : ''}**Route to GitHub Agent** when the user's intent is to:${hasValidGithub ? '' : ' (⚠️ ONLY if GitHub is configured)'}
+- Make code changes or modifications
+- Update files in a repository
+- Fix bugs or issues in code
+- Change UI elements, text, styling
+- Add or modify features in code
+- Create pull requests
+- Any request that involves modifying repository files
+
+**Route to Workflow Executor** when the user's intent is to:
+${isLinear ? '- Accomplish a specific task that requires backend operations (non-GitHub)\n- Get actual data or results from the system (executes workflows immediately)' : '- Accomplish a specific task that requires backend operations (non-GitHub)\n- Get actual data or results from the system (executes workflows immediately)'}
+- Perform actions that would change or retrieve information
+- Execute operations that need system interaction
+- Work with concrete entities (users, files, data, records, etc.)
+
+**Route to Conversational Response** when the user's intent is to:
+- Understand concepts, explanations, or how things work
+- Get general information or guidance
+- Have casual conversation or ask questions
+- Learn about capabilities without performing actions
+
+## Intent Analysis Framework
+Focus on the user's underlying goal, not specific words:
+
+${isLinear ? `**Workflow Listing Intent Indicators:**
+- "List workflows", "show workflows", "my workflows"
+- "What workflows do I have?", "available workflows"
+- "Show me my saved workflows"
+
+**Workflow Execution Intent Indicators:**
+- "Run workflow [name/id]", "execute workflow [name/id]"
+- "Start workflow", "trigger workflow"
+- User mentions a specific workflow to run
+
+` : ''}**GitHub Intent Indicators:**
+- "Change", "update", "modify", "fix" + code/file/component
+- "Add" or "remove" code elements
+- References to UI components, buttons, text, colors
+- Mentions of files, components, or code sections
+- Requests for code improvements or bug fixes
+
+**Workflow${isLinear ? ' Execution' : ' Execution'} Intent Indicators:**
+- User wants to accomplish something specific (non-code)${isLinear ? ' and expects immediate results' : ' and expects immediate results'}
+- Request involves concrete entities or data
+- User expects to receive actual results or see changes
+- Request implies system interaction or backend operations
+
+**GitHub Status Intent Indicators:**
+- "Is GitHub connected/configured/attached?"
+- "GitHub status", "GitHub integration"
+- "Can I use GitHub features?"
+- "What's my GitHub setup?"
+- "Which repo is connected?"
+- "What repository am I connected to?"
+- "Show me repo details/information"
+- "Tell me about the connected repository"
+- Any direct questions about GitHub connectivity, configuration, or repository information
+
+**Informational Intent Indicators:**
+- User wants to understand or learn something
+- Request is about concepts, processes, or explanations  
+- User is exploring capabilities or asking "how" questions
+- Request is conversational or exploratory in nature (NOT about GitHub status)
+
+## Routing Strategy
+
+${isLinear ? `**For Workflow Listing Questions:**
+1. ALWAYS use list_workflows tool for any workflow listing requests
+2. Format the response in markdown for better readability
+3. Provide clear information about available workflows
+4. Do NOT hand off to other agents for these questions
+
+**For Workflow Execution Requests:**
+1. ALWAYS use execute_workflow tool for running workflows
+2. Extract workflow ID/name from user request
+3. Parse any parameters the user provides
+4. Format the execution results in markdown
+5. Do NOT hand off to other agents for these questions
+
+` : ''}**For GitHub Status Questions:**
+1. ALWAYS use check_github_status tool first for any GitHub connectivity/status questions
+2. For repository detail questions, use check_github_status with includeRepoDetails=true
+3. Provide clear, direct answer about current configuration state
+4. Include configuration guidance if needed
+5. Do NOT hand off to other agents for these questions
+
+**For GitHub Code Requests:**
+${hasValidGithub ?
+            '1. Hand off to GitHub Agent for explain-then-approve workflow' :
+            '1. Use check_github_status tool to show current status\n2. Inform user that GitHub is not configured and explain what they need to do\n3. Do NOT hand off to GitHub Agent - explain the limitation instead'}
+
+**For Other Actionable Requests:**
+1. Hand off to Workflow Executor to create and immediately execute workflows with results in plain English
+
+**For Informational Requests:**
+1. Hand off directly to Response Agent for conversational response (NOT for GitHub status questions)
+
+## Key Principles
+${isLinear ? '- **PRIORITY**: For ANY workflow listing/execution request, use the appropriate tool FIRST - do not route to other agents\n' : ''}- **PRIORITY**: For ANY GitHub status/connectivity question, use check_github_status tool FIRST - do not route to other agents
+- Focus on intent, not keywords
+- Be confident in your routing decisions
+- Trust the specialized agents to handle their domains
+- Prioritize user experience through smooth handoffs
+${hasValidGithub ?
+            '- When in doubt about code changes, route to GitHub Agent' :
+            '- When users request code changes, use check_github_status tool and inform them GitHub needs to be configured first'}
+- When in doubt about other actions, consider if the user expects to see actual results or data
+- Always be transparent about GitHub configuration status
+
+## GitHub Status Question Examples (Use check_github_status tool):
+- "Is GitHub connected?" → Use tool, provide status
+- "Is GitHub attached?" → Use tool, provide status
+- "Can I use GitHub features?" → Use tool, explain availability
+- "What's my GitHub setup?" → Use tool, show configuration
+- "GitHub status" → Use tool, provide detailed status
+- "Which repo is connected?" → Use tool with includeRepoDetails=true
+- "What repository am I connected to?" → Use tool with includeRepoDetails=true
+- "Show me repo details" → Use tool with includeRepoDetails=true
+- "Tell me about the connected repository" → Use tool with includeRepoDetails=true
+
+## GitHub Configuration Guidance
+${!hasValidGithub ? `
+When informing users about GitHub configuration, explain they need to:
+1. Provide a GitHub personal access token
+2. Specify the repository owner (username/organization)
+3. Specify the repository name
+4. Configure these in the system settings
+
+Missing fields: ${githubValidation.missingFields.join(', ')}
+` : 'GitHub is properly configured and ready to use!'}
+
+## Decision Framework
+${isLinear ? `1. **First**: Is this a workflow listing request? → Use list_workflows tool
+2. **Second**: Is this a workflow execution request? → Use execute_workflow tool
+3. **Third**: Is this a GitHub status/connectivity/repository question? → Use check_github_status tool (with includeRepoDetails=true for repo info)
+4. **Fourth**: Is this a GitHub code change request? → Route based on GitHub availability
+5. **Fifth**: Is this an actionable request (non-GitHub) that needs immediate execution? → Route to Workflow Executor
+6. **Sixth**: Is this informational/conversational? → Route to Response Agent
+
+**CRITICAL FOR LINEAR INTEGRATION**: 
+- ALWAYS respond in markdown format for Linear requests
+- When listing workflows, format as markdown list with workflow details
+- When executing workflows, format results as markdown with clear sections
+- Include workflow IDs clearly for easy reference` : `1. **First**: Is this a GitHub status/connectivity/repository question? → Use check_github_status tool (with includeRepoDetails=true for repo info)
+2. **Second**: Is this a GitHub code change request? → Route based on GitHub availability
+3. **Third**: Is this an actionable request (non-GitHub)? → Route to Workflow Executor
+4. **Fourth**: Is this informational/conversational? → Route to Response Agent`}
+
+Analyze the user's request and follow this priority order for routing decisions.`;
+};
+
+// Shared GitHub status tool creation
+const createSharedGitHubStatusTool = (config?: GitHubConfig) => {
+    const githubValidation = validateGitHubConfig(config);
+    const hasValidGithub = githubValidation.isValid;
+
+    // Helper function to get GitHub service
+    const getInitializedGitHubService = async () => {
+        try {
+            if (!config?.token || !config?.owner || !config?.repo) {
+                return null;
+            }
+            return initializeGitHubAPI({
+                token: config.token,
+                owner: config.owner,
+                repo: config.repo
+            });
+        } catch (error) {
+            console.error('Failed to initialize GitHub service:', error);
+            return null;
+        }
+    };
+
+    return tool({
         name: 'check_github_status',
         description: 'Check the current GitHub integration status and configuration, optionally fetch repository details',
         strict: false,
@@ -1245,27 +1701,12 @@ const createSashiAgent = (workflowPlannerAgent: Agent, responseAgent: Agent, ref
             return baseStatus;
         }
     });
+};
 
-    // Helper function to get GitHub service (moved up for reuse)
-    const getInitializedGitHubService = async () => {
-        try {
-            if (!config?.token || !config?.owner || !config?.repo) {
-                return null;
-            }
-            return initializeGitHubAPI({
-                token: config.token,
-                owner: config.owner,
-                repo: config.repo
-            });
-        } catch (error) {
-            console.error('Failed to initialize GitHub service:', error);
-            return null;
-        }
-    };
-
-    return new Agent({
-        name: 'SashiAgent',
-        instructions: `You are SashiAgent, the main conversational AI assistant that intelligently routes requests to specialized agents.
+const createSashiAgentPrompt = (config?: GitHubConfig, apiConfig?: { hubUrl?: string, apiSecretKey?: string, sessionId?: string, executeWorkflowFn?: (workflow: any, debug: boolean) => Promise<any> }, isLinear: boolean = false) => {
+    const githubValidation = validateGitHubConfig(config);
+    const hasValidGithub = githubValidation.isValid;
+    return `You are SashiAgent, the main conversational AI assistant that intelligently routes requests to specialized agents.
 
 ## Your Role
 You are the entry point for all user requests. Your job is to understand the user's intent and route them to the appropriate specialized agents to fulfill their needs.
@@ -1346,8 +1787,8 @@ Focus on the user's underlying goal, not specific words:
 
 **For GitHub Code Requests:**
 ${hasValidGithub ?
-                '1. Hand off to GitHub Agent for explain-then-approve workflow' :
-                '1. Use check_github_status tool to show current status\n2. Inform user that GitHub is not configured and explain what they need to do\n3. Do NOT hand off to GitHub Agent - explain the limitation instead'}
+            '1. Hand off to GitHub Agent for explain-then-approve workflow' :
+            '1. Use check_github_status tool to show current status\n2. Inform user that GitHub is not configured and explain what they need to do\n3. Do NOT hand off to GitHub Agent - explain the limitation instead'}
 
 **For Other Actionable Requests:**
 1. Hand off to Workflow Planner to create complete workflow with actions and UI components
@@ -1362,8 +1803,8 @@ ${hasValidGithub ?
 - Trust the specialized agents to handle their domains
 - Prioritize user experience through smooth handoffs
 ${hasValidGithub ?
-                '- When in doubt about code changes, route to GitHub Agent' :
-                '- When users request code changes, use check_github_status tool and inform them GitHub needs to be configured first'}
+            '- When in doubt about code changes, route to GitHub Agent' :
+            '- When users request code changes, use check_github_status tool and inform them GitHub needs to be configured first'}
 - When in doubt about other actions, consider if the user expects to see actual results or data
 - Always be transparent about GitHub configuration status
 
@@ -1395,7 +1836,21 @@ Missing fields: ${githubValidation.missingFields.join(', ')}
 3. **Third**: Is this an actionable request (non-GitHub)? → Route to Workflow Planner
 4. **Fourth**: Is this informational/conversational? → Route to Response Agent
 
-Analyze the user's request and follow this priority order for routing decisions.`,
+Analyze the user's request and follow this priority order for routing decisions.
+`;
+}
+
+// Main SashiAgent - Router that decides which agents to use (for regular chat)
+const createSashiAgent = (workflowPlannerAgent: Agent, responseAgent: Agent, refinerAgent: Agent, githubAgent: Agent, config?: GitHubConfig) => {
+    const githubValidation = validateGitHubConfig(config);
+    const hasValidGithub = githubValidation.isValid;
+
+    // GitHub status checking tool (only tool for regular chat)
+    const checkGitHubStatusTool = createSharedGitHubStatusTool(config);
+
+    return new Agent({
+        name: 'SashiAgent',
+        instructions: createSashiAgentPrompt(config, undefined, false),
         tools: [checkGitHubStatusTool],
         handoffs: [
             // Only include GitHub agent if properly configured
@@ -1426,6 +1881,290 @@ const createWorkflowRefinerAgent = () => {
         - Apply user-requested changes (e.g., add steps, update values).
         Always return a complete, valid workflow JSON.
         `
+    });
+};
+
+// Linear-specific SashiAgent - Router with workflow tools for Linear integration
+const createLinearSashiAgent = (workflowExecutorAgent: Agent, responseAgent: Agent, refinerAgent: Agent, githubAgent: Agent, config?: GitHubConfig, apiConfig?: { hubUrl?: string, apiSecretKey?: string, sessionId?: string, executeWorkflowFn?: (workflow: any, debug: boolean) => Promise<any> }) => {
+    const githubValidation = validateGitHubConfig(config);
+    const hasValidGithub = githubValidation.isValid;
+
+    // Workflow listing tool
+    const listWorkflowsTool = tool({
+        name: 'list_workflows',
+        description: 'List all saved workflows for the current user',
+        strict: false,
+        parameters: {
+            type: "object" as const,
+            properties: {},
+            required: [],
+            additionalProperties: false as const
+        } as any,
+        execute: async () => {
+            console.log('🔍 [list_workflows] Starting workflow list fetch...');
+            try {
+                console.log('🔍 [list_workflows] Checking API config:', {
+                    hasHubUrl: !!apiConfig?.hubUrl,
+                    hasApiSecretKey: !!apiConfig?.apiSecretKey,
+                    hasSessionId: !!apiConfig?.sessionId,
+                    hubUrl: apiConfig?.hubUrl
+                });
+
+                if (!apiConfig?.hubUrl || !apiConfig?.apiSecretKey) {
+                    console.log('❌ [list_workflows] Hub not configured');
+                    return {
+                        success: false,
+                        error: 'Hub not configured - cannot fetch workflows'
+                    };
+                }
+
+                const headers: Record<string, string> = {
+                    'Content-Type': 'application/json',
+                    'x-api-token': apiConfig.apiSecretKey,
+                };
+
+                if (apiConfig.sessionId) {
+                    headers['X-Session-ID'] = apiConfig.sessionId;
+                }
+
+                console.log('🔍 [list_workflows] Making request to:', `${apiConfig.hubUrl}/workflows`);
+                console.log('🔍 [list_workflows] Headers:', Object.keys(headers));
+
+                const response = await fetch(`${apiConfig.hubUrl}/workflows`, {
+                    method: 'GET',
+                    headers,
+                    signal: AbortSignal.timeout(10000), // 10 second timeout
+                });
+
+                console.log('🔍 [list_workflows] Response status:', response.status, response.statusText);
+
+                if (!response.ok) {
+                    console.log('❌ [list_workflows] Request failed:', response.status, response.statusText);
+                    return {
+                        success: false,
+                        error: `Failed to fetch workflows: ${response.status} ${response.statusText}`
+                    };
+                }
+
+                const workflows = await response.json();
+                console.log('🔍 [list_workflows] Received workflows:', {
+                    isArray: Array.isArray(workflows),
+                    count: Array.isArray(workflows) ? workflows.length : 'not array',
+                    type: typeof workflows
+                });
+
+                return {
+                    success: true,
+                    workflows: Array.isArray(workflows) ? workflows : []
+                };
+            } catch (error) {
+                console.error('❌ [list_workflows] Error occurred:', error);
+                return {
+                    success: false,
+                    error: `Failed to fetch workflows: ${error instanceof Error ? error.message : 'Unknown error'}`
+                };
+            }
+        }
+    });
+
+    // Workflow execution tool
+    const executeWorkflowTool = tool({
+        name: 'execute_workflow',
+        description: 'Execute a saved workflow by ID with optional parameters',
+        strict: false,
+        parameters: {
+            type: "object" as const,
+            properties: {
+                workflowId: {
+                    type: "string" as const,
+                    description: "The ID of the workflow to execute"
+                },
+                parameters: {
+                    type: "object" as const,
+                    description: "Parameters to pass to the workflow execution",
+                    additionalProperties: true
+                }
+            },
+            required: ["workflowId"],
+            additionalProperties: false as const
+        } as any,
+        execute: async ({ workflowId, parameters = {} }: { workflowId: string, parameters?: Record<string, any> }) => {
+            console.log('⚡ [execute_workflow] Starting workflow execution...', {
+                workflowId,
+                parametersCount: Object.keys(parameters).length,
+                parameters: parameters
+            });
+
+            try {
+                console.log('⚡ [execute_workflow] Checking API config:', {
+                    hasHubUrl: !!apiConfig?.hubUrl,
+                    hasApiSecretKey: !!apiConfig?.apiSecretKey,
+                    hasSessionId: !!apiConfig?.sessionId,
+                    hasExecuteWorkflowFn: !!apiConfig?.executeWorkflowFn,
+                    hubUrl: apiConfig?.hubUrl
+                });
+
+                if (!apiConfig?.hubUrl || !apiConfig?.apiSecretKey) {
+                    console.log('❌ [execute_workflow] Hub not configured');
+                    return {
+                        success: false,
+                        error: 'Hub not configured - cannot execute workflows'
+                    };
+                }
+
+                const headers: Record<string, string> = {
+                    'Content-Type': 'application/json',
+                    'x-api-token': apiConfig.apiSecretKey,
+                };
+
+                if (apiConfig.sessionId) {
+                    headers['X-Session-ID'] = apiConfig.sessionId;
+                    headers['x-sashi-session-token'] = apiConfig.sessionId;
+                }
+
+                console.log('⚡ [execute_workflow] Fetching workflow definition from:', `${apiConfig.hubUrl}/workflows/${workflowId}`);
+                console.log('⚡ [execute_workflow] Headers:', Object.keys(headers));
+
+                // First, fetch the workflow to get its definition
+                const workflowResponse = await fetch(`${apiConfig.hubUrl}/workflows/${workflowId}`, {
+                    method: 'GET',
+                    headers,
+                    signal: AbortSignal.timeout(10000),
+                });
+
+                console.log('⚡ [execute_workflow] Workflow fetch response:', workflowResponse.status, workflowResponse.statusText);
+
+                if (!workflowResponse.ok) {
+                    console.log('❌ [execute_workflow] Failed to fetch workflow:', workflowResponse.status, workflowResponse.statusText);
+                    return {
+                        success: false,
+                        error: `Failed to fetch workflow: ${workflowResponse.status} ${workflowResponse.statusText}`
+                    };
+                }
+
+                const workflowDefinition = await workflowResponse.json();
+                console.log('⚡ [execute_workflow] Received workflow definition:', {
+                    name: workflowDefinition.name,
+                    actionsCount: workflowDefinition.actions?.length || 0,
+                    hasUI: !!workflowDefinition.ui,
+                    type: workflowDefinition.type
+                });
+
+                // Merge user parameters into the workflow if needed
+                // This is a simple approach - you might want more sophisticated parameter injection
+                if (parameters && Object.keys(parameters).length > 0) {
+                    console.log('⚡ [execute_workflow] Injecting user parameters into workflow...');
+                    // Update workflow actions with user-provided parameters
+                    if (workflowDefinition.actions) {
+                        let parameterReplacements = 0;
+                        workflowDefinition.actions = workflowDefinition.actions.map((action: any, index: number) => {
+                            if (action.parameters) {
+                                console.log(`⚡ [execute_workflow] Processing action ${index} (${action.id}):`, action.parameters);
+                                // Replace userInput parameters with actual values
+                                const updatedParams = { ...action.parameters };
+                                for (const [key, value] of Object.entries(updatedParams)) {
+                                    if (typeof value === 'string' && value.startsWith('userInput.')) {
+                                        const paramName = value.replace('userInput.', '');
+                                        if (parameters[paramName] !== undefined) {
+                                            console.log(`⚡ [execute_workflow] Replacing ${key}: ${value} → ${parameters[paramName]}`);
+                                            updatedParams[key] = parameters[paramName];
+                                            parameterReplacements++;
+                                        }
+                                    }
+                                }
+                                return { ...action, parameters: updatedParams };
+                            }
+                            return action;
+                        });
+                        console.log(`⚡ [execute_workflow] Made ${parameterReplacements} parameter replacements`);
+                    }
+                }
+
+                // Now execute the workflow using the local execution logic
+                // We'll call the execution function directly instead of making an HTTP request
+                console.log('⚡ [execute_workflow] Checking for execution function...');
+                if (!apiConfig?.executeWorkflowFn) {
+                    console.log('❌ [execute_workflow] Execution function not available');
+                    return {
+                        success: false,
+                        error: 'Workflow execution function not available - this should only be called from Linear integration'
+                    };
+                }
+
+                console.log('⚡ [execute_workflow] Calling local execution function...');
+                const executionResult = await apiConfig.executeWorkflowFn(workflowDefinition, false);
+                console.log('⚡ [execute_workflow] Execution completed:', {
+                    hasResult: !!executionResult,
+                    hasError: !!(executionResult?.error),
+                    resultType: typeof executionResult,
+                    resultKeys: executionResult ? Object.keys(executionResult) : 'no result'
+                });
+
+                if (!executionResult || executionResult.error) {
+                    console.log('❌ [execute_workflow] Execution failed:', executionResult?.error);
+                    return {
+                        success: false,
+                        error: `Failed to execute workflow: ${executionResult?.error || 'Unknown execution error'}`
+                    };
+                }
+
+                const finalResult = {
+                    success: true,
+                    workflowId: workflowId,
+                    workflowName: workflowDefinition.name || workflowId,
+                    executionId: `exec-${Date.now()}`,
+                    status: 'completed',
+                    results: executionResult.results || [],
+                    errors: executionResult.errors || [],
+                    message: `Workflow "${workflowDefinition.name || workflowId}" executed successfully`,
+                    executionDetails: {
+                        actionCount: workflowDefinition.actions?.length || 0,
+                        duration: 0, // Duration would need to be calculated if needed
+                        timestamp: new Date().toISOString()
+                    }
+                };
+
+                console.log('✅ [execute_workflow] Returning final result:', {
+                    success: finalResult.success,
+                    workflowName: finalResult.workflowName,
+                    resultsCount: finalResult.results.length,
+                    errorsCount: finalResult.errors.length
+                });
+
+                return finalResult;
+            } catch (error) {
+                console.error('❌ [execute_workflow] Exception occurred:', error);
+                console.error('❌ [execute_workflow] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+                return {
+                    success: false,
+                    error: `Failed to execute workflow: ${error instanceof Error ? error.message : 'Unknown error'}`
+                };
+            }
+        }
+    });
+
+    // Shared GitHub status checking tool for Linear agent
+    const checkGitHubStatusTool = createSharedGitHubStatusTool(config);
+
+    return new Agent({
+        name: 'LinearSashiAgent',
+        instructions: createUnifiedPrompt(config, apiConfig, true),
+        tools: [listWorkflowsTool, executeWorkflowTool, checkGitHubStatusTool],
+        handoffs: [
+            // Only include GitHub agent if properly configured
+            ...(hasValidGithub ? [handoff(githubAgent, {
+                toolDescriptionOverride: 'Hand off to GitHub Agent when user wants to make code changes, modify files, or create pull requests (GitHub is configured)'
+            })] : []),
+            handoff(workflowExecutorAgent, {
+                toolDescriptionOverride: 'Hand off to Workflow Executor when user wants to accomplish a specific task that requires backend operations (non-GitHub) - creates and executes workflows immediately'
+            }),
+            handoff(responseAgent, {
+                toolDescriptionOverride: 'Hand off to Response Agent for informational responses, explanations, or when user wants to understand concepts'
+            }),
+            handoff(refinerAgent, {
+                toolDescriptionOverride: 'Hand off to Refiner Agent when user wants to modify or fix an existing workflow'
+            })
+        ].filter((item) => item !== null) as Handoff<any, "text">[],
     });
 };
 
@@ -1546,4 +2285,127 @@ export const getSashiAgent = (config?: GitHubConfig): SashiAgent => {
         currentConfig = config;
     }
     return sashiAgent;
+};
+
+// Linear-specific agent interface
+interface LinearSashiAgent {
+    handleUserPrompt(userPrompt: string, previousActivities: { role: string, content: string }[]): Promise<string>;
+}
+
+// Linear agent configuration
+interface LinearAgentConfig {
+    githubConfig?: GitHubConfig;
+    hubUrl?: string;
+    apiSecretKey?: string;
+    executeWorkflowFn?: (workflow: any, debug: boolean) => Promise<any>;
+}
+
+// Create a Linear-specific agent with workflow tools
+export const getLinearSashiAgent = (config?: LinearAgentConfig): LinearSashiAgent => {
+    // Create the specialized agents
+    const workflowExecutorAgent = createWorkflowExecutorAgent(config?.executeWorkflowFn);
+    const responseAgent = createResponseAgent();
+    const refinerAgent = createWorkflowRefinerAgent();
+    const githubAgent = createGitHubAgent(config?.githubConfig);
+
+    const apiConfig = {
+        hubUrl: config?.hubUrl,
+        apiSecretKey: config?.apiSecretKey,
+        sessionId: undefined, // Session ID would be passed separately if needed
+        executeWorkflowFn: config?.executeWorkflowFn
+    };
+
+    // Create the Linear-specific agent with workflow tools
+    const linearSashiAgent = createLinearSashiAgent(
+        workflowExecutorAgent,
+        responseAgent,
+        refinerAgent,
+        githubAgent,
+        config?.githubConfig,
+        apiConfig
+    );
+
+    return {
+        async handleUserPrompt(userPrompt: string, previousActivities: { role: string, content: string }[] = []): Promise<string> {
+            try {
+                console.log('🤖 [Linear Agent] ========== Processing Linear Request ==========');
+                console.log('🤖 [Linear Agent] User prompt:', userPrompt);
+                console.log('🤖 [Linear Agent] Previous activities count:', previousActivities.length);
+                console.log('🤖 [Linear Agent] API config:', {
+                    hasHubUrl: !!(config?.hubUrl),
+                    hasApiSecretKey: !!(config?.apiSecretKey),
+                    hasExecuteWorkflowFn: !!(config?.executeWorkflowFn),
+                    hubUrl: config?.hubUrl
+                });
+
+                console.log('🤖 [Linear Agent] Calling LinearSashiAgent.run...');
+                const thread = previousActivities.map((item) => {
+                    if (item.role === 'user') {
+                        return user(item.content);
+                    }
+                    if (item.role === 'assistant') {
+                        return assistant(item.content);
+                    }
+                    return null;
+                }).filter((item) => item !== null);
+                thread.push(user(userPrompt));
+
+                const result = await run(linearSashiAgent, thread);
+                const finalOutput = result.finalOutput;
+
+                let response;
+                if (typeof finalOutput === 'object' && finalOutput !== null) {
+                    const parsed = finalOutput as any;
+                    if (parsed.type === 'general' && typeof parsed.content === 'string') {
+                        response = parsed;
+                    } else {
+                        response = {
+                            type: 'general',
+                            content: typeof finalOutput === 'string' ? finalOutput : JSON.stringify(finalOutput)
+                        };
+                    }
+                } else {
+                    response = {
+                        type: 'general',
+                        content: typeof finalOutput === 'string' ? finalOutput : JSON.stringify(finalOutput)
+                    };
+                }
+
+                console.log('🤖 [Linear Agent] SashiAgent response received:', {
+                    type: response.type,
+                    contentLength: response.content.length,
+                    contentPreview: response.content.substring(0, 200) + (response.content.length > 200 ? '...' : '')
+                });
+
+                // Ensure response is always markdown formatted for Linear
+                let content = response.content;
+
+                // If response doesn't start with markdown indicators, format it properly
+                if (!content.includes('**') && !content.includes('#') && !content.includes('```')) {
+                    console.log('🤖 [Linear Agent] Adding markdown formatting to response');
+                    content = `**Response:**\n\n${content}`;
+                }
+
+                // Add RESPONSE: prefix for Linear compatibility
+                const formattedResponse = content;
+
+                console.log('🤖 [Linear Agent] Final formatted response:', {
+                    length: formattedResponse.length,
+                    hasMarkdown: formattedResponse.includes('**') || formattedResponse.includes('#'),
+                    preview: formattedResponse.substring(0, 150) + (formattedResponse.length > 150 ? '...' : '')
+                });
+                console.log('🤖 [Linear Agent] ========== Request Complete ==========');
+
+                return formattedResponse;
+
+            } catch (error) {
+                console.error('🤖 [Linear Agent] ❌ Error processing request:', error);
+                console.error('🤖 [Linear Agent] ❌ Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+                const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+                const errorResponse = `RESPONSE: **Error**\n\nI encountered an error while processing your request: ${errorMessage}\n\nPlease try again or rephrase your request.`;
+                console.log('🤖 [Linear Agent] ❌ Returning error response:', errorResponse);
+                return errorResponse;
+            }
+        }
+    };
 }; 

@@ -1777,21 +1777,26 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
             console.log('🤖 [Linear Agent] 🚀 Initializing Linear agent...');
             // Create Linear agent with proper configuration
-            const { getSashiAgent } = await import('./sashiagent');
-            const linearAgent = getSashiAgent();
+            const { getLinearSashiAgent } = await import('./sashiagent');
+            const linearAgent = getLinearSashiAgent({
+                githubConfig,
+                hubUrl,
+                apiSecretKey,
+                executeWorkflowFn
+            });
             console.log('🤖 [Linear Agent] ✅ Linear agent initialized');
 
             console.log('🤖 [Linear Agent] 💭 Processing user request...');
             // Process the user request
-            const response = await linearAgent.processRequest(userPrompt, previousActivities);
-            console.log('🤖 [Linear Agent] 💭 Agent response type:', response.content.split(':')[0] || 'Unknown');
-            console.log('🤖 [Linear Agent] 💭 Agent response preview:', response.content.substring(0, 100) + (response.content.length > 100 ? '...' : ''));
+            const response = await linearAgent.handleUserPrompt(userPrompt, previousActivities);
+            console.log('🤖 [Linear Agent] 💭 Agent response type:', typeof response);
+            console.log('🤖 [Linear Agent] 💭 Agent response preview:', response.substring(0, 100) + (response.length > 100 ? '...' : ''));
 
             console.log('🤖 [Linear Agent] ✅ Sending successful response');
             // Return response in format Linear expects
             res.json({
                 success: true,
-                response: response.content
+                response: response
             });
 
         } catch (error) {
