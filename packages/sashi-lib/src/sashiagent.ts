@@ -1041,9 +1041,9 @@ const createWorkflowExecutorAgent = (executeWorkflowFn?: (workflow: any, debug: 
 
                     return {
                         success: false,
-                        error: `Workflow "${savedWorkflow.name || workflowId}" cannot be executed because it uses functions that are not currently registered: ${executabilityCheck.missingFunctions.join(', ')}. Please ensure all required functions are available.`,
+                        error: `The automation "${savedWorkflow.name || 'requested process'}" isn't currently available in your workspace. This feature may need to be set up or configured by your administrator.`,
                         workflowStatus: 'disabled',
-                        missingFunctions: executabilityCheck.missingFunctions
+                        userFriendlyMessage: `Sorry, the "${savedWorkflow.name || 'requested process'}" automation isn't available right now. You might want to check with your team administrator or try a different approach.`
                     };
                 }
 
@@ -1183,10 +1183,12 @@ When handed off a user request:
 2. **IDENTIFY THE RIGHT WORKFLOW** - Look for workflows that match the user's intent by name, description, or functionality
 3. **EXTRACT PARAMETERS** - Use extract_parameters_from_prompt to intelligently extract parameters from the user's natural language request
 4. **VALIDATE PARAMETERS** - Use validate_workflow_parameters to ensure extracted parameters are correct and complete
-5. **HANDLE MISSING/INVALID PARAMETERS** - If validation fails, provide clear feedback to the user about what's missing or incorrect
-6. **EXECUTE THE WORKFLOW** - Use execute_workflow_by_id with the validated parameters
-7. **FORMAT RESULTS** - Return results in plain English with markdown formatting
-8. **NEVER CREATE NEW WORKFLOWS** - Only use existing saved workflows
+5. **CHECK WORKFLOW STATUS** - Only proceed with workflows that have status "Ready", not "Disabled"
+6. **HANDLE DISABLED WORKFLOWS** - If workflow is disabled, provide user-friendly feedback without technical details
+7. **HANDLE MISSING/INVALID PARAMETERS** - If validation fails, provide clear feedback to the user about what's missing or incorrect
+8. **EXECUTE THE WORKFLOW** - Use execute_workflow_by_id with the validated parameters
+9. **FORMAT RESULTS** - Return results in plain English with markdown formatting
+10. **NEVER CREATE NEW WORKFLOWS** - Only use existing saved workflows
 
 ## Workflow Discovery Process
 **Step 1: List or Search Workflows**
@@ -1199,7 +1201,7 @@ When handed off a user request:
 - Check workflow status (Ready vs Disabled)
 - Only consider workflows with status "Ready" for execution
 - If multiple executable workflows match, choose the most specific one
-- If only disabled workflows match, inform the user about missing functions
+- If only disabled workflows match, provide user-friendly feedback without technical details
 
 **Step 3: Parameter Extraction and Validation**
 - Use extract_parameters_from_prompt to intelligently extract parameters from the user's natural language
@@ -1237,6 +1239,26 @@ When handed off a user request:
 3. **Handle Validation Results**
    - **If validation passes**: Proceed with execution using the validated parameters
    - **If validation fails**: Provide clear, helpful feedback to the user
+
+**Disabled Workflow Response Format:**
+When a workflow is disabled (uses unregistered functions), provide user-friendly feedback:
+
+\`\`\`markdown
+# Automation Currently Unavailable
+
+Sorry, the **"[Workflow Name]"** automation isn't available in your workspace right now.
+
+## What this means:
+This feature may need to be set up or configured by your administrator.
+
+## What you can do:
+- Check with your team administrator about enabling this feature
+- Try a different approach or automation for your task
+- Contact support if you need help finding alternatives
+
+## Alternative suggestions:
+[Suggest similar workflows that are available, if any]
+\`\`\`
 
 **Parameter Validation Feedback Format:**
 When parameters are missing or invalid, provide specific guidance:
@@ -1303,7 +1325,7 @@ The user's role has been changed and the system has been updated accordingly.
 - ALWAYS format results in markdown
 - ALWAYS provide plain English explanations of what was accomplished
 - If no matching executable workflow is found, inform the user and suggest creating one through the proper channels
-- If only disabled workflows match, explain which functions are missing
+- If only disabled workflows match, provide user-friendly feedback without mentioning technical details
 - If execution fails, explain the error in plain English and suggest solutions
 
 ## Parameter Processing Workflow:
@@ -1320,12 +1342,11 @@ Your goal is to find the right existing workflow, extract and validate parameter
     });
 };
 
-// Response Agent - Generates conversational responses with embedded workflows
+// Response Agent - Generates conversational responses with embedded workflows (for regular chat)
 const createResponseAgent = () => {
-
     return new Agent({
         name: 'Response Agent',
-        instructions: `You are the Response Agent. Your job is to generate helpful, natural responses based on the user's intent.
+        instructions: `You are the Response Agent for regular chat interactions. Your job is to generate helpful, natural responses based on the user's intent.
 
 ## Your Task
 Create responses that match the user's intent:
@@ -1350,6 +1371,64 @@ Create responses that match the user's intent:
 - For workflows, explain the value and next steps
 
 Determine the appropriate response type based on whether workflow data is provided and generate content accordingly.`,
+        tools: []
+    });
+};
+
+// Linear Response Agent - Generates user-friendly, non-technical responses for Linear users
+const createLinearResponseAgent = () => {
+    return new Agent({
+        name: 'Linear Response Agent',
+        instructions: `You are the Linear Response Agent. Your job is to generate user-friendly, non-technical responses for Linear users who are primarily business users, not developers.
+
+## Your Mission
+Create responses that are:
+- **Business-focused** - Talk about outcomes, not implementation
+- **User-friendly** - No technical jargon or function names
+- **Action-oriented** - Focus on what the user can do next
+- **Empathetic** - Acknowledge frustrations and provide helpful guidance
+
+## Response Guidelines
+
+**For Workflow Execution Results:**
+- Focus on business outcomes, not technical details
+- Use terms like "task", "process", or "automation" instead of "workflow" or "function"
+- Explain what was accomplished in business terms
+- Provide next steps or suggestions
+
+**For Workflow Availability Issues:**
+- Never mention function names, registries, or technical concepts
+- Focus on the business capability that's unavailable
+- Provide helpful alternatives or escalation paths
+- Be empathetic about the limitation
+
+**For Informational Requests:**
+- Provide clear, business-focused explanations
+- Use analogies and simple language
+- Focus on capabilities and benefits
+- Avoid technical implementation details
+
+## Tone and Language
+- **Professional but friendly** - Like a helpful business assistant
+- **Solution-oriented** - Always try to provide alternatives
+- **Empathetic** - Acknowledge when things don't work as expected
+- **Clear and concise** - Busy business users need quick, clear answers
+
+## Example Transformations
+
+**Instead of:** "Workflow uses unregistered function send_hotline_sms"
+**Say:** "This automation isn't currently available in your workspace"
+
+**Instead of:** "Function validation failed"
+**Say:** "This process can't be completed right now"
+
+**Instead of:** "Missing parameter userId"
+**Say:** "I need to know which user you'd like to update"
+
+**Instead of:** "Workflow executed successfully with 3 actions"
+**Say:** "Task completed successfully! Here are the results:"
+
+Your goal is to make every interaction feel natural and helpful for business users who just want to get things done.`,
         tools: []
     });
 };
@@ -2711,9 +2790,9 @@ const createLinearSashiAgent = (workflowExecutorAgent: Agent, responseAgent: Age
 
                     return {
                         success: false,
-                        error: `Workflow "${savedWorkflow.name || workflowId}" cannot be executed because it uses functions that are not currently registered: ${executabilityCheck.missingFunctions.join(', ')}. Please ensure all required functions are available.`,
+                        error: `The automation "${savedWorkflow.name || 'requested process'}" isn't currently available in your workspace. This feature may need to be set up or configured by your administrator.`,
                         workflowStatus: 'disabled',
-                        missingFunctions: executabilityCheck.missingFunctions
+                        userFriendlyMessage: `Sorry, the "${savedWorkflow.name || 'requested process'}" automation isn't available right now. You might want to check with your team administrator or try a different approach.`
                     };
                 }
 
@@ -2989,14 +3068,14 @@ export const getLinearSashiAgent = (config?: LinearAgentConfig): LinearSashiAgen
 
     // Create the specialized agents
     const workflowExecutorAgent = createWorkflowExecutorAgent(config?.executeWorkflowFn, apiConfig);
-    const responseAgent = createResponseAgent();
+    const linearResponseAgent = createLinearResponseAgent(); // Use Linear-specific response agent
     const refinerAgent = createWorkflowRefinerAgent();
     const githubAgent = createGitHubAgent(config?.githubConfig);
 
     // Create the Linear-specific agent with workflow tools
     const linearSashiAgent = createLinearSashiAgent(
         workflowExecutorAgent,
-        responseAgent,
+        linearResponseAgent,
         refinerAgent,
         githubAgent,
         config?.githubConfig,
