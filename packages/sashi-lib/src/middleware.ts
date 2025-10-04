@@ -1833,6 +1833,7 @@ export const executeWorkflowLogic = async (
     const startTime = new Date();
 
     if (!workflow || !workflow.actions || !Array.isArray(workflow.actions)) {
+        console.error('Invalid workflow format', workflow);
         throw new Error('Invalid workflow format');
     }
 

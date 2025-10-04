@@ -1,6 +1,6 @@
 import { Agent, AgentInputItem, assistant, Handoff, handoff, run, tool, user } from '@openai/agents';
 import { z } from 'zod';
-import { generateSplitToolSchemas } from './ai-function-loader';
+import { generateSplitToolSchemas, getFunctionRegistry } from './ai-function-loader';
 import { GitHubConfig, initializeGitHubAPI } from './github-api-service';
 import { WorkflowResponse } from './models/models';
 import { verifyWorkflow } from './utils/verifyWorkflow';
@@ -13,6 +13,53 @@ const SashiAgentResponseSchema = z.object({
 });
 
 export type SashiAgentResponse = z.infer<typeof SashiAgentResponseSchema>;
+
+// Helper function to check if a workflow can be executed with current registered functions
+const checkWorkflowExecutability = (workflow: any): { isExecutable: boolean, missingFunctions: string[], status: string } => {
+    const functionRegistry = getFunctionRegistry();
+    const missingFunctions: string[] = [];
+
+    try {
+        // Extract the actual workflow definition
+        const workflowDef = workflow.workflow?.workflow || workflow;
+
+        if (!workflowDef.actions || !Array.isArray(workflowDef.actions)) {
+            return {
+                isExecutable: false,
+                missingFunctions: [],
+                status: 'invalid_format'
+            };
+        }
+
+        // Check each action's tool
+        for (const action of workflowDef.actions) {
+            if (action.tool) {
+                // Remove 'functions.' prefix if present
+                const toolName = action.tool.replace(/^functions\./, '');
+
+                if (!functionRegistry.has(toolName)) {
+                    missingFunctions.push(toolName);
+                }
+            }
+        }
+
+        const isExecutable = missingFunctions.length === 0;
+        const status = isExecutable ? 'executable' : 'missing_functions';
+
+        return {
+            isExecutable,
+            missingFunctions,
+            status
+        };
+    } catch (error) {
+        console.error('Error checking workflow executability:', error);
+        return {
+            isExecutable: false,
+            missingFunctions: [],
+            status: 'error'
+        };
+    }
+};
 
 // Workflow Planner Agent - Creates workflows (business logic only)
 const createWorkflowPlannerAgent = () => {
@@ -427,14 +474,615 @@ inputComponents: [
     });
 };
 
-// Workflow Executor Agent - Creates workflows and executes them immediately, returning results in plain English
-const createWorkflowExecutorAgent = (executeWorkflowFn?: (workflow: any, debug: boolean) => Promise<any>) => {
-    const toolSchemas = generateSplitToolSchemas(8000);
-    const toolSchemaString = toolSchemas.map((chunk, index) => {
-        return index === 0
-            ? `Available backend functions:\n${JSON.stringify(chunk, null, 2)}`
-            : `Additional backend functions (part ${index + 1}):\n${JSON.stringify(chunk, null, 2)}`;
-    }).join('\n\n');
+// Workflow Executor Agent - Searches for and executes existing workflows, returning results in plain English
+const createWorkflowExecutorAgent = (executeWorkflowFn?: (workflow: any, debug: boolean) => Promise<any>, apiConfig?: { hubUrl?: string, apiSecretKey?: string, sessionId?: string }) => {
+
+    // List workflows tool
+    const listWorkflowsTool = tool({
+        name: 'list_workflows',
+        description: 'List all available saved workflows',
+        strict: false,
+        parameters: {
+            type: "object" as const,
+            properties: {},
+            required: [],
+        } as any,
+        execute: async () => {
+            console.log('🔍 [Workflow Executor] Listing workflows...');
+            try {
+                if (!apiConfig?.hubUrl || !apiConfig?.apiSecretKey) {
+                    return {
+                        success: false,
+                        error: 'Hub not configured - cannot fetch workflows'
+                    };
+                }
+
+                const headers: Record<string, string> = {
+                    'Content-Type': 'application/json',
+                    'x-api-token': apiConfig.apiSecretKey,
+                };
+
+                if (apiConfig.sessionId) {
+                    headers['X-Session-ID'] = apiConfig.sessionId;
+                }
+
+                const response = await fetch(`${apiConfig.hubUrl}/workflows`, {
+                    method: 'GET',
+                    headers,
+                    signal: AbortSignal.timeout(10000),
+                });
+
+                if (!response.ok) {
+                    return {
+                        success: false,
+                        error: `Failed to fetch workflows: ${response.status} ${response.statusText}`
+                    };
+                }
+
+                const workflows = await response.json();
+                console.log('✅ [Workflow Executor] Found workflows:', workflows?.length || 0);
+
+                // Check executability for each workflow
+                const workflowsWithStatus = (workflows || []).map((workflow: any) => {
+                    const executabilityCheck = checkWorkflowExecutability(workflow);
+                    return {
+                        ...workflow,
+                        isExecutable: executabilityCheck.isExecutable,
+                        executabilityStatus: executabilityCheck.status,
+                        missingFunctions: executabilityCheck.missingFunctions,
+                        statusLabel: executabilityCheck.isExecutable ? 'Ready' : 'Disabled (Missing Functions)'
+                    };
+                });
+
+                console.log('✅ [Workflow Executor] Workflows with executability status:', {
+                    total: workflowsWithStatus.length,
+                    executable: workflowsWithStatus.filter((w: any) => w.isExecutable).length,
+                    disabled: workflowsWithStatus.filter((w: any) => !w.isExecutable).length
+                });
+
+                return {
+                    success: true,
+                    workflows: workflowsWithStatus
+                };
+            } catch (error: any) {
+                console.error('❌ [Workflow Executor] Error listing workflows:', error);
+                return {
+                    success: false,
+                    error: error.message || 'Unknown error occurred'
+                };
+            }
+        }
+    });
+
+    // Search workflows tool
+    const searchWorkflowsTool = tool({
+        name: 'search_workflows',
+        description: 'Search for workflows by name, description, or ID',
+        strict: false,
+        parameters: {
+            type: "object" as const,
+            properties: {
+                query: {
+                    type: "string" as const,
+                    description: "Search query - can be workflow name, description, or ID"
+                }
+            },
+            required: ["query"],
+        } as any,
+        execute: async ({ query }: { query: string }) => {
+            console.log('🔍 [Workflow Executor] Searching workflows for:', query);
+
+            // First get all workflows by calling the list function directly
+            const listResult = await (async () => {
+                console.log('🔍 [Workflow Executor] Listing workflows...');
+                try {
+                    if (!apiConfig?.hubUrl || !apiConfig?.apiSecretKey) {
+                        return {
+                            success: false,
+                            error: 'Hub not configured - cannot fetch workflows'
+                        };
+                    }
+
+                    const headers: Record<string, string> = {
+                        'Content-Type': 'application/json',
+                        'x-api-token': apiConfig.apiSecretKey,
+                    };
+
+                    if (apiConfig.sessionId) {
+                        headers['X-Session-ID'] = apiConfig.sessionId;
+                    }
+
+                    const response = await fetch(`${apiConfig.hubUrl}/workflows`, {
+                        method: 'GET',
+                        headers,
+                        signal: AbortSignal.timeout(10000),
+                    });
+
+                    if (!response.ok) {
+                        return {
+                            success: false,
+                            error: `Failed to fetch workflows: ${response.status} ${response.statusText}`
+                        };
+                    }
+
+                    const workflows = await response.json();
+                    console.log('✅ [Workflow Executor] Found workflows:', workflows?.length || 0);
+
+                    // Check executability for each workflow
+                    const workflowsWithStatus = (workflows || []).map((workflow: any) => {
+                        const executabilityCheck = checkWorkflowExecutability(workflow);
+                        return {
+                            ...workflow,
+                            isExecutable: executabilityCheck.isExecutable,
+                            executabilityStatus: executabilityCheck.status,
+                            missingFunctions: executabilityCheck.missingFunctions,
+                            statusLabel: executabilityCheck.isExecutable ? 'Ready' : 'Disabled (Missing Functions)'
+                        };
+                    });
+
+                    return {
+                        success: true,
+                        workflows: workflowsWithStatus
+                    };
+                } catch (error: any) {
+                    console.error('❌ [Workflow Executor] Error listing workflows:', error);
+                    return {
+                        success: false,
+                        error: error.message || 'Unknown error occurred'
+                    };
+                }
+            })();
+
+            if (!listResult.success) {
+                return listResult;
+            }
+
+            const workflows = listResult.workflows || [];
+            const searchQuery = query.toLowerCase();
+
+            // Search by ID, name, or description
+            const matchingWorkflows = workflows.filter((workflow: any) => {
+                const id = workflow.id?.toLowerCase() || '';
+                const name = workflow.name?.toLowerCase() || '';
+                const description = workflow.description?.toLowerCase() || '';
+
+                return id.includes(searchQuery) ||
+                    name.includes(searchQuery) ||
+                    description.includes(searchQuery);
+            });
+
+            console.log('✅ [Workflow Executor] Found matching workflows:', matchingWorkflows.length);
+
+            return {
+                success: true,
+                workflows: matchingWorkflows
+            };
+        }
+    });
+
+    // Extract parameters from user prompt tool
+    const extractParametersTool = tool({
+        name: 'extract_parameters_from_prompt',
+        description: 'Extract workflow parameters from the user\'s natural language prompt',
+        strict: false,
+        parameters: {
+            type: "object" as const,
+            properties: {
+                userPrompt: {
+                    type: "string" as const,
+                    description: "The user's natural language request"
+                },
+                workflow: {
+                    type: "object" as const,
+                    description: "The workflow object to extract parameters for"
+                }
+            },
+            required: ["userPrompt", "workflow"],
+            additionalProperties: false as const
+        } as any,
+        execute: async ({ userPrompt, workflow }: { userPrompt: string, workflow: any }) => {
+            console.log('🔍 [Parameter Extractor] Extracting parameters from prompt:', userPrompt);
+
+            try {
+                const extractedParams: Record<string, any> = {};
+                const requiredParams: string[] = [];
+                const parameterInfo: Record<string, any> = {};
+
+                // Extract WorkflowResponse from SavedWorkflow
+                const workflowDef = workflow.workflow.workflow;
+
+                // Analyze workflow to find required parameters
+                if (workflowDef.actions) {
+                    for (const action of workflowDef.actions) {
+                        if (action.parameters) {
+                            for (const [key, value] of Object.entries(action.parameters)) {
+                                if (typeof value === 'string' && value.startsWith('userInput.')) {
+                                    const paramName = value.replace('userInput.', '');
+                                    requiredParams.push(paramName);
+
+                                    // Get parameter metadata if available
+                                    if (action.parameterMetadata && action.parameterMetadata[key]) {
+                                        parameterInfo[paramName] = action.parameterMetadata[key];
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Extract parameters using various strategies
+                const prompt = userPrompt.toLowerCase();
+
+                // Strategy 1: Extract IDs (numbers)
+                const idMatches = userPrompt.match(/\b\d+\b/g);
+                if (idMatches) {
+                    // Look for common ID parameter names
+                    const idParams = requiredParams.filter(p =>
+                        p.includes('id') || p.includes('Id') ||
+                        p === 'userId' || p === 'workflowId' || p === 'taskId'
+                    );
+                    if (idParams.length > 0 && idMatches.length > 0 && idParams[0] && idMatches[0]) {
+                        extractedParams[idParams[0]] = idMatches[0];
+                    }
+                }
+
+                // Strategy 2: Extract emails
+                const emailMatch = userPrompt.match(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/);
+                if (emailMatch) {
+                    const emailParams = requiredParams.filter(p =>
+                        p.includes('email') || p.includes('Email')
+                    );
+                    if (emailParams.length > 0 && emailParams[0] && emailMatch[0]) {
+                        extractedParams[emailParams[0]] = emailMatch[0];
+                    }
+                }
+
+                // Strategy 3: Extract role/status values
+                const roleKeywords = ['admin', 'user', 'manager', 'editor', 'viewer', 'owner'];
+                const statusKeywords = ['active', 'inactive', 'pending', 'completed', 'cancelled'];
+
+                for (const keyword of [...roleKeywords, ...statusKeywords]) {
+                    if (prompt.includes(keyword)) {
+                        const roleParams = requiredParams.filter(p =>
+                            p.includes('role') || p.includes('Role') ||
+                            p.includes('status') || p.includes('Status')
+                        );
+                        if (roleParams.length > 0 && roleParams[0]) {
+                            extractedParams[roleParams[0]] = keyword;
+                        }
+                    }
+                }
+
+                // Strategy 4: Extract quoted strings (for messages, names, etc.)
+                const quotedMatches = userPrompt.match(/"([^"]+)"/g) || userPrompt.match(/'([^']+)'/g);
+                if (quotedMatches) {
+                    const textParams = requiredParams.filter(p =>
+                        p.includes('message') || p.includes('Message') ||
+                        p.includes('name') || p.includes('Name') ||
+                        p.includes('title') || p.includes('Title') ||
+                        p.includes('subject') || p.includes('Subject')
+                    );
+                    if (textParams.length > 0 && quotedMatches.length > 0 && textParams[0] && quotedMatches[0]) {
+                        extractedParams[textParams[0]] = quotedMatches[0].replace(/['"]/g, '');
+                    }
+                }
+
+                // Strategy 5: Context-based extraction
+                // Look for "to [role]" patterns
+                const toRoleMatch = prompt.match(/to\s+(admin|user|manager|editor|viewer|owner)/);
+                if (toRoleMatch) {
+                    const roleParams = requiredParams.filter(p =>
+                        p.includes('role') || p.includes('Role')
+                    );
+                    if (roleParams.length > 0 && roleParams[0] && toRoleMatch[1]) {
+                        extractedParams[roleParams[0]] = toRoleMatch[1];
+                    }
+                }
+
+                // Strategy 6: Extract file names or paths
+                const fileMatch = userPrompt.match(/\b[\w-]+\.(txt|csv|json|pdf|doc|docx|xlsx|xls)\b/i);
+                if (fileMatch) {
+                    const fileParams = requiredParams.filter(p =>
+                        p.includes('file') || p.includes('File') ||
+                        p.includes('path') || p.includes('Path')
+                    );
+                    if (fileParams.length > 0 && fileParams[0] && fileMatch[0]) {
+                        extractedParams[fileParams[0]] = fileMatch[0];
+                    }
+                }
+
+                console.log('✅ [Parameter Extractor] Extraction complete:', {
+                    requiredParams,
+                    extractedParams,
+                    extractedCount: Object.keys(extractedParams).length,
+                    requiredCount: requiredParams.length
+                });
+
+                return {
+                    success: true,
+                    extractedParameters: extractedParams,
+                    requiredParameters: requiredParams,
+                    parameterInfo: parameterInfo,
+                    extractionStrategies: {
+                        idsFound: idMatches?.length || 0,
+                        emailsFound: emailMatch ? 1 : 0,
+                        quotedStringsFound: quotedMatches?.length || 0,
+                        rolesFound: roleKeywords.filter(k => prompt.includes(k)).length
+                    }
+                };
+            } catch (error: any) {
+                console.error('❌ [Parameter Extractor] Error:', error);
+                return {
+                    success: false,
+                    error: error.message || 'Unknown error during parameter extraction'
+                };
+            }
+        }
+    });
+
+    // Validate workflow parameters tool
+    const validateWorkflowParametersTool = tool({
+        name: 'validate_workflow_parameters',
+        description: 'Validate extracted parameters against workflow requirements and provide user feedback',
+        strict: false,
+        parameters: {
+            type: "object" as const,
+            properties: {
+                workflow: {
+                    type: "object" as const,
+                    description: "The workflow object"
+                },
+                extractedParameters: {
+                    type: "object" as const,
+                    description: "Parameters extracted from user prompt"
+                },
+                requiredParameters: {
+                    type: "array" as const,
+                    items: { type: "string" as const },
+                    description: "List of required parameter names"
+                }
+            },
+            required: ["workflow", "extractedParameters", "requiredParameters"],
+            additionalProperties: false as const
+        } as any,
+        execute: async ({ workflow, extractedParameters, requiredParameters }: {
+            workflow: any,
+            extractedParameters: Record<string, any>,
+            requiredParameters: string[]
+        }) => {
+            console.log('🔍 [Parameter Validator] Validating parameters...');
+
+            try {
+                const validationResults = {
+                    isValid: true,
+                    missingParameters: [] as string[],
+                    invalidParameters: [] as { param: string, value: any, expectedType: string, error: string }[],
+                    validParameters: {} as Record<string, any>,
+                    parameterRequirements: {} as Record<string, any>
+                };
+
+                // Extract WorkflowResponse from SavedWorkflow
+                const workflowDef = workflow.workflow.workflow;
+
+                // Get parameter requirements from workflow
+                const parameterMetadata: Record<string, any> = {};
+                if (workflowDef.actions) {
+                    for (const action of workflowDef.actions) {
+                        if (action.parameterMetadata) {
+                            for (const [key, value] of Object.entries(action.parameterMetadata)) {
+                                if (action.parameters && action.parameters[key] &&
+                                    typeof action.parameters[key] === 'string' &&
+                                    action.parameters[key].startsWith('userInput.')) {
+                                    const paramName = action.parameters[key].replace('userInput.', '');
+                                    parameterMetadata[paramName] = value;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Check for missing parameters
+                for (const paramName of requiredParameters) {
+                    if (!(paramName in extractedParameters)) {
+                        validationResults.missingParameters.push(paramName);
+                        validationResults.isValid = false;
+                    }
+                }
+
+                // Validate parameter types and values
+                for (const [paramName, value] of Object.entries(extractedParameters)) {
+                    const metadata = parameterMetadata[paramName];
+                    if (metadata) {
+                        validationResults.parameterRequirements[paramName] = metadata;
+
+                        try {
+                            // Type validation
+                            if (metadata.type === 'number') {
+                                const numValue = Number(value);
+                                if (isNaN(numValue)) {
+                                    validationResults.invalidParameters.push({
+                                        param: paramName,
+                                        value: value,
+                                        expectedType: 'number',
+                                        error: `Expected a number, got: ${value}`
+                                    });
+                                    validationResults.isValid = false;
+                                } else {
+                                    validationResults.validParameters[paramName] = numValue;
+                                }
+                            } else if (metadata.type === 'boolean') {
+                                const boolValue = value === 'true' || value === true || value === '1' || value === 1;
+                                validationResults.validParameters[paramName] = boolValue;
+                            } else if (metadata.enum && Array.isArray(metadata.enum)) {
+                                if (!metadata.enum.includes(value)) {
+                                    validationResults.invalidParameters.push({
+                                        param: paramName,
+                                        value: value,
+                                        expectedType: `one of: ${metadata.enum.join(', ')}`,
+                                        error: `Value must be one of: ${metadata.enum.join(', ')}`
+                                    });
+                                    validationResults.isValid = false;
+                                } else {
+                                    validationResults.validParameters[paramName] = value;
+                                }
+                            } else {
+                                // String or other types
+                                validationResults.validParameters[paramName] = String(value);
+                            }
+                        } catch (error: any) {
+                            validationResults.invalidParameters.push({
+                                param: paramName,
+                                value: value,
+                                expectedType: metadata.type || 'unknown',
+                                error: error.message || 'Validation error'
+                            });
+                            validationResults.isValid = false;
+                        }
+                    } else {
+                        // No metadata available, accept as string
+                        validationResults.validParameters[paramName] = String(value);
+                    }
+                }
+
+                console.log('✅ [Parameter Validator] Validation complete:', {
+                    isValid: validationResults.isValid,
+                    missingCount: validationResults.missingParameters.length,
+                    invalidCount: validationResults.invalidParameters.length,
+                    validCount: Object.keys(validationResults.validParameters).length
+                });
+
+                return {
+                    success: true,
+                    validation: validationResults
+                };
+            } catch (error: any) {
+                console.error('❌ [Parameter Validator] Error:', error);
+                return {
+                    success: false,
+                    error: error.message || 'Unknown error during parameter validation'
+                };
+            }
+        }
+    });
+
+    // Execute workflow by ID tool
+    const executeWorkflowByIdTool = tool({
+        name: 'execute_workflow_by_id',
+        description: 'Execute a specific workflow by its ID with validated parameters',
+        strict: false,
+        parameters: {
+            type: "object" as const,
+            properties: {
+                workflowId: {
+                    type: "string" as const,
+                    description: "The ID of the workflow to execute"
+                },
+                parameters: {
+                    type: "object" as const,
+                    description: "Validated parameters to pass to the workflow execution",
+                    additionalProperties: true
+                }
+            },
+            required: ["workflowId"],
+            additionalProperties: false as const
+        } as any,
+        execute: async ({ workflowId, parameters = {} }: { workflowId: string, parameters?: Record<string, any> }) => {
+            console.log('⚡ [Workflow Executor] Executing workflow by ID:', workflowId);
+
+            if (!executeWorkflowFn) {
+                return {
+                    success: false,
+                    error: 'Workflow execution function not available'
+                };
+            }
+
+            try {
+                // First, get the workflow details
+                if (!apiConfig?.hubUrl || !apiConfig?.apiSecretKey) {
+                    return {
+                        success: false,
+                        error: 'Hub not configured - cannot fetch workflow'
+                    };
+                }
+
+                const headers: Record<string, string> = {
+                    'Content-Type': 'application/json',
+                    'x-api-token': apiConfig.apiSecretKey,
+                };
+
+                if (apiConfig.sessionId) {
+                    headers['X-Session-ID'] = apiConfig.sessionId;
+                }
+
+                const response = await fetch(`${apiConfig.hubUrl}/workflows/${workflowId}`, {
+                    method: 'GET',
+                    headers,
+                    signal: AbortSignal.timeout(10000),
+                });
+
+                if (!response.ok) {
+                    return {
+                        success: false,
+                        error: `Failed to fetch workflow: ${response.status} ${response.statusText}`
+                    };
+                }
+
+                const savedWorkflow = await response.json();
+
+                // Check if workflow is executable before proceeding
+                const executabilityCheck = checkWorkflowExecutability(savedWorkflow);
+                if (!executabilityCheck.isExecutable) {
+                    console.log('❌ [Workflow Executor] Workflow is not executable:', {
+                        workflowId: workflowId,
+                        workflowName: savedWorkflow.name,
+                        status: executabilityCheck.status,
+                        missingFunctions: executabilityCheck.missingFunctions
+                    });
+
+                    return {
+                        success: false,
+                        error: `Workflow "${savedWorkflow.name || workflowId}" cannot be executed because it uses functions that are not currently registered: ${executabilityCheck.missingFunctions.join(', ')}. Please ensure all required functions are available.`,
+                        workflowStatus: 'disabled',
+                        missingFunctions: executabilityCheck.missingFunctions
+                    };
+                }
+
+                // Extract the actual workflow definition
+                const workflow = savedWorkflow.workflow.workflow;
+
+                // Merge parameters into workflow if provided
+                if (Object.keys(parameters).length > 0 && workflow.actions) {
+                    for (const action of workflow.actions) {
+                        if (action.parameters) {
+                            for (const [key, value] of Object.entries(action.parameters)) {
+                                if (typeof value === 'string' && value.startsWith('userInput.')) {
+                                    const inputKey = value.replace('userInput.', '');
+                                    if (parameters[inputKey] !== undefined) {
+                                        action.parameters[key] = parameters[inputKey];
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                console.log('⚡ [Workflow Executor] Executing workflow...');
+                const executionResult = await executeWorkflowFn(workflow, false);
+
+                return {
+                    success: true,
+                    result: executionResult,
+                    message: 'Workflow executed successfully'
+                };
+            } catch (error: any) {
+                console.error('❌ [Workflow Executor] Error executing workflow:', error);
+                return {
+                    success: false,
+                    error: error.message || 'Unknown error occurred during workflow execution'
+                };
+            }
+        }
+    });
 
     const validateWorkflowTool = tool({
         name: 'validate_workflow',
@@ -472,10 +1120,6 @@ const createWorkflowExecutorAgent = (executeWorkflowFn?: (workflow: any, debug: 
             const verification = verifyWorkflow(workflow);
 
             // Additional validation for UI components
-            const uiValidation = {
-                valid: true,
-                errors: [] as string[]
-            };
 
             // Collect BASE userInput.* parameters from actions (not array operations)
             const userInputParams = new Set<string>();
@@ -528,137 +1172,113 @@ const createWorkflowExecutorAgent = (executeWorkflowFn?: (workflow: any, debug: 
         }
     });
 
-    const executeWorkflowTool = tool({
-        name: 'execute_workflow_immediately',
-        description: 'Execute a workflow immediately and return the results in plain English with markdown formatting',
-        strict: false,
-        parameters: {
-            type: "object" as const,
-            properties: {
-                workflow: {
-                    type: "object" as const,
-                    properties: {
-                        type: {
-                            type: "string" as const,
-                            enum: ["workflow"] as const
-                        },
-                        description: {
-                            type: "string" as const
-                        }
-                    }
-                },
-                userInputs: {
-                    type: "object" as const,
-                    description: "User input values for the workflow parameters"
-                }
-            },
-            required: ["workflow"],
-            additionalProperties: true as const
-        } as any,
-        execute: async ({ workflow, userInputs = {} }: { workflow: WorkflowResponse, userInputs?: Record<string, any> }) => {
-            console.log('⚡ execute_workflow_immediately called with workflow:', {
-                type: workflow.type,
-                actionsCount: workflow.actions?.length || 0,
-                userInputsProvided: Object.keys(userInputs).length
-            });
-
-            if (!executeWorkflowFn) {
-                console.log('❌ Execution function not available');
-                return {
-                    success: false,
-                    error: 'Workflow execution function not available'
-                };
-            }
-
-            // Merge user inputs into workflow parameters
-            if (Object.keys(userInputs).length > 0 && workflow.actions) {
-                for (const action of workflow.actions) {
-                    if (action.parameters) {
-                        for (const [key, value] of Object.entries(action.parameters)) {
-                            if (typeof value === 'string' && value.startsWith('userInput.')) {
-                                const inputKey = value;
-                                if (userInputs[inputKey]) {
-                                    action.parameters[key] = userInputs[inputKey];
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            console.log('⚡ Executing workflow with merged parameters...');
-            const executionResult = await executeWorkflowFn(workflow, false);
-            console.log('⚡ Workflow execution completed:', {
-                hasResult: !!executionResult,
-                hasError: !!(executionResult?.error),
-                resultType: typeof executionResult
-            });
-
-            if (!executionResult || executionResult.error) {
-                console.log('❌ Execution failed:', executionResult?.error);
-                return {
-                    success: false,
-                    error: `Failed to execute workflow: ${executionResult?.error || 'Unknown execution error'}`
-                };
-            }
-
-            return {
-                success: true,
-                result: executionResult,
-                message: 'Workflow executed successfully'
-            };
-        }
-    });
 
     return new Agent({
         name: 'Workflow Executor',
-        instructions: `You are the Workflow Executor agent. Your job is to create complete workflow JSON objects that accomplish the user's goal and IMMEDIATELY EXECUTE them, returning the results in plain English with markdown formatting.
-
-## Available Functions
-${toolSchemaString}
+        instructions: `You are the Workflow Executor agent. Your job is to find and execute existing saved workflows that accomplish the user's goal, returning the results in plain English with markdown formatting.
 
 ## Your Task
 When handed off a user request:
-1. Analyze the request and determine what needs to be accomplished
-2. Create a complete JSON workflow object with the necessary actions
-3. For workflows that need user input, extract reasonable defaults or ask the user for specific values
-4. IMMEDIATELY execute the workflow using the execute_workflow_immediately tool
-5. Format the results in plain English with markdown formatting
-6. NEVER return just the workflow definition - always execute and return results
+1. **SEARCH FOR EXISTING WORKFLOWS** - Use list_workflows or search_workflows to find relevant saved workflows
+2. **IDENTIFY THE RIGHT WORKFLOW** - Look for workflows that match the user's intent by name, description, or functionality
+3. **EXTRACT PARAMETERS** - Use extract_parameters_from_prompt to intelligently extract parameters from the user's natural language request
+4. **VALIDATE PARAMETERS** - Use validate_workflow_parameters to ensure extracted parameters are correct and complete
+5. **HANDLE MISSING/INVALID PARAMETERS** - If validation fails, provide clear feedback to the user about what's missing or incorrect
+6. **EXECUTE THE WORKFLOW** - Use execute_workflow_by_id with the validated parameters
+7. **FORMAT RESULTS** - Return results in plain English with markdown formatting
+8. **NEVER CREATE NEW WORKFLOWS** - Only use existing saved workflows
 
-## User Input Strategy
-**For workflows that require user input:**
-- If the user provided specific values in their request, use those values
-- If the user didn't provide required values, ask them for the specific information needed
-- For optional parameters, use reasonable defaults when possible
-- Extract parameters from the user's natural language request
+## Workflow Discovery Process
+**Step 1: List or Search Workflows**
+- Use list_workflows to see all available workflows
+- Use search_workflows with keywords from the user's request to find specific workflows
+- Look for workflows that match the user's intent
 
-**Examples:**
-- "Update user 123 to admin role" → Use userId: 123, role: "admin"
-- "Send email to john@example.com about the meeting" → Use email: "john@example.com", subject: "Meeting", message: extracted from context
-- "Update a user's role" → Ask user: "Which user ID and what role would you like to set?"
+**Step 2: Analyze Available Workflows**
+- Review workflow names and descriptions
+- Check workflow status (Ready vs Disabled)
+- Only consider workflows with status "Ready" for execution
+- If multiple executable workflows match, choose the most specific one
+- If only disabled workflows match, inform the user about missing functions
 
-## Workflow Creation Rules
-- Create workflows with proper action structure
-- Include parameterMetadata for validation
-- Use appropriate backend functions from the available functions list
-- Set map: true for operations that should process multiple items
-- Validate workflows using validate_workflow tool before execution
+**Step 3: Parameter Extraction and Validation**
+- Use extract_parameters_from_prompt to intelligently extract parameters from the user's natural language
+- The tool will automatically identify and extract:
+  - IDs (numbers like user IDs, workflow IDs)
+  - Email addresses
+  - Role/status keywords (admin, user, active, pending, etc.)
+  - Quoted strings (for messages, names, titles)
+  - File names and paths
+  - Context-based values ("to admin role", "set status to active")
+- Use validate_workflow_parameters to check if extracted parameters are valid and complete
+- Handle validation results appropriately
+
+## Parameter Handling Strategy
+
+**Step-by-Step Parameter Processing:**
+
+1. **Extract Parameters from User Request**
+   - Use extract_parameters_from_prompt with the user's original request and the selected workflow
+   - The extraction tool will automatically identify common patterns:
+     - Numbers → IDs (userId, workflowId, etc.)
+     - Email patterns → email parameters
+     - Role keywords → role/status parameters
+     - Quoted text → message/name/title parameters
+     - File extensions → file/path parameters
+
+2. **Validate Extracted Parameters**
+   - Use validate_workflow_parameters to check the extracted parameters against workflow requirements
+   - The validation will check:
+     - Are all required parameters present?
+     - Do parameter values match expected types (number, string, boolean, enum)?
+     - Are enum values valid (e.g., role must be one of: admin, user, editor)?
+     - Are parameter formats correct?
+
+3. **Handle Validation Results**
+   - **If validation passes**: Proceed with execution using the validated parameters
+   - **If validation fails**: Provide clear, helpful feedback to the user
+
+**Parameter Validation Feedback Format:**
+When parameters are missing or invalid, provide specific guidance:
+
+\`\`\`markdown
+# Parameter Validation Failed
+
+I found the workflow **"[Workflow Name]"** but need some additional information:
+
+## Missing Parameters:
+- **userId**: Please provide the user ID (e.g., "Update user 123")
+- **role**: Please specify the new role (admin, user, editor, viewer)
+
+## Invalid Parameters:
+- **status**: You provided "activ" but valid options are: active, inactive, pending
+
+## Example Usage:
+"Update user 123 to admin role"
+"Set user 456 status to active"
+\`\`\`
+
+**Examples of Parameter Extraction:**
+- "Update user 123 to admin role" → Extracts: userId: "123", role: "admin"
+- "Send email to john@example.com about 'Project Update'" → Extracts: email: "john@example.com", subject: "Project Update"
+- "Set user 456 status to active" → Extracts: userId: "456", status: "active"
+- "Process users.csv file" → Extracts: csvFile: "users.csv"
 
 ## Execution and Response Format
-1. **Always execute workflows immediately** using execute_workflow_immediately tool
-2. **Format results in markdown** with clear sections:
+1. **Always search for workflows first** using list_workflows or search_workflows
+2. **Execute found workflows** using execute_workflow_by_id
+3. **Format results in markdown** with clear sections:
    - Brief summary of what was accomplished
    - Detailed results in tables or lists as appropriate
    - Any important notes or next steps
 
-3. **Never return workflow JSON** to the user - they should only see the results
+4. **Never return workflow JSON** to the user - they should only see the results
 
 ## Example Response Format:
 \`\`\`markdown
 # Task Completed Successfully
 
-I've successfully updated the user's role as requested.
+I found and executed the "User Role Update" workflow as requested.
 
 ## Results
 | Field | Value |
@@ -671,15 +1291,32 @@ The user's role has been changed and the system has been updated accordingly.
 \`\`\`
 
 ## Important Rules:
-- NEVER return workflow JSON definitions to the user
-- ALWAYS execute workflows immediately after creation
+- NEVER create new workflows - only use existing saved workflows
+- ALWAYS search for workflows first before execution
+- ALWAYS check workflow status - only execute workflows with status "Ready"
+- NEVER execute workflows marked as "Disabled" or with missing functions
+- ALWAYS extract parameters using extract_parameters_from_prompt before execution
+- ALWAYS validate parameters using validate_workflow_parameters before execution
+- NEVER execute workflows with invalid or missing parameters
+- If parameter validation fails, provide clear, specific feedback about what's wrong
+- ALWAYS execute workflows using execute_workflow_by_id with validated parameters
 - ALWAYS format results in markdown
 - ALWAYS provide plain English explanations of what was accomplished
+- If no matching executable workflow is found, inform the user and suggest creating one through the proper channels
+- If only disabled workflows match, explain which functions are missing
 - If execution fails, explain the error in plain English and suggest solutions
-- For missing required parameters, ask the user for specific values rather than creating incomplete workflows
 
-Your goal is to complete the user's task and show them the results, not to show them how the task was accomplished.`,
-        tools: [validateWorkflowTool, executeWorkflowTool]
+## Parameter Processing Workflow:
+1. Find matching workflow
+2. Check workflow status → Only proceed if status is "Ready"
+3. If workflow is "Disabled" → Inform user about missing functions
+4. Extract parameters from user prompt → extract_parameters_from_prompt
+5. Validate extracted parameters → validate_workflow_parameters
+6. If validation fails → Provide specific feedback and ask for corrections
+7. If validation passes → Execute workflow with validated parameters
+
+Your goal is to find the right existing workflow, extract and validate parameters correctly, and execute it successfully.`,
+        tools: [listWorkflowsTool, searchWorkflowsTool, extractParametersTool, validateWorkflowParametersTool, executeWorkflowByIdTool, validateWorkflowTool]
     });
 };
 
@@ -1953,9 +2590,27 @@ const createLinearSashiAgent = (workflowExecutorAgent: Agent, responseAgent: Age
                     type: typeof workflows
                 });
 
+                // Check executability for each workflow
+                const workflowsWithStatus = (Array.isArray(workflows) ? workflows : []).map((workflow: any) => {
+                    const executabilityCheck = checkWorkflowExecutability(workflow);
+                    return {
+                        ...workflow,
+                        isExecutable: executabilityCheck.isExecutable,
+                        executabilityStatus: executabilityCheck.status,
+                        missingFunctions: executabilityCheck.missingFunctions,
+                        statusLabel: executabilityCheck.isExecutable ? 'Ready' : 'Disabled (Missing Functions)'
+                    };
+                });
+
+                console.log('🔍 [list_workflows] Workflows with executability status:', {
+                    total: workflowsWithStatus.length,
+                    executable: workflowsWithStatus.filter((w: any) => w.isExecutable).length,
+                    disabled: workflowsWithStatus.filter((w: any) => !w.isExecutable).length
+                });
+
                 return {
                     success: true,
-                    workflows: Array.isArray(workflows) ? workflows : []
+                    workflows: workflowsWithStatus
                 };
             } catch (error) {
                 console.error('❌ [list_workflows] Error occurred:', error);
@@ -2042,9 +2697,32 @@ const createLinearSashiAgent = (workflowExecutorAgent: Agent, responseAgent: Age
                     };
                 }
 
-                const workflowDefinition = await workflowResponse.json();
+                const savedWorkflow = await workflowResponse.json();
+
+                // Check if workflow is executable before proceeding
+                const executabilityCheck = checkWorkflowExecutability(savedWorkflow);
+                if (!executabilityCheck.isExecutable) {
+                    console.log('❌ [execute_workflow] Workflow is not executable:', {
+                        workflowId: workflowId,
+                        workflowName: savedWorkflow.name,
+                        status: executabilityCheck.status,
+                        missingFunctions: executabilityCheck.missingFunctions
+                    });
+
+                    return {
+                        success: false,
+                        error: `Workflow "${savedWorkflow.name || workflowId}" cannot be executed because it uses functions that are not currently registered: ${executabilityCheck.missingFunctions.join(', ')}. Please ensure all required functions are available.`,
+                        workflowStatus: 'disabled',
+                        missingFunctions: executabilityCheck.missingFunctions
+                    };
+                }
+
+                // Extract the actual workflow definition from SavedWorkflow
+                const workflowDefinition = savedWorkflow.workflow.workflow;
+
                 console.log('⚡ [execute_workflow] Received workflow definition:', {
-                    name: workflowDefinition.name,
+                    savedWorkflowName: savedWorkflow.name,
+                    savedWorkflowId: savedWorkflow.id,
                     actionsCount: workflowDefinition.actions?.length || 0,
                     hasUI: !!workflowDefinition.ui,
                     type: workflowDefinition.type
@@ -2111,12 +2789,12 @@ const createLinearSashiAgent = (workflowExecutorAgent: Agent, responseAgent: Age
                 const finalResult = {
                     success: true,
                     workflowId: workflowId,
-                    workflowName: workflowDefinition.name || workflowId,
+                    workflowName: savedWorkflow.name || workflowId,
                     executionId: `exec-${Date.now()}`,
                     status: 'completed',
                     results: executionResult.results || [],
                     errors: executionResult.errors || [],
-                    message: `Workflow "${workflowDefinition.name || workflowId}" executed successfully`,
+                    message: `Workflow "${savedWorkflow.name || workflowId}" executed successfully`,
                     executionDetails: {
                         actionCount: workflowDefinition.actions?.length || 0,
                         duration: 0, // Duration would need to be calculated if needed
@@ -2302,18 +2980,18 @@ interface LinearAgentConfig {
 
 // Create a Linear-specific agent with workflow tools
 export const getLinearSashiAgent = (config?: LinearAgentConfig): LinearSashiAgent => {
-    // Create the specialized agents
-    const workflowExecutorAgent = createWorkflowExecutorAgent(config?.executeWorkflowFn);
-    const responseAgent = createResponseAgent();
-    const refinerAgent = createWorkflowRefinerAgent();
-    const githubAgent = createGitHubAgent(config?.githubConfig);
-
     const apiConfig = {
         hubUrl: config?.hubUrl,
         apiSecretKey: config?.apiSecretKey,
         sessionId: undefined, // Session ID would be passed separately if needed
         executeWorkflowFn: config?.executeWorkflowFn
     };
+
+    // Create the specialized agents
+    const workflowExecutorAgent = createWorkflowExecutorAgent(config?.executeWorkflowFn, apiConfig);
+    const responseAgent = createResponseAgent();
+    const refinerAgent = createWorkflowRefinerAgent();
+    const githubAgent = createGitHubAgent(config?.githubConfig);
 
     // Create the Linear-specific agent with workflow tools
     const linearSashiAgent = createLinearSashiAgent(

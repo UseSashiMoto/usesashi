@@ -3,6 +3,21 @@ export interface GeneralResponse {
     content: string
 }
 
+
+
+
+
+// SavedWorkflow type updated to remove results field
+export type SavedWorkflow = {
+    id: string;
+    name: string;
+    description?: string;
+    workflow: UIWorkflowDefinition;
+    timestamp: number;
+    userId: string;
+    favorited?: boolean;
+};
+
 export interface WorkflowResponse {
     type: 'workflow'
     actions: {
