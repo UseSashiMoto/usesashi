@@ -1958,7 +1958,8 @@ export const executeWorkflowLogic = async (
         const errorMessage = 'Failed to execute workflow';
         const details = error instanceof Error ? error.message : 'Unknown error';
 
-        throw new Error(`${errorMessage}: ${details}`);
+        throw createWorkflowExecutionError(errorMessage, details, error);
+
     }
 };
 
