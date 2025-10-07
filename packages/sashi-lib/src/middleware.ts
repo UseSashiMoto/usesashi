@@ -1726,7 +1726,242 @@ export const createMiddleware = (options: MiddlewareOptions) => {
     // Session validation middleware for UI requests
     router.use('/bot', sessionValidation);
 
+    // =============== LINEAR AGENT ENDPOINT ===============
+    // Endpoint for Linear to communicate with Sashi agent
+    router.post('/linear/agent', sessionValidation, asyncHandler(async (req, res) => {
+        console.log('🤖 [Linear Agent] Request received');
+        console.log('🤖 [Linear Agent] Request body:', JSON.stringify(req.body, null, 2));
+        console.log('🤖 [Linear Agent] Headers:', {
+            'x-sashi-session-token': req.headers['x-sashi-session-token'] ? 'Present' : 'Missing',
+            'content-type': req.headers['content-type']
+        });
+
+        const { userPrompt, previousActivities = [] } = req.body;
+
+        if (!userPrompt || typeof userPrompt !== 'string') {
+            console.log('🤖 [Linear Agent] ❌ Invalid request: userPrompt validation failed');
+            return res.status(400).json({
+                error: 'Invalid request: userPrompt is required and must be a string'
+            });
+        }
+
+        console.log('🤖 [Linear Agent] ✅ Request validation passed');
+        console.log('🤖 [Linear Agent] User prompt:', userPrompt);
+        console.log('🤖 [Linear Agent] Previous activities count:', previousActivities.length);
+
+        try {
+            console.log('🤖 [Linear Agent] 🔍 Fetching GitHub config...');
+            // Get GitHub config for the Linear agent
+            const githubConfig = await getGithubConfig({ hubUrl, apiSecretKey });
+            console.log('🤖 [Linear Agent] GitHub config:', githubConfig ?
+                `✅ Found (${githubConfig.owner}/${githubConfig.repo})` :
+                '❌ Not found'
+            );
+
+            console.log('🤖 [Linear Agent] 🔧 Creating workflow execution function...');
+            // Create workflow execution function that uses local middleware logic
+            const executeWorkflowFn = async (workflow: WorkflowResponse, debug: boolean) => {
+                console.log('🤖 [Linear Agent] ⚡ Executing workflow:', workflow.type || 'Unknown type');
+                console.log('🤖 [Linear Agent] ⚡ Workflow actions count:', workflow.actions?.length || 0);
+                const result = await executeWorkflowLogic(workflow, debug, {
+                    getFunctionRegistry,
+                    resolveParameters,
+                    callFunctionFromRegistryFromObject,
+                    guessUIType,
+                    createWorkflowExecutionSuccess,
+                    createWorkflowExecutionError
+                });
+                console.log('🤖 [Linear Agent] ⚡ Workflow execution completed');
+                return result;
+            };
+
+            console.log('🤖 [Linear Agent] 🚀 Initializing Linear agent...');
+            // Create Linear agent with proper configuration
+            const { getLinearSashiAgent } = await import('./sashiagent');
+            const linearAgent = getLinearSashiAgent({
+                githubConfig,
+                hubUrl,
+                apiSecretKey,
+                executeWorkflowFn
+            });
+            console.log('🤖 [Linear Agent] ✅ Linear agent initialized');
+
+            console.log('🤖 [Linear Agent] 💭 Processing user request...');
+            // Process the user request
+            const response = await linearAgent.handleUserPrompt(userPrompt, previousActivities);
+            console.log('🤖 [Linear Agent] 💭 Agent response type:', typeof response);
+            console.log('🤖 [Linear Agent] 💭 Agent response preview:', response.substring(0, 100) + (response.length > 100 ? '...' : ''));
+
+            console.log('🤖 [Linear Agent] ✅ Sending successful response');
+            // Return response in format Linear expects
+            res.json({
+                success: true,
+                response: response
+            });
+
+        } catch (error) {
+            console.error('🤖 [Linear Agent] ❌ Error occurred:', error);
+            console.error('🤖 [Linear Agent] ❌ Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+            console.log('🤖 [Linear Agent] 💥 Sending error response:', errorMessage);
+            res.status(500).json({
+                success: false,
+                error: 'Linear agent failed to process request',
+                details: errorMessage
+            });
+        }
+    }));
+
     return router;
+};
+
+// =============== WORKFLOW EXECUTION FUNCTION ===============
+// Extract workflow execution logic for reuse by Linear agent
+export const executeWorkflowLogic = async (
+    workflow: WorkflowResponse,
+    debug: boolean = false,
+    options: {
+        getFunctionRegistry: () => Map<string, any>,
+        resolveParameters: (params: any, actionResults: any, debug: boolean) => any,
+        callFunctionFromRegistryFromObject: (toolName: string, params: any) => Promise<any>,
+        guessUIType: (data: any) => string,
+        createWorkflowExecutionSuccess: (results: any, errors?: any) => any,
+        createWorkflowExecutionError: (message: string, details: string, errors?: any) => any
+    }
+) => {
+    const startTime = new Date();
+
+    if (!workflow || !workflow.actions || !Array.isArray(workflow.actions)) {
+        console.error('Invalid workflow format', workflow);
+        throw new Error('Invalid workflow format');
+    }
+
+    if (debug) {
+        console.log("Executing workflow:", JSON.stringify(workflow, null, 2));
+    }
+
+    const functionRegistry = options.getFunctionRegistry();
+    const actionResults: Record<string, any> = {};
+    const errors: Array<{ actionId: string, error: string }> = [];
+
+    try {
+        for (let i = 0; i < workflow.actions.length; i++) {
+            const action = workflow.actions[i];
+            const actionId = action?.id || `action_${i}`;
+
+            try {
+                const toolName = action?.tool.replace(/^functions\./, '') || '';
+                const { parameters } = action || {};
+                const registeredFunction = functionRegistry.get(toolName);
+
+                if (!registeredFunction) {
+                    throw new Error(`Function ${toolName} not found in registry`);
+                }
+
+                if (debug) {
+                    console.log(`\n[Workflow Step ${i + 1}] Processing action "${actionId}" using tool "${toolName}"`);
+                }
+
+                // Resolve parameters
+                const processedParameters = options.resolveParameters(parameters, actionResults, debug);
+
+                if ((action?.map ?? false) === true) {
+                    const arrayParams = Object.entries(processedParameters).find(
+                        ([_, value]) => Array.isArray(value)
+                    );
+
+                    if (!arrayParams) {
+                        throw new Error(`Action ${actionId} has map:true but no array parameters were found`);
+                    }
+
+                    const [arrayParamName, arrayValues] = arrayParams;
+
+                    if (debug) {
+                        console.log(`Mapping over ${(arrayValues as any[]).length} items for parameter "${arrayParamName}"`);
+                    }
+
+                    const results = await Promise.all((arrayValues as any[]).map(async (item: unknown) => {
+                        const itemParams = { ...processedParameters };
+                        itemParams[arrayParamName] = item;
+                        return await options.callFunctionFromRegistryFromObject(toolName, itemParams);
+                    }));
+
+                    actionResults[actionId] = results;
+
+                    if (debug) {
+                        console.log(`Mapped results from "${actionId}":`, results);
+                    }
+                } else {
+                    const result = await options.callFunctionFromRegistryFromObject(toolName, processedParameters);
+                    actionResults[actionId] = result;
+                    if (debug) {
+                        console.log(`Result from "${actionId}":`, result);
+                    }
+                }
+            } catch (actionError) {
+                const errorMessage = actionError instanceof Error ? actionError.message : String(actionError);
+                console.error(`Error in action "${actionId}":`, errorMessage);
+                errors.push({ actionId, error: errorMessage });
+                actionResults[actionId] = { error: errorMessage, failed: true }; // Store error state
+            }
+        }
+
+        // After loop, process UI components based on schema
+        const results: any[] = [];
+        if (workflow.ui && workflow.ui.outputComponents) {
+            for (const component of workflow.ui.outputComponents) {
+                const { actionId, component: componentType } = component;
+                const action = workflow.actions.find(a => a.id === actionId);
+                const resultData = actionResults[actionId];
+
+                if (!action || !resultData) {
+                    console.warn(`Could not find action or result for output component with actionId: ${actionId}`);
+                    continue;
+                }
+
+                // Skip generating UI for failed actions
+                if (resultData.failed) {
+                    continue;
+                }
+
+                // Use component type from schema, fallback to guessing
+                const uiType = componentType || options.guessUIType(resultData);
+
+                results.push({
+                    actionId,
+                    result: typeof resultData === 'object' ? resultData : { value: resultData },
+                    uiElement: {
+                        type: 'result',
+                        actionId,
+                        tool: action.tool,
+                        content: {
+                            type: uiType,
+                            title: action.description || action.tool,
+                            content: JSON.stringify(resultData, null, 2),
+                            timestamp: new Date().toISOString(),
+                            config: {} // Placeholder for future enhancement
+                        }
+                    }
+                });
+            }
+        }
+
+        // Final response logic
+        if (errors.length > 0) {
+            return options.createWorkflowExecutionSuccess(results, errors);
+        } else {
+            return options.createWorkflowExecutionSuccess(results);
+        }
+
+    } catch (error: unknown) {
+        const errorMessage = 'Failed to execute workflow';
+        const details = error instanceof Error ? error.message : 'Unknown error';
+        errors.push({ actionId: 'all', error: details });
+
+        throw createWorkflowExecutionError(errorMessage, details, errors);
+
+    }
 };
 
 // Helper function to resolve parameters by replacing references with actual values from previous action results.
