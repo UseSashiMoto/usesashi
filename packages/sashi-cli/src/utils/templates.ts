@@ -2,65 +2,63 @@ import fs from 'fs-extra';
 import path from 'path';
 
 interface TemplateConfig {
-    framework: 'nextjs' | 'nodejs' | 'express';
-    typescript: boolean;
-    apiKey: string;
-    hubUrl?: string;
-    rootDir: string;
+  framework: 'nodejs' | 'express';
+  typescript: boolean;
+  apiKey: string;
+  hubUrl?: string;
+  hubApiKey?: string;
+  rootDir: string;
 }
 
 export async function createConfigFiles(config: TemplateConfig) {
-    const { framework, typescript, apiKey, hubUrl, rootDir } = config;
+  const { framework, typescript, apiKey, hubUrl, hubApiKey, rootDir } = config;
 
-    // Create .env.local or .env file
-    await createEnvFile(rootDir, apiKey, hubUrl);
+  // Create .env.local or .env file
+  await createEnvFile(rootDir, apiKey, hubUrl, hubApiKey);
 
-    // Create sashi.config file
-    await createSashiConfig(rootDir, typescript, framework);
+  // Create sashi.config file
+  await createSashiConfig(rootDir, typescript, framework);
 
-    // Create framework-specific files
-    switch (framework) {
-        case 'nextjs':
-            await createNextJSFiles(rootDir, typescript);
-            break;
-        case 'express':
-            await createExpressFiles(rootDir, typescript);
-            break;
-        case 'nodejs':
-            await createNodeJSFiles(rootDir, typescript);
-            break;
-    }
+  // Create framework-specific files
+  switch (framework) {
+    case 'nextjs':
+      await createNextJSFiles(rootDir, typescript);
+      break;
+    case 'express':
+      await createExpressFiles(rootDir, typescript);
+      break;
+    case 'nodejs':
+      await createNodeJSFiles(rootDir, typescript);
+      break;
+  }
 }
 
-async function createEnvFile(rootDir: string, apiKey: string, hubUrl?: string) {
-    const envPath = path.join(rootDir, '.env.local');
-    const envContent = `# Sashi Configuration
+async function createEnvFile(rootDir: string, apiKey: string, hubUrl?: string, hubApiKey?: string) {
+  const envPath = path.join(rootDir, '.env.local');
+  const envContent = `# Sashi Configuration
 OPENAI_API_KEY=${apiKey}
-${hubUrl ? `SASHI_HUB_URL=${hubUrl}` : '# SASHI_HUB_URL=https://your-hub-url.com'}
+${hubUrl ? `HUB_URL=${hubUrl}` : '# HUB_URL=https://hub.usesashi.com'}
+${hubApiKey ? `HUB_API_SECRET_KEY=${hubApiKey}` : '# HUB_API_SECRET_KEY=your-hub-api-key-here'}
 
 # Add other environment variables as needed
 `;
 
-    await fs.writeFile(envPath, envContent);
+  await fs.writeFile(envPath, envContent);
 }
 
 async function createSashiConfig(rootDir: string, typescript: boolean, framework: string) {
-    const configPath = path.join(rootDir, `sashi.config.${typescript ? 'ts' : 'js'}`);
+  const configPath = path.join(rootDir, `sashi.config.${typescript ? 'ts' : 'js'}`);
 
-    const configContent = typescript ? `
+  const configContent = typescript ? `
 import type { SashiConfig } from '@sashimo/lib';
 
 const config: SashiConfig = {
   // OpenAI Configuration
-  openai: {
-    apiKey: process.env.OPENAI_API_KEY!,
-    model: 'gpt-4', // or 'gpt-3.5-turbo'
-  },
-
+  openAIKey: process.env.OPENAI_API_KEY!,
+  
   // Hub Configuration (optional)
-  hub: {
-    url: process.env.SASHI_HUB_URL,
-  },
+  hubUrl: process.env.HUB_URL,
+  apiSecretKey: process.env.HUB_API_SECRET_KEY,
 
   // Middleware Configuration
   middleware: {
@@ -90,15 +88,11 @@ export default config;
 ` : `
 const config = {
   // OpenAI Configuration
-  openai: {
-    apiKey: process.env.OPENAI_API_KEY,
-    model: 'gpt-4', // or 'gpt-3.5-turbo'
-  },
-
+  openAIKey: process.env.OPENAI_API_KEY,
+  
   // Hub Configuration (optional)
-  hub: {
-    url: process.env.SASHI_HUB_URL,
-  },
+  hubUrl: process.env.HUB_URL,
+  apiSecretKey: process.env.HUB_API_SECRET_KEY,
 
   // Middleware Configuration
   middleware: {
@@ -127,15 +121,15 @@ const config = {
 module.exports = config;
 `;
 
-    await fs.writeFile(configPath, configContent);
+  await fs.writeFile(configPath, configContent);
 }
 
 async function createNextJSFiles(rootDir: string, typescript: boolean) {
-    // Create API route for Sashi
-    const apiDir = path.join(rootDir, 'pages', 'api', 'sashi');
-    await fs.ensureDir(apiDir);
+  // Create API route for Sashi
+  const apiDir = path.join(rootDir, 'pages', 'api', 'sashi');
+  await fs.ensureDir(apiDir);
 
-    const apiContent = typescript ? `
+  const apiContent = typescript ? `
 import { NextApiRequest, NextApiResponse } from 'next';
 import { createSashiMiddleware } from '@sashimo/lib';
 import config from '../../../sashi.config';
@@ -156,13 +150,13 @@ export default async function handler(req, res) {
 }
 `;
 
-    await fs.writeFile(path.join(apiDir, `[[...slug]].${typescript ? 'ts' : 'js'}`), apiContent);
+  await fs.writeFile(path.join(apiDir, `[[...slug]].${typescript ? 'ts' : 'js'}`), apiContent);
 
-    // Create Sashi page
-    const pagesDir = path.join(rootDir, 'pages', 'sashi');
-    await fs.ensureDir(pagesDir);
+  // Create Sashi page
+  const pagesDir = path.join(rootDir, 'pages', 'sashi');
+  await fs.ensureDir(pagesDir);
 
-    const pageContent = typescript ? `
+  const pageContent = typescript ? `
 import { SashiUI } from '@sashimo/ui';
 import config from '../../sashi.config';
 
@@ -178,11 +172,11 @@ export default function SashiPage() {
 }
 `;
 
-    await fs.writeFile(path.join(pagesDir, `index.${typescript ? 'tsx' : 'jsx'}`), pageContent);
+  await fs.writeFile(path.join(pagesDir, `index.${typescript ? 'tsx' : 'jsx'}`), pageContent);
 }
 
 async function createExpressFiles(rootDir: string, typescript: boolean) {
-    const exampleContent = typescript ? `
+  const exampleContent = typescript ? `
 import express from 'express';
 import { createSashiMiddleware } from '@sashimo/lib';
 import config from './sashi.config';
@@ -226,11 +220,11 @@ app.listen(PORT, () => {
 });
 `;
 
-    await fs.writeFile(path.join(rootDir, `sashi-example.${typescript ? 'ts' : 'js'}`), exampleContent);
+  await fs.writeFile(path.join(rootDir, `sashi-example.${typescript ? 'ts' : 'js'}`), exampleContent);
 }
 
 async function createNodeJSFiles(rootDir: string, typescript: boolean) {
-    const exampleContent = typescript ? `
+  const exampleContent = typescript ? `
 import http from 'http';
 import { createSashiMiddleware } from '@sashimo/lib';
 import config from './sashi.config';
@@ -280,5 +274,5 @@ server.listen(PORT, () => {
 });
 `;
 
-    await fs.writeFile(path.join(rootDir, `sashi-example.${typescript ? 'ts' : 'js'}`), exampleContent);
+  await fs.writeFile(path.join(rootDir, `sashi-example.${typescript ? 'ts' : 'js'}`), exampleContent);
 } 
