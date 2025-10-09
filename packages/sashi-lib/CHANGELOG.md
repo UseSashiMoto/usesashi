@@ -1,5 +1,11 @@
 # sashi-lib
 
+## 9.0.0
+
+### Major Changes
+
+- cc7ad41: adding linear integration
+
 ## 8.6.0
 
 ### Minor Changes
