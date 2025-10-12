@@ -17,3 +17,230 @@ jobs:
 
             - run: yarn install --frozen-lockfile
             - run: yarn run lint && yarn run build
+
+    test:
+        runs-on: ubuntu-latest
+        needs: build
+        steps:
+            - uses: actions/checkout@v3
+
+            - uses: actions/setup-node@v3
+              with:
+                  node-version: 20.x
+                  cache: "yarn"
+
+            - run: yarn install --frozen-lockfile
+            - run: yarn run build
+            
+            # Run unit tests for all packages
+            - name: Run unit tests
+              run: yarn run test
+
+    cli-integration:
+        runs-on: ubuntu-latest
+        needs: build
+        strategy:
+            matrix:
+                framework: [nodejs, express]
+        steps:
+            - uses: actions/checkout@v3
+
+            - uses: actions/setup-node@v3
+              with:
+                  node-version: 20.x
+                  cache: "yarn"
+
+            - run: yarn install --frozen-lockfile
+            - run: yarn run build
+
+            # Test CLI project creation and setup
+            - name: Test CLI ${{ matrix.framework }} project creation
+              run: |
+                # Create test project using CLI
+                cd /tmp
+                node $GITHUB_WORKSPACE/packages/sashi-cli/dist-simple/simple-index.js init test-sashi-${{ matrix.framework }} --framework ${{ matrix.framework }}
+                cd test-sashi-${{ matrix.framework }}
+                
+                # Verify project structure
+                test -f package.json
+                test -f sashi.config.ts
+                test -f .env.local
+                test -f src/index.ts
+                test -f tsconfig.json
+                
+                # Install dependencies
+                npm install
+                
+                # Add test API key
+                echo "OPENAI_API_KEY=sk-test-dummy-key-for-ci" > .env.local
+                echo "HUB_API_SECRET_KEY=test-secret" >> .env.local
+                
+                # Verify TypeScript compilation
+                npx tsc --noEmit
+
+            # Test existing project setup
+            - name: Test CLI setup in existing project
+              run: |
+                # Create a basic Node.js project
+                mkdir -p /tmp/existing-project
+                cd /tmp/existing-project
+                
+                # Create package.json for ${{ matrix.framework }}
+                if [ "${{ matrix.framework }}" = "express" ]; then
+                  echo '{"name": "test", "dependencies": {"express": "^4.18.0"}, "devDependencies": {"typescript": "^5.0.0"}}' > package.json
+                else
+                  echo '{"name": "test", "devDependencies": {"typescript": "^5.0.0"}}' > package.json
+                fi
+                
+                # Run sashi setup
+                node $GITHUB_WORKSPACE/packages/sashi-cli/dist-simple/simple-index.js setup
+                
+                # Verify files were created
+                test -f sashi.config.ts
+                test -f .env.local
+
+    e2e-test:
+        runs-on: ubuntu-latest
+        needs: build
+        steps:
+            - uses: actions/checkout@v3
+
+            - uses: actions/setup-node@v3
+              with:
+                  node-version: 20.x
+                  cache: "yarn"
+
+            - run: yarn install --frozen-lockfile
+            - run: yarn run build
+
+            # Test end-to-end functionality with real server
+            - name: End-to-End Admin Panel and Workflow Test
+              run: |
+                # Create test project
+                cd /tmp
+                node $GITHUB_WORKSPACE/packages/sashi-cli/dist-simple/simple-index.js init e2e-test-server --framework express
+                cd e2e-test-server
+                
+                # Install dependencies
+                npm install
+                
+                # Add test API key (dummy for CI)
+                echo "OPENAI_API_KEY=sk-test-dummy-key-for-ci-testing-only" > .env.local
+                echo "HUB_API_SECRET_KEY=test-secret-key" >> .env.local
+                
+                # Start server in background
+                timeout 60s npm run dev &
+                SERVER_PID=$!
+                
+                # Wait for server to start
+                sleep 10
+                
+                # Test admin panel accessibility
+                echo "Testing admin panel access..."
+                curl -f http://localhost:3000/sashi/bot || (echo "Admin panel not accessible" && exit 1)
+                
+                # Test API endpoint
+                echo "Testing session creation..."
+                RESPONSE=$(curl -s -w "%{http_code}" http://localhost:3000/sashi/ping)
+                HTTP_CODE=${RESPONSE: -3}
+                if [ "$HTTP_CODE" -ne "200" ]; then
+                  echo "API endpoint not responding correctly. HTTP code: $HTTP_CODE"
+                  exit 1
+                fi
+                
+                # Test workflow execution endpoint with multiple scenarios
+                echo "Testing workflow execution..."
+                
+                # Test 1: Basic workflow execution
+                WORKFLOW_RESPONSE=$(curl -s -X POST http://localhost:3000/sashi/workflow/execute \
+                  -H "Content-Type: application/json" \
+                  -H "x-sashi-session-token: test-session" \
+                  -d '{
+                    "workflow": {
+                      "type": "workflow", 
+                      "actions": [{
+                        "id": "test-action-1",
+                        "description": "Test action",
+                        "tool": "test-function",
+                        "parameters": {"message": "test"}
+                      }]
+                    },
+                    "debug": true
+                  }')
+                
+                echo "Workflow response: $WORKFLOW_RESPONSE"
+                
+                # Verify response contains expected fields
+                echo "$WORKFLOW_RESPONSE" | grep -q "success" || (echo "Workflow response missing 'success' field" && exit 1)
+                echo "$WORKFLOW_RESPONSE" | grep -q "results" || (echo "Workflow response missing 'results' field" && exit 1)
+                echo "$WORKFLOW_RESPONSE" | grep -q "errors" || (echo "Workflow response missing 'errors' field" && exit 1)
+                
+                # Test 2: Multi-step workflow
+                echo "Testing multi-step workflow..."
+                curl -s -X POST http://localhost:3000/sashi/workflow/execute \
+                  -H "Content-Type: application/json" \
+                  -H "x-sashi-session-token: test-session" \
+                  -d '{
+                    "workflow": {
+                      "type": "workflow",
+                      "actions": [
+                        {
+                          "id": "step-1",
+                          "description": "First step",
+                          "tool": "function-1", 
+                          "parameters": {"input": "value1"}
+                        },
+                        {
+                          "id": "step-2",
+                          "description": "Second step",
+                          "tool": "function-2",
+                          "parameters": {"input": "value2"}
+                        }
+                      ]
+                    },
+                    "debug": true
+                  }' | grep -q "success" || (echo "Multi-step workflow failed" && exit 1)
+                
+                # Test 3: Invalid workflow format should be rejected
+                echo "Testing invalid workflow rejection..."
+                INVALID_RESPONSE=$(curl -s -w "%{http_code}" -X POST http://localhost:3000/sashi/workflow/execute \
+                  -H "Content-Type: application/json" \
+                  -H "x-sashi-session-token: test-session" \
+                  -d '{"invalid": "workflow"}')
+                
+                HTTP_CODE=${INVALID_RESPONSE: -3}
+                if [ "$HTTP_CODE" = "200" ]; then
+                  RESPONSE_BODY=${INVALID_RESPONSE%???}
+                  echo "$RESPONSE_BODY" | grep -q "error\|Invalid" || (echo "Invalid workflow should return error" && exit 1)
+                fi
+                
+                # Clean up
+                kill $SERVER_PID || true
+                
+                echo "✅ All E2E tests passed!"
+              env:
+                NODE_ENV: test
+
+    cli-e2e-jest:
+        runs-on: ubuntu-latest
+        needs: build
+        steps:
+            - uses: actions/checkout@v3
+
+            - uses: actions/setup-node@v3
+              with:
+                  node-version: 20.x
+                  cache: "yarn"
+
+            - run: yarn install --frozen-lockfile
+            - run: yarn run build
+
+            # Run dedicated E2E Jest tests for CLI
+            - name: Run CLI E2E Tests with Jest
+              run: |
+                cd packages/sashi-cli
+                npm install
+                npm run test:e2e
+              env:
+                NODE_ENV: test
+                CI: true
