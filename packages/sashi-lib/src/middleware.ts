@@ -1524,8 +1524,13 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                         console.log(`\n[Workflow Step ${i + 1}] Processing action "${actionId}" using tool "${toolName}"`);
                     }
 
-                    // Resolve parameters
-                    const processedParameters = resolveParameters(parameters, actionResults, debug);
+                    // Resolve parameters (with LLM generation support)
+                    const processedParameters = await resolveParametersWithGeneration(
+                        parameters,
+                        actionResults,
+                        openAIKey,
+                        debug
+                    );
 
                     if ((action?.map ?? false) === true) {
                         const arrayParams = Object.entries(processedParameters).find(
@@ -1554,7 +1559,18 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                             console.log(`Mapped results from "${actionId}":`, results);
                         }
                     } else {
-                        const result = await callFunctionFromRegistryFromObject(toolName, processedParameters);
+                        let result = await callFunctionFromRegistryFromObject(toolName, processedParameters);
+
+                        // Apply transformation if specified
+                        if ((action as any)?._transform) {
+                            result = await transformActionResult(
+                                result,
+                                (action as any)._transform,
+                                openAIKey,
+                                debug
+                            );
+                        }
+
                         actionResults[actionId] = result;
                         if (debug) {
                             console.log(`Result from "${actionId}":`, result);
@@ -1765,11 +1781,13 @@ export const createMiddleware = (options: MiddlewareOptions) => {
                 console.log('🤖 [Linear Agent] ⚡ Workflow actions count:', workflow.actions?.length || 0);
                 const result = await executeWorkflowLogic(workflow, debug, {
                     getFunctionRegistry,
-                    resolveParameters,
+                    resolveParameters: resolveParametersWithGeneration,
                     callFunctionFromRegistryFromObject,
                     guessUIType,
                     createWorkflowExecutionSuccess,
-                    createWorkflowExecutionError
+                    createWorkflowExecutionError,
+                    transformActionResult,
+                    openAIKey
                 });
                 console.log('🤖 [Linear Agent] ⚡ Workflow execution completed');
                 return result;
@@ -1823,11 +1841,13 @@ export const executeWorkflowLogic = async (
     debug: boolean = false,
     options: {
         getFunctionRegistry: () => Map<string, any>,
-        resolveParameters: (params: any, actionResults: any, debug: boolean) => any,
+        resolveParameters: (params: any, actionResults: any, openAIKey: string, debug: boolean) => Promise<any>,
         callFunctionFromRegistryFromObject: (toolName: string, params: any) => Promise<any>,
         guessUIType: (data: any) => string,
         createWorkflowExecutionSuccess: (results: any, errors?: any) => any,
-        createWorkflowExecutionError: (message: string, details: string, errors?: any) => any
+        createWorkflowExecutionError: (message: string, details: string, errors?: any) => any,
+        transformActionResult: (result: any, transformation: any, openAIKey: string, debug: boolean) => Promise<any>,
+        openAIKey: string
     }
 ) => {
     const startTime = new Date();
@@ -1863,8 +1883,8 @@ export const executeWorkflowLogic = async (
                     console.log(`\n[Workflow Step ${i + 1}] Processing action "${actionId}" using tool "${toolName}"`);
                 }
 
-                // Resolve parameters
-                const processedParameters = options.resolveParameters(parameters, actionResults, debug);
+                // Resolve parameters (with LLM generation support)
+                const processedParameters = await options.resolveParameters(parameters, actionResults, options.openAIKey, debug);
 
                 if ((action?.map ?? false) === true) {
                     const arrayParams = Object.entries(processedParameters).find(
@@ -1893,7 +1913,18 @@ export const executeWorkflowLogic = async (
                         console.log(`Mapped results from "${actionId}":`, results);
                     }
                 } else {
-                    const result = await options.callFunctionFromRegistryFromObject(toolName, processedParameters);
+                    let result = await options.callFunctionFromRegistryFromObject(toolName, processedParameters);
+
+                    // Apply transformation if specified
+                    if ((action as any)?._transform) {
+                        result = await options.transformActionResult(
+                            result,
+                            (action as any)._transform,
+                            options.openAIKey,
+                            debug
+                        );
+                    }
+
                     actionResults[actionId] = result;
                     if (debug) {
                         console.log(`Result from "${actionId}":`, result);
@@ -1963,6 +1994,258 @@ export const executeWorkflowLogic = async (
 
     }
 };
+
+// Helper function to generate parameter values using LLM
+async function generateWithLLM(
+    prompt: string,
+    context: string,
+    openAIKey: string,
+    debug: boolean = false
+): Promise<string> {
+    const OpenAI = require('openai').default;
+    const openai = new OpenAI({ apiKey: openAIKey });
+
+    // Context-specific system prompts
+    const systemPrompts: Record<string, string> = {
+        'sql': `You are a SQL expert. Generate valid PostgreSQL SELECT queries.
+
+Database Schema:
+- User: id, name, email, role, isActive, createdAt, lastLogin
+- File: id, name, userId, mimeType, size, createdAt
+- Content: id, title, content, authorId, type, status, createdAt
+
+Rules:
+- Return ONLY the SQL query, no explanations
+- Use double quotes for table names: "User", "File", etc.
+- Only generate SELECT queries
+- Be precise and efficient`,
+
+        'markdown': `You are a markdown formatting expert. Convert data to well-formatted markdown.
+
+Rules:
+- Create clear, readable markdown
+- Use tables for structured data
+- Use lists for arrays
+- Add headers for sections
+- Return ONLY markdown, no code blocks or explanations`,
+
+        'json': `You are a JSON expert. Generate or transform data into valid JSON format.
+
+Rules:
+- Return ONLY valid JSON, no explanations or markdown code blocks
+- Ensure proper JSON syntax (double quotes, proper escaping)
+- Structure data logically with appropriate nesting
+- Use arrays for lists and objects for structured data
+- Return minified or formatted JSON as appropriate`,
+
+        'general': `You are a data formatting expert. Convert the input to well-formatted output.
+
+Rules:
+- Default to markdown formatting for structured data
+- For JSON strings, parse them and extract relevant data
+- Create clear, readable output
+- Use appropriate formatting structures (tables, lists, headers)
+- Return ONLY the formatted output, no explanations`
+    };
+
+    const systemPrompt = systemPrompts[context] || systemPrompts['general'];
+
+    if (debug) {
+        console.log(`[LLM Generate] Context: ${context}, Prompt: ${prompt}`);
+    }
+
+    try {
+        const completion = await openai.chat.completions.create({
+            model: "gpt-4",
+            messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: prompt }
+            ],
+            temperature: 0.1
+        });
+
+        let result = completion.choices[0]?.message?.content?.trim() || '';
+
+        // Clean up code blocks if present
+        result = result.replace(/```sql\n?/g, '').replace(/```\n?/g, '').trim();
+
+        if (debug) {
+            console.log(`[LLM Generate] Result: ${result.substring(0, 200)}...`);
+        }
+
+        return result;
+    } catch (error) {
+        console.error('[LLM Generate] Error:', error);
+        throw new Error(`Failed to generate: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+}
+
+// Helper function to transform action results using LLM
+async function transformActionResult(
+    result: any,
+    transformation: { _transform: string; _context?: string } | undefined,
+    openAIKey: string,
+    debug: boolean
+): Promise<any> {
+    if (!transformation || !transformation._transform) {
+        return result;
+    }
+
+    if (debug) {
+        console.log('[Output Transform] Applying transformation:', transformation._transform);
+    }
+
+    // Auto-parse JSON strings before transformation
+    let parsedResult = result;
+    if (typeof result === 'string') {
+        try {
+            parsedResult = JSON.parse(result);
+            if (debug) {
+                console.log('[Output Transform] Auto-parsed JSON string');
+            }
+        } catch (e) {
+            // If not valid JSON, use as-is
+            parsedResult = result;
+        }
+    }
+
+    const context = transformation._context || 'markdown';
+    const resultAsString = typeof parsedResult === 'string'
+        ? parsedResult
+        : JSON.stringify(parsedResult, null, 2);
+
+    const prompt = `${transformation._transform}\n\nData to transform:\n${resultAsString}`;
+
+    const transformed = await generateWithLLM(prompt, context, openAIKey, debug);
+
+    if (debug) {
+        console.log('[Output Transform] Transformed result:', transformed.substring(0, 200));
+    }
+
+    return transformed;
+}
+
+// Async parameter resolution with LLM generation support
+async function resolveParametersWithGeneration(
+    parameters: Record<string, any> | undefined,
+    actionResults: Record<string, any>,
+    openAIKey: string,
+    debug: boolean
+): Promise<Record<string, any>> {
+    if (!parameters) return {};
+    const processedParameters: Record<string, any> = {};
+
+    for (const [key, value] of Object.entries(parameters)) {
+        // Handle _generate objects
+        if (typeof value === 'object' && value !== null && '_generate' in value) {
+            if (debug) {
+                console.log(`[Parameter Generation] Generating "${key}" from:`, value._generate);
+            }
+
+            const context = value._context || 'general';
+            const generated = await generateWithLLM(
+                value._generate,
+                context,
+                openAIKey,
+                debug
+            );
+
+            processedParameters[key] = generated;
+
+            if (debug) {
+                console.log(`[Parameter Generation] Generated "${key}":`, generated);
+            }
+            continue;
+        }
+
+        // Handle regular string references (existing logic)
+        if (typeof value === 'string' && value.includes('.')) {
+            try {
+                if (value.startsWith('userInput.')) {
+                    throw new Error(`Unresolved userInput parameter: ${value}`);
+                }
+
+                const parts = value.split('.');
+                const [actionRef, ...pathParts] = parts;
+
+                if (!actionRef) {
+                    throw new Error(`Invalid reference format: ${value} - missing action reference`);
+                }
+
+                if (actionRef === 'userInput') {
+                    throw new Error(`Unresolved userInput parameter: ${value}`);
+                }
+
+                // Handle array operations
+                if (actionRef.includes('[')) {
+                    const baseActionId = actionRef.split('[')[0];
+                    const arrayPattern = actionRef.match(/\[(.*?)\]/);
+
+                    if (!baseActionId || !actionResults[baseActionId]) {
+                        throw new Error(`Action result not found: ${baseActionId}`);
+                    }
+
+                    const arrayResult = actionResults[baseActionId];
+                    if (!Array.isArray(arrayResult)) {
+                        throw new Error(`Expected array from ${baseActionId}`);
+                    }
+
+                    if (arrayPattern?.length && arrayPattern[1]) {
+                        const arrayOp = arrayPattern[1];
+                        if (arrayOp === '*') {
+                            processedParameters[key] = arrayResult.map(item => {
+                                let currentValue = item;
+                                for (const part of pathParts) {
+                                    currentValue = currentValue[part];
+                                }
+                                return currentValue;
+                            });
+                        } else if (/^\d+$/.test(arrayOp)) {
+                            const index = parseInt(arrayOp, 10);
+                            let currentValue = arrayResult[index];
+                            for (const part of pathParts) {
+                                currentValue = currentValue[part];
+                            }
+                            processedParameters[key] = currentValue;
+                        } else if (arrayOp === 'first') {
+                            let currentValue = arrayResult[0];
+                            for (const part of pathParts) {
+                                currentValue = currentValue[part];
+                            }
+                            processedParameters[key] = currentValue;
+                        } else if (arrayOp === 'last') {
+                            let currentValue = arrayResult[arrayResult.length - 1];
+                            for (const part of pathParts) {
+                                currentValue = currentValue[part];
+                            }
+                            processedParameters[key] = currentValue;
+                        }
+                    }
+                } else {
+                    // Handle regular object property access
+                    if (!actionResults[actionRef]) {
+                        throw new Error(`Referenced action "${actionRef}" not found`);
+                    }
+
+                    let currentValue = actionResults[actionRef];
+                    for (const field of pathParts) {
+                        currentValue = currentValue[field];
+                    }
+                    processedParameters[key] = currentValue;
+                }
+            } catch (error) {
+                const errorMessage = `Parameter error for "${key}": ${(error as Error).message}`;
+                if (debug) console.error(errorMessage);
+                throw new Error(errorMessage);
+            }
+        } else {
+            // Regular values pass through
+            processedParameters[key] = value;
+        }
+    }
+
+    return processedParameters;
+}
 
 // Helper function to resolve parameters by replacing references with actual values from previous action results.
 function resolveParameters(

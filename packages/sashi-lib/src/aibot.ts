@@ -3,8 +3,6 @@ import OpenAI from "openai"
 import {
     getFunctionAttributes,
     getFunctionRegistry,
-    VisualizationFunction,
-    VisualizationType
 } from "./ai-function-loader"
 
 export class AIBot {
@@ -84,7 +82,7 @@ Finally, if you decide that a component should be generated, you will output the
 
         const component = getFunctionRegistry().get(
             componentName
-        ) as VisualizationFunction
+        ) as any
 
         if (!component || !component.getVisualizationType()) {
             throw new Error("Component not found")
@@ -126,14 +124,14 @@ Finally, if you decide that a component should be generated, you will output the
         temperature = 0
     }: {
         messages: any[]
-        viz_tools: VisualizationFunction[]
+        viz_tools: any[]
         model?: string
         max_tokens?: number
         temperature?: number
     }): Promise<
         | {
             name: string
-            type: VisualizationType
+            type: any
             parameters: any
         }[]
         | null

@@ -6,6 +6,7 @@ import "./services/content_service"
 import "./services/email_service"
 import "./services/file_service"
 import "./services/payment_service"
+import "./services/query_service"
 import "./services/user_service"
 
 require("dotenv").config()

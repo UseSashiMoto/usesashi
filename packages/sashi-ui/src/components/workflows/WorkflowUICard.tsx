@@ -914,6 +914,30 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
                         </div>
                         <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">{action.description}</div>
 
+                        {/* Show if this action has parameter generation */}
+                        {Object.entries(action.parameters).some(
+                          ([_, value]) => typeof value === 'object' && value !== null && '_generate' in value
+                        ) && (
+                          <Badge variant="secondary" className="mt-2 text-xs">
+                            <span className="mr-1">🤖</span> Uses AI Generation
+                          </Badge>
+                        )}
+
+                        {/* Show if this action has output transformation */}
+                        {(action as any)?._transform && (
+                          <div className="mt-2 p-2 bg-purple-50 dark:bg-purple-950 rounded-md border border-purple-200 dark:border-purple-800">
+                            <div className="text-xs font-medium text-purple-800 dark:text-purple-200 mb-1">
+                              🔄 Output Transformation
+                            </div>
+                            <div className="text-xs text-purple-700 dark:text-purple-300 font-mono">
+                              Context: {(action as any)._transform._context || 'general'}
+                            </div>
+                            <div className="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                              {(action as any)._transform._transform}
+                            </div>
+                          </div>
+                        )}
+
                         {Object.keys(action.parameters).length > 0 && (
                           <div className="mt-2 text-xs bg-slate-100 dark:bg-slate-800 p-2 rounded overflow-hidden">
                             <div className="font-mono flex items-center text-xs mb-1">
