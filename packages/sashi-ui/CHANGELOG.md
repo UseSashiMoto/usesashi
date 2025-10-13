@@ -1,5 +1,11 @@
 # @sashi/ui
 
+## 9.0.0
+
+### Major Changes
+
+- b53e220: correcting versioning misalignment
+
 ## 8.6.0
 
 ### Minor Changes
