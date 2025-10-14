@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.6.0
+
+### Minor Changes
+
+- 06b82d2: now have generative and transformative steps
+
 ## 3.5.0
 
 ### Minor Changes

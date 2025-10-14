@@ -1,5 +1,11 @@
 # sashi-lib
 
+## 9.1.0
+
+### Minor Changes
+
+- 06b82d2: now have generative and transformative steps
+
 ## 9.0.0
 
 ### Major Changes
