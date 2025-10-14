@@ -1340,14 +1340,36 @@ export const createMiddleware = (options: MiddlewareOptions) => {
             return res.status(400).json({ error: 'Invalid workflow format' });
         }
 
+        // Deterministic check: If workflow has inputComponents, it's definitely a form
+        if (workflow.ui && workflow.ui.inputComponents && workflow.ui.inputComponents.length > 0) {
+            console.log('[Entry Type] Workflow has inputComponents, classifying as form');
+            return res.json({
+                entry: {
+                    entryType: "form",
+                    description: workflow.description || "Workflow Form",
+                    payload: {
+                        fields: workflow.ui.inputComponents.map((comp: any) => ({
+                            key: comp.key,
+                            label: comp.label || comp.key,
+                            type: comp.type || "string",
+                            required: comp.required !== false
+                        }))
+                    }
+                }
+            });
+        }
+
         const prompt = `
                 You are an assistant that classifies how a given backend workflow should be presented to a user.
 
                 Given the following workflow JSON, identify how the user should interact with it using one of the following entry types:
-                - "form": if the workflow requires one or more inputs
+                - "form": if the workflow requires one or more inputs (check for ui.inputComponents array or userInput.* parameters)
                 - "button": if it requires no inputs and is simply triggered
                 - "auto_update": if it should fetch data periodically without user input
                 - "label": if it should only display information without any action
+
+                **IMPORTANT**: If the workflow has ui.inputComponents with any items, it MUST be classified as "form".
+                Also check for userInput.* references in parameters or inside _generate objects.
 
                 Respond with strictly valid JSON in this format:
 
@@ -2142,9 +2164,42 @@ async function resolveParametersWithGeneration(
                 console.log(`[Parameter Generation] Generating "${key}" from:`, value._generate);
             }
 
+            // Resolve actionId.field references in the _generate prompt
+            // Supports both {{actionId.field}} and plain actionId.field for backward compatibility
+            let resolvedPrompt = value._generate;
+
+            // Replace action references with actual values from action results
+            // Matches both {{actionId.field}} and plain actionId.field patterns
+            const actionPattern = /\{\{([a-zA-Z_][\w]*)\.([\w]+)\}\}|(?:^|[^{])([a-zA-Z_][\w]*)\.([\w]+)(?![}])/g;
+            resolvedPrompt = resolvedPrompt.replace(actionPattern, (match: string, bracedActionId?: string, bracedField?: string, plainActionId?: string, plainField?: string) => {
+                const actionId = bracedActionId || plainActionId;
+                const field = bracedField || plainField;
+
+                if (actionId && field && actionResults[actionId] && actionResults[actionId][field] !== undefined) {
+                    const fieldValue = actionResults[actionId][field];
+                    // If we matched plain syntax, preserve any leading characters
+                    const prefix = match.startsWith('{{') ? '' : match.charAt(0);
+                    return prefix + String(fieldValue);
+                }
+                if (debug && actionId && field) {
+                    console.warn(`[Parameter Generation] Unresolved action reference: ${actionId}.${field}`);
+                }
+                return match; // Keep original if not found
+            });
+
+            // Check for any remaining userInput.* that weren't resolved by UI
+            const unresolvedUserInput = resolvedPrompt.match(/\{\{userInput\.([\w]+)\}\}|userInput\.([\w]+)/g);
+            if (unresolvedUserInput && debug) {
+                console.warn(`[Parameter Generation] Unresolved userInput references (should be resolved by UI):`, unresolvedUserInput);
+            }
+
+            if (debug && resolvedPrompt !== value._generate) {
+                console.log(`[Parameter Generation] Resolved prompt:`, resolvedPrompt);
+            }
+
             const context = value._context || 'general';
             const generated = await generateWithLLM(
-                value._generate,
+                resolvedPrompt,
                 context,
                 openAIKey,
                 debug

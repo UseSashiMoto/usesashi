@@ -84,7 +84,7 @@ export const WorkflowDashboard: React.FC<WorkflowDashboardProps> = ({ workflows,
               >
                 {viewMode === 'grid' ? (
                   <WorkflowUICard
-                    workflow={createUIWorkflowDefinition(workflow)}
+                    workflow={workflow.workflow.workflow}
                     apiUrl={apiUrl}
                     isDraggable={true}
                     isInChat={false}
@@ -95,7 +95,7 @@ export const WorkflowDashboard: React.FC<WorkflowDashboardProps> = ({ workflows,
                   <Card className="w-full">
                     <CardContent className="p-4">
                       <WorkflowUICard
-                        workflow={createUIWorkflowDefinition(workflow)}
+                        workflow={workflow.workflow.workflow}
                         apiUrl={apiUrl}
                         isDraggable={true}
                         isInChat={false}

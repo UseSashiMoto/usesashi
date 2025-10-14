@@ -67,9 +67,20 @@ export function verifyWorkflow(workflow: any): VerificationResult {
             if (provided) {
                 const value = action.parameters[paramName];
 
-                // Allow placeholders like "userInput.*" or "<prev>.field"
-                if (typeof value === "string" && (value.startsWith("userInput.") || value.includes("."))) {
+                // Allow placeholders like "userInput.*" or "actionId.field"
+                // Also allows {{}} wrapped syntax for backward compatibility
+                if (typeof value === "string" && (value.startsWith("userInput.") || value.includes(".") || value.includes("{{"))) {
                     return; // skip type validation for placeholders
+                }
+
+                // Allow _generate objects for dynamic parameter generation
+                if (typeof value === "object" && value !== null && "_generate" in value) {
+                    return; // skip type validation for _generate objects - will be generated at runtime
+                }
+
+                // Allow _transform objects for output transformation
+                if (typeof value === "object" && value !== null && "_transform" in value) {
+                    return; // skip type validation for _transform objects - will be transformed at runtime
                 }
 
                 try {

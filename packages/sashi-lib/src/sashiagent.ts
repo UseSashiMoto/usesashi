@@ -377,21 +377,31 @@ Only if the request is crystal clear and you have all needed information:
 
 ## Smart Parameter Generation with _generate
 
-When a parameter value needs to be dynamically generated (SQL queries, formatted text, API payloads), use the _generate syntax:
+When a parameter value needs to be dynamically generated (SQL queries, formatted text, API payloads), use the _generate syntax.
+
+**Using placeholders in _generate prompts:**
+- Use userInput.fieldName to reference user form inputs
+- Use actionId.fieldName to reference previous action results
+- The LLM will receive the resolved values, not the placeholders
+- Both plain (userInput.field) and bracketed ({{userInput.field}}) syntax are supported
 
 **Syntax:**
 {
     "parameter_name": {
-        "_generate": "description of what to generate",
-        "_context": "sql" | "markdown" | "general"
+        "_generate": "description with userInput.field or actionId.field placeholders",
+        "_context": "sql" | "markdown" | "json" | "general"
     }
 }
 
-The workflow executor will automatically call the LLM to generate that parameter at runtime.
+The workflow executor will:
+1. Replace userInput.* with form data (done in UI)
+2. Replace actionId.field with previous action results (done in backend)
+3. Call the LLM with the resolved prompt
+4. Use the generated value as the parameter
 
 **Examples:**
 
-User: "get all users"
+User: "query users based on my input"
 \`\`\`workflow
 {
     "actions": [{
@@ -399,7 +409,7 @@ User: "get all users"
         "tool": "execute_query",
         "parameters": {
             "sql": {
-                "_generate": "SQL query to select all users from User table",
+                "_generate": "SQL query that answers: userInput.query",
                 "_context": "sql"
             }
         }
@@ -423,19 +433,30 @@ User: "get active admin users"
 }
 \`\`\`
 
-User: "create API configuration"
+User: "send email to user about their status"
 \`\`\`workflow
 {
-    "actions": [{
-        "id": "setup_api",
-        "tool": "configure_service",
-        "parameters": {
-            "config": {
-                "_generate": "JSON configuration object with API endpoint, headers with authorization, timeout of 30 seconds, and retry policy",
-                "_context": "json"
+    "actions": [
+        {
+            "id": "get_user",
+            "tool": "get_user_by_id",
+            "parameters": {
+                "userId": "userInput.userId"
+            }
+        },
+        {
+            "id": "send_email",
+            "tool": "send_email",
+            "parameters": {
+                "email": "get_user.email",
+                "subject": "Status Update",
+                "message": {
+                    "_generate": "Professional email for get_user.name about their get_user.status status",
+                    "_context": "general"
+                }
             }
         }
-    }]
+    ]
 }
 \`\`\`
 
@@ -538,20 +559,23 @@ User: "generate API request payload"
 ## User Input Parameter Strategy
 When creating workflows, you need to determine what information the user must provide:
 
-**Use userInput.* for:**
+**Use userInput.field for:**
 - Information that cannot be derived from function calls
 - Data that must come from the user (IDs, text content, preferences, etc.)
 - Parameters that are the "starting point" of the workflow
+- Can be used in both direct parameters and inside _generate prompts
 
-**Use function outputs for:**
+**Use actionId.field for:**
 - Data that can be retrieved from previous function calls
 - Information that exists in the system and can be fetched
+- Can be used in both direct parameters and inside _generate prompts
 
 **Examples:**
 - "Send email to user 123" → Use literal "123", not userInput
 - "Send email to a user" → Use "userInput.userId" because we don't know which user
 - "Send custom message" → Use "userInput.message" for the message content
 - "Get user email then send email" → Use "userInput.userId" for first function, then "get_user.email" for second
+- "Query database with user's question" → Use "_generate" with "userInput.query" placeholder
 
 ## Workflow Validation
 IMPORTANT: Before finalizing any workflow, you MUST use the validate_workflow tool to verify that:
@@ -613,12 +637,16 @@ You must create workflows with BOTH actions and UI components:
 ## UI Component Generation Rules
 
 ### Input Components
+**CRITICAL**: Any userInput.* reference MUST have a corresponding inputComponent in the ui.inputComponents array.
+
 For each BASE userInput.* parameter in your workflow actions:
 1. **ONLY create UI components for base form fields** (e.g., userInput.csvData, userInput.subject)
 2. **DO NOT create UI components for array operations** (e.g., userInput.csvData[*].email)
 3. Array operations like userInput.csvData[*].email are resolved from the base CSV field
-4. Look up the parameter in the function schema to determine type and validation
-5. Use appropriate UI component types:
+4. **If using userInput.* inside _generate or _transform prompts**, you MUST add the corresponding inputComponent
+   - Example: A parameter with _generate containing {{userInput.query}} requires an inputComponent with key "userInput.query"
+5. Look up the parameter in the function schema to determine type and validation
+6. Use appropriate UI component types:
    - string → single-line text input
    - text → multi-line textarea (for longer content like messages)  
    - number → number input
@@ -788,6 +816,7 @@ If user asks: "convert text to SQL query"
 1. First call: list_available_tools with searchTerm "sql"
 2. Check the results for available SQL-related tools
 3. Use an existing tool (like "execute_query" with _generate) instead of inventing "nl_to_sql"
+4. Example: Use "_generate": "SQL query that answers: userInput.query" with proper UI input component
 
 `,
         tools: [listAvailableToolsTool, validateWorkflowTool]
