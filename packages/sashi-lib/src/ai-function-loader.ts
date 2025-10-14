@@ -375,9 +375,9 @@ export class AIFunction {
         | z.ZodNull
         | z.ZodAny
         | z.ZodOptional<any> => {
-        
+
         let schema: any;
-        
+
         if (param instanceof AIArray) {
             schema = z.array(this.validateAIField(param.getItemType()));
         } else if (param instanceof AIObject) {
@@ -546,7 +546,7 @@ export class AIFunction {
 
             // Create validation schema for provided arguments only
             const paramSchemas = this._params.slice(0, paddedArgs.length).map(this.validateAIField);
-            
+
             if (paramSchemas.length === 0) {
                 // No parameters expected or provided
                 const result = await this._implementation();
@@ -596,9 +596,9 @@ export class AIFunction {
                         const paramIndex = parseInt(path);
                         const param = this._params[paramIndex];
                         const paramName = param instanceof AIArray ? param.getName() :
-                                         param instanceof AIObject ? param.getName() :
-                                         param instanceof AIFieldEnum ? param.getName() :
-                                         param?.name || path;
+                            param instanceof AIObject ? param.getName() :
+                                param instanceof AIFieldEnum ? param.getName() :
+                                    param?.name || path;
                         return `Field "${paramName}": ${error.message}`;
                     })
                     .join('\n');
@@ -612,43 +612,7 @@ export class AIFunction {
     }
 }
 
-export type VisualizationType = 'table' | 'dataCard';
 
-export class VisualizationFunction extends AIFunction {
-    private _visualizationType: VisualizationType;
-
-    constructor(
-        name: string,
-        description: string,
-        visualizationType: VisualizationType,
-        repo?: string,
-        needsConfirm: boolean = false
-    ) {
-        super(name, description, repo, needsConfirm);
-        this._visualizationType = visualizationType;
-    }
-
-    getVisualizationType(): VisualizationType {
-        return this._visualizationType;
-    }
-
-    description() {
-        return {
-            ...super.description(),
-            visualizationType: this._visualizationType,
-        };
-    }
-    // Override the implement method to ensure it returns visualization data
-    implement(func: (args: any) => any): this {
-        return super.implement((args: any) => {
-            const result = func(args);
-            return {
-                type: this._visualizationType,
-                data: result,
-            };
-        });
-    }
-}
 
 export interface FunctionMetadata<F extends AIFunction> {
     fn: F;
@@ -661,7 +625,7 @@ interface RegisteredFunction<F extends AIFunction> extends FunctionMetadata<F> {
 type FunctionRegistry = Map<string, AIFunction>;
 type FunctionAttributes = Map<
     string,
-    { active: boolean; isVisualization: boolean; isHidden: boolean }
+    { active: boolean; isHidden: boolean }
 >;
 
 type RepoRegistry = Map<string, RepoMetadata>;
@@ -691,11 +655,9 @@ export function registerFunctionIntoAI<F extends AIFunction>(
     name: string,
     fn: F
 ) {
-    const isVisualization = fn instanceof VisualizationFunction;
     functionRegistry.set(fn.getName(), fn);
     functionAttributes.set(fn.getName(), {
         active: true,
-        isVisualization: isVisualization,
         isHidden: fn.isHidden(),
     });
 }
@@ -708,7 +670,7 @@ export function registerRepoFunctionsIntoAI<F extends AIFunction>(
         fn.name,
         new AIFunction(fn.name, fn.description, repoToken, fn.needConfirmation)
     );
-    functionAttributes.set(fn.name, { active: true, isVisualization: false, isHidden: false });
+    functionAttributes.set(fn.name, { active: true, isHidden: false });
 }
 
 export function registerRepo(repo: RepoMetadata, token: string) {

@@ -16,19 +16,11 @@ import { TooltipContent, TooltipProvider, TooltipTrigger } from '@radix-ui/react
 import axios from 'axios';
 import { Check, Code, Copy, GripVertical, Heart, Trash2, X } from 'lucide-react';
 import React, { useRef, useState } from 'react';
-import {
-  FormPayload,
-  LabelPayload,
-  SavedWorkflow,
-  UIWorkflowDefinition,
-  WorkflowResponse,
-  WorkflowResult,
-  WorkflowUIComponent,
-} from '../../models/payload';
+import { SavedWorkflow, WorkflowResponse, WorkflowResult, WorkflowUIComponent } from '../../models/payload';
 import { WorkflowResultViewer } from './WorkflowResultViewer';
 
 interface WorkflowUICardProps {
-  workflow: UIWorkflowDefinition;
+  workflow: WorkflowResponse;
   apiUrl: string;
   onSave?: (workflowId: string) => void; // Optional callback for external save handling
   onSaveComplete?: (success: boolean, message: string, workflowId?: string) => void; // Callback with save result
@@ -55,7 +47,7 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [results, setResults] = useState<WorkflowResult[]>(() => {
     // Initialize with existing results if available
-    return workflow.workflow.executionResults || [];
+    return [];
   });
   const [isExecuting, setIsExecuting] = useState(false);
   const [isPinned, setIsPinned] = useState(savedWorkflow?.favorited || false);
@@ -63,7 +55,7 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState(() => {
     // Default to results tab if results are available
-    return workflow.workflow.executionResults && workflow.workflow.executionResults.length > 0 ? 'results' : 'workflow';
+    return 'workflow';
   });
   const [isCopied, setIsCopied] = useState(false);
   const connectedToHub = useAppStore((state) => state.connectedToHub);
@@ -118,8 +110,8 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
   // Form field validation
   const isFormValid = () => {
     // Check if we have the new UI format with inputComponents
-    if (workflow.workflow.ui?.inputComponents) {
-      return workflow.workflow.ui.inputComponents.every((field) => {
+    if (workflow.ui?.inputComponents) {
+      return workflow.ui.inputComponents.every((field) => {
         if (field.required) {
           // Extract the key from userInput.* format (e.g., "userInput.userId" -> "userId")
           const fieldKey = field.key.startsWith('userInput.') ? field.key.substring('userInput.'.length) : field.key;
@@ -150,38 +142,7 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
       });
     }
 
-    // Fallback to old format
-    const formPayload = workflow.entry.payload as FormPayload;
-    if (!formPayload?.fields) return true;
-
-    return formPayload.fields.every((field) => {
-      if (field.required) {
-        const value = formData[field.key];
-        const fieldAny = field as any;
-
-        // Handle CSV fields specifically
-        if (fieldAny.type === 'csv') {
-          // For CSV fields, the value should always be a string (raw CSV text)
-          if (!value || typeof value !== 'string') return false;
-
-          // Try to parse the CSV and validate
-          const parsedData = parseCSV(value);
-          if (parsedData.length === 0) return false;
-
-          // Check if expected columns are present
-          if (fieldAny.expectedColumns && fieldAny.expectedColumns.length > 0) {
-            const validation = validateCSVColumns(parsedData, fieldAny.expectedColumns);
-            return validation.isValid;
-          }
-
-          return true;
-        }
-
-        // Handle other field types
-        return value !== undefined && value !== '';
-      }
-      return true;
-    });
+    return false;
   };
 
   // Handle different input types
@@ -324,7 +285,7 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
       console.log('🔍 [CSV Debug] Form data before execution:', formData);
       console.log(
         '🔍 [CSV Debug] Original workflow parameters:',
-        workflow.workflow.actions?.map((a) => ({
+        workflow.actions?.map((a) => ({
           id: a.id,
           tool: a.tool,
           parameters: a.parameters,
@@ -333,7 +294,7 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
       );
 
       // Create a copy of the workflow with form data
-      const workflowWithFormData: WorkflowResponse = { ...workflow.workflow };
+      const workflowWithFormData: WorkflowResponse = { ...workflow };
 
       // Update actions to include form data
       if (workflowWithFormData.actions) {
@@ -357,8 +318,8 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
                   // For array operations, check if the base field (csvData) has CSV type metadata
                   // Look for the corresponding UI input component to determine if it's CSV
                   let isCSVField = false;
-                  if (workflow.workflow.ui?.inputComponents) {
-                    const csvComponent = workflow.workflow.ui.inputComponents.find(
+                  if (workflow.ui?.inputComponents) {
+                    const csvComponent = workflow.ui.inputComponents.find(
                       (comp) => comp.key === `userInput.${formFieldKey}` && comp.type === 'csv'
                     );
                     isCSVField = !!csvComponent;
@@ -431,6 +392,63 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
             }
           }
 
+          // Replace userInput.* references inside _generate and _transform objects
+          for (const key in updatedParams) {
+            const value = updatedParams[key];
+
+            // Handle _generate objects
+            if (typeof value === 'object' && value !== null && '_generate' in value) {
+              let generatePrompt = value._generate;
+
+              // Replace userInput.field references with actual form data
+              // Matches both {{userInput.field}} and plain userInput.field for backward compatibility
+              const userInputPattern = /\{\{userInput\.([\w]+)\}\}|userInput\.([\w]+)/g;
+              generatePrompt = generatePrompt.replace(
+                userInputPattern,
+                (match: string, bracedField?: string, plainField?: string) => {
+                  const fieldName = bracedField || plainField;
+                  if (fieldName && formData[fieldName] !== undefined) {
+                    return String(formData[fieldName]);
+                  }
+                  console.warn(`Unresolved placeholder in _generate: ${match}`);
+                  return match; // Keep original if not found
+                }
+              );
+
+              // Update the _generate prompt with resolved values
+              updatedParams[key] = {
+                ...value,
+                _generate: generatePrompt,
+              };
+            }
+
+            // Handle _transform objects
+            if (typeof value === 'object' && value !== null && '_transform' in value) {
+              let transformPrompt = value._transform;
+
+              // Replace userInput.field references with actual form data
+              // Matches both {{userInput.field}} and plain userInput.field for backward compatibility
+              const userInputPattern = /\{\{userInput\.([\w]+)\}\}|userInput\.([\w]+)/g;
+              transformPrompt = transformPrompt.replace(
+                userInputPattern,
+                (match: string, bracedField?: string, plainField?: string) => {
+                  const fieldName = bracedField || plainField;
+                  if (fieldName && formData[fieldName] !== undefined) {
+                    return String(formData[fieldName]);
+                  }
+                  console.warn(`Unresolved placeholder in _transform: ${match}`);
+                  return match; // Keep original if not found
+                }
+              );
+
+              // Update the _transform prompt with resolved values
+              updatedParams[key] = {
+                ...value,
+                _transform: transformPrompt,
+              };
+            }
+          }
+
           return {
             ...action,
             parameters: updatedParams,
@@ -498,16 +516,15 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
       const workflowId = `workflow-${Date.now()}`;
       const savedWorkflow: SavedWorkflow = {
         id: workflowId,
-        name: workflow.entry.description || 'Unnamed Workflow',
-        description: `Saved from ${workflow.entry.entryType} workflow`,
+        name: workflow.description || 'Unnamed Workflow',
+        description: `Saved from ${workflow.description} workflow`,
         timestamp: Date.now(), // Use number timestamp instead of string
         userId: sessionToken || 'anonymous', // Use session token as user identifier
-        workflow: workflow, // This is already a UIWorkflowDefinition
+        workflow: { workflow, entry: { entryType: 'button', description: workflow.description } }, // This is already a UIWorkflowDefinition
         results: results.length > 0 ? results : undefined, // Keep full WorkflowResult objects
         favorited: false,
       };
 
-      let savedSuccessfully = false;
       let saveMessage = '';
 
       // Save to server using WorkflowStorage
@@ -517,7 +534,6 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
         });
         await workflowStorage.saveWorkflow(savedWorkflow);
         console.log('Workflow saved to server');
-        savedSuccessfully = true;
         saveMessage = `Workflow "${savedWorkflow.name}" has been saved to your dashboard successfully!`;
       } catch (apiError: any) {
         console.error('Error saving to server:', apiError);
@@ -719,14 +735,14 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
       <CardHeader className="pb-2 flex flex-row items-start justify-between">
         <div>
           <CardTitle className="flex items-center gap-2">
-            {workflow.entry.description || 'Workflow'}
+            {workflow.description || 'Workflow'}
             <Badge variant="outline" className="ml-2">
-              {workflow.entry.entryType}
+              {'form'}
             </Badge>
           </CardTitle>
-          {workflow.workflow.actions && (
+          {workflow.actions && (
             <CardDescription>
-              {workflow.workflow.actions.length} action{workflow?.workflow?.actions?.length !== 1 ? 's' : ''}
+              {workflow.actions.length} action{workflow?.actions?.length !== 1 ? 's' : ''}
             </CardDescription>
           )}
         </div>
@@ -825,63 +841,28 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
 
         <TabsContent value="workflow">
           <CardContent className="pt-4 pb-2">
-            {workflow.entry.entryType === 'button' ? (
-              <Button onClick={handleExecute} disabled={isExecuting} className="w-full">
-                {isExecuting ? 'Running...' : workflow.entry.description || 'Execute'}
-              </Button>
-            ) : workflow.entry.entryType === 'form' ? (
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  handleExecute();
-                }}
-                className="space-y-4 overflow-visible"
-              >
-                {/* New UI format */}
-                {workflow.workflow.ui?.inputComponents?.map((field: WorkflowUIComponent) => (
-                  <div key={field.key} className="space-y-2 overflow-visible">
-                    <Label htmlFor={field.key}>
-                      {field.label || field.key}
-                      {field.required && <span className="text-red-500 ml-1">*</span>}
-                    </Label>
-                    {renderFormField(field)}
-                  </div>
-                ))}
-
-                {/* Fallback to old format */}
-                {!workflow.workflow.ui?.inputComponents &&
-                  (workflow.entry.payload as FormPayload)?.fields?.map((field) => (
-                    <div key={field.key} className="space-y-2 overflow-visible">
-                      <Label htmlFor={field.key}>
-                        {field.label || field.key}
-                        {field.required && <span className="text-red-500 ml-1">*</span>}
-                      </Label>
-                      {renderFormField(field)}
-                    </div>
-                  ))}
-
-                <Button type="submit" disabled={isExecuting || !isFormValid()} className="w-full mt-4">
-                  {isExecuting ? 'Running...' : 'Execute'}
-                </Button>
-              </form>
-            ) : workflow.entry.entryType === 'label' ? (
-              <div className="space-y-4">
-                <div
-                  className={`p-4 rounded-md ${
-                    (workflow.entry.payload as LabelPayload)?.isError
-                      ? 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300'
-                      : 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
-                  }`}
-                >
-                  <div className="font-medium mb-1">{workflow.entry.description || 'Message'}</div>
-                  {(workflow.entry.payload as LabelPayload)?.message && (
-                    <div className="text-sm">{(workflow.entry.payload as LabelPayload).message}</div>
-                  )}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleExecute();
+              }}
+              className="space-y-4 overflow-visible"
+            >
+              {/* New UI format */}
+              {workflow.ui?.inputComponents?.map((field: WorkflowUIComponent) => (
+                <div key={field.key} className="space-y-2 overflow-visible">
+                  <Label htmlFor={field.key}>
+                    {field.label || field.key}
+                    {field.required && <span className="text-red-500 ml-1">*</span>}
+                  </Label>
+                  {renderFormField(field)}
                 </div>
-              </div>
-            ) : (
-              <div className="text-center py-4">Unknown UI type: {workflow.entry.entryType}</div>
-            )}
+              ))}
+
+              <Button type="submit" disabled={isExecuting || !isFormValid()} className="w-full mt-4">
+                {isExecuting ? 'Running...' : 'Execute'}
+              </Button>
+            </form>
           </CardContent>
         </TabsContent>
 
@@ -899,7 +880,7 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
               <h3 className="text-sm font-medium mb-2">This workflow will execute these steps:</h3>
 
               <div className="border rounded-md divide-y">
-                {workflow.workflow?.actions?.map((action, index) => (
+                {workflow?.actions?.map((action, index) => (
                   <div key={index} className="p-3 bg-slate-50 dark:bg-slate-900">
                     <div className="flex items-start">
                       <div className="h-6 w-6 flex items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300 mr-2 flex-shrink-0 mt-0.5">
@@ -913,6 +894,30 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
                           </Badge>
                         </div>
                         <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">{action.description}</div>
+
+                        {/* Show if this action has parameter generation */}
+                        {Object.entries(action.parameters).some(
+                          ([_, value]) => typeof value === 'object' && value !== null && '_generate' in value
+                        ) && (
+                          <Badge variant="secondary" className="mt-2 text-xs">
+                            <span className="mr-1">🤖</span> Uses AI Generation
+                          </Badge>
+                        )}
+
+                        {/* Show if this action has output transformation */}
+                        {(action as any)?._transform && (
+                          <div className="mt-2 p-2 bg-purple-50 dark:bg-purple-950 rounded-md border border-purple-200 dark:border-purple-800">
+                            <div className="text-xs font-medium text-purple-800 dark:text-purple-200 mb-1">
+                              🔄 Output Transformation
+                            </div>
+                            <div className="text-xs text-purple-700 dark:text-purple-300 font-mono">
+                              Context: {(action as any)._transform._context || 'general'}
+                            </div>
+                            <div className="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                              {(action as any)._transform._transform}
+                            </div>
+                          </div>
+                        )}
 
                         {Object.keys(action.parameters).length > 0 && (
                           <div className="mt-2 text-xs bg-slate-100 dark:bg-slate-800 p-2 rounded overflow-hidden">
@@ -935,7 +940,7 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
                 ))}
               </div>
 
-              {workflow?.workflow?.actions?.length === 0 && (
+              {workflow?.actions?.length === 0 && (
                 <div className="text-center py-6 text-slate-500 dark:text-slate-400">
                   This workflow doesn't have any steps defined.
                 </div>

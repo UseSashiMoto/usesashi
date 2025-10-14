@@ -70,6 +70,74 @@ const createWorkflowPlannerAgent = () => {
             : `Additional backend functions (part ${index + 1}):\n${JSON.stringify(chunk, null, 2)}`;
     }).join('\n\n');
 
+    // Tool to list all available functions
+    const listAvailableToolsTool = tool({
+        name: 'list_available_tools',
+        description: 'Get a list of all currently registered backend functions/tools. Use this to verify a tool exists before using it in a workflow.',
+        strict: false,
+        parameters: {
+            type: "object" as const,
+            properties: {
+                searchTerm: {
+                    type: "string" as const,
+                    description: "Optional search term to filter tools by name or description"
+                }
+            },
+            required: [],
+            additionalProperties: false as const
+        } as any,
+        execute: async ({ searchTerm }: { searchTerm?: string } = {}) => {
+            console.log('🔍 list_available_tools called', { searchTerm });
+
+            const functionRegistry = getFunctionRegistry();
+            const allFunctions = Array.from(functionRegistry.values());
+
+            // Filter if search term provided
+            let filteredFunctions = allFunctions;
+            if (searchTerm) {
+                const searchLower = searchTerm.toLowerCase();
+                filteredFunctions = allFunctions.filter(fn => {
+                    const name = fn.getName().toLowerCase();
+                    const desc = fn.getDescription().toLowerCase();
+                    return name.includes(searchLower) || desc.includes(searchLower);
+                });
+            }
+
+            // Create a simplified list with name, description, and parameters
+            const toolList = filteredFunctions.map(fn => {
+                const params = fn.getParams();
+                const paramList = params.map((param: any) => {
+                    const paramName = param.name || param.arg?.name || 'unknown';
+                    const paramType = param.type || param.arg?.type || 'any';
+                    const required = param.required !== false;
+                    return {
+                        name: paramName,
+                        type: paramType,
+                        required: required,
+                        description: param.description || param.arg?.description || ''
+                    };
+                });
+
+                return {
+                    name: fn.getName(),
+                    description: fn.getDescription(),
+                    parameters: paramList
+                };
+            });
+
+            console.log(`✅ Found ${toolList.length} tools` + (searchTerm ? ` matching "${searchTerm}"` : ''));
+
+            return {
+                success: true,
+                count: toolList.length,
+                tools: toolList,
+                message: searchTerm
+                    ? `Found ${toolList.length} tools matching "${searchTerm}"`
+                    : `Found ${toolList.length} available tools`
+            };
+        }
+    });
+
     const validateWorkflowTool = tool({
         name: 'validate_workflow',
         description: 'Validate a workflow JSON object to ensure it uses valid functions and parameters, and that UI components exist for userInput parameters',
@@ -250,25 +318,264 @@ const createWorkflowPlannerAgent = () => {
 ${toolSchemaString}
 
 ## Your Task
-When handed off a user request, analyze it and create a complete JSON workflow object that accomplishes the user's goal, including both the workflow actions and UI components.
+When handed off a user request, analyze it and decide:
+
+### Option 1: Ask Follow-Up Questions (Recommended)
+If you're unsure about requirements OR want to confirm you understand correctly OR could benefit from more details:
+- **Simply respond conversationally** with your questions
+- Use markdown formatting for clear, friendly questions
+- Include suggestions or examples to help the user respond
+- This ensures you create the right workflow for the user's needs
+- Better to ask than to guess!
+
+**When to ask questions:**
+- User request is vague or ambiguous
+- Multiple ways to accomplish the goal (need to know user preference)
+- Missing critical information (which fields? what format? what conditions?)
+- Want to confirm your understanding is correct
+- Could create a better workflow with more context
+- **Confused about function parameters**: Not sure what values to pass or what format they need
+- **Unclear about function returns**: Don't know what data structure the function returns
+- **Unsure about output components**: Not sure whether to use "table" (for arrays) or "dataCard" (for objects)
+- **Tool behavior unclear**: After checking list_available_tools, still uncertain how a tool works
+- **Multiple tools could work**: Several tools might accomplish the goal, need user preference
+
+**Example question formats:**
+
+EXAMPLE 1 - Asking for specific details:
+"I'd be happy to help! To create the right workflow, I need a bit more information:
+**What specific data fields do you want to include?** (e.g., name, email, role, creation date)
+This will help me build exactly what you need."
+
+EXAMPLE 2 - Presenting multiple options:
+"I can create this workflow in a few different ways:
+1. **Option A**: Fetch all users and display in a table
+2. **Option B**: Filter by specific criteria first
+3. **Option C**: Export to CSV format
+Which approach works best for you?"
+
+EXAMPLE 3 - Confirming understanding:
+"Just to confirm I understand correctly:
+You want to [describe what you think they need], right?
+Let me know if I'm on the right track or if you need something different!"
+
+EXAMPLE 4 - Uncertain about parameters or returns:
+"I found the 'execute_query' function but I need a bit more information:
+**What kind of query result are you expecting?** (e.g., a list of users, a single record, a count)
+This will help me set up the right output format for you."
+
+EXAMPLE 5 - Multiple tools available:
+"I can accomplish this using a few different approaches:
+1. Use 'get_all_users' - faster but returns all fields
+2. Use 'query_users' with filters - more flexible, specify exact criteria
+3. Use 'execute_query' with custom SQL - most control but needs SQL knowledge
+Which would work best for your use case?"
+
+### Option 2: Create Workflow Directly
+Only if the request is crystal clear and you have all needed information:
+- Create a complete JSON workflow object with actions and UI components
+
+## Smart Parameter Generation with _generate
+
+When a parameter value needs to be dynamically generated (SQL queries, formatted text, API payloads), use the _generate syntax.
+
+**Using placeholders in _generate prompts:**
+- Use userInput.fieldName to reference user form inputs
+- Use actionId.fieldName to reference previous action results
+- The LLM will receive the resolved values, not the placeholders
+- Both plain (userInput.field) and bracketed ({{userInput.field}}) syntax are supported
+
+**Syntax:**
+{
+    "parameter_name": {
+        "_generate": "description with userInput.field or actionId.field placeholders",
+        "_context": "sql" | "markdown" | "json" | "general"
+    }
+}
+
+The workflow executor will:
+1. Replace userInput.* with form data (done in UI)
+2. Replace actionId.field with previous action results (done in backend)
+3. Call the LLM with the resolved prompt
+4. Use the generated value as the parameter
+
+**Examples:**
+
+User: "query users based on my input"
+\`\`\`workflow
+{
+    "actions": [{
+        "id": "query_users",
+        "tool": "execute_query",
+        "parameters": {
+            "sql": {
+                "_generate": "SQL query that answers: userInput.query",
+                "_context": "sql"
+            }
+        }
+    }]
+}
+\`\`\`
+
+User: "get active admin users"
+\`\`\`workflow
+{
+    "actions": [{
+        "id": "query_admins",
+        "tool": "execute_query",
+        "parameters": {
+            "sql": {
+                "_generate": "SQL query to select users where role='admin' and isActive=true from User table",
+                "_context": "sql"
+            }
+        }
+    }]
+}
+\`\`\`
+
+User: "send email to user about their status"
+\`\`\`workflow
+{
+    "actions": [
+        {
+            "id": "get_user",
+            "tool": "get_user_by_id",
+            "parameters": {
+                "userId": "userInput.userId"
+            }
+        },
+        {
+            "id": "send_email",
+            "tool": "send_email",
+            "parameters": {
+                "email": "get_user.email",
+                "subject": "Status Update",
+                "message": {
+                    "_generate": "Professional email for get_user.name about their get_user.status status",
+                    "_context": "general"
+                }
+            }
+        }
+    ]
+}
+\`\`\`
+
+## Smart Output Transformation with _transform
+
+Transform action results into different formats using _transform:
+
+**Syntax:**
+{
+    "id": "action_id",
+    "tool": "function_name",
+    "parameters": { ... },
+    "_transform": {
+        "_transform": "description of how to transform the output",
+        "_context": "markdown" | "general"
+    }
+}
+
+**Examples:**
+
+User: "get users and format as markdown"
+\`\`\`workflow
+{
+    "actions": [{
+        "id": "get_users",
+        "tool": "get_all_users",
+        "_transform": {
+            "_transform": "Format this user data as a markdown table with columns for name, email, and role",
+            "_context": "markdown"
+        }
+    }]
+}
+\`\`\`
+
+User: "summarize user data"
+\`\`\`workflow
+{
+    "actions": [{
+        "id": "get_users",
+        "tool": "get_all_users",
+        "_transform": {
+            "_transform": "Create a markdown summary showing total users, active vs inactive, and breakdown by role"
+        }
+    }]
+}
+\`\`\`
+
+User: "convert user data to JSON format"
+\`\`\`workflow
+{
+    "actions": [{
+        "id": "get_users",
+        "tool": "get_all_users",
+        "_transform": {
+            "_transform": "Transform this data into a clean JSON array with only id, name, email, and role fields",
+            "_context": "json"
+        }
+    }]
+}
+\`\`\`
+
+User: "generate API request payload"
+\`\`\`workflow
+{
+    "actions": [{
+        "id": "create_payload",
+        "tool": "get_user_by_id",
+        "parameters": {
+            "userId": "userInput.userId"
+        },
+        "_transform": {
+            "_transform": "Create a JSON API request payload with user data formatted for external API",
+            "_context": "json"
+        }
+    }]
+}
+\`\`\`
+
+## When to Use _generate and _transform
+
+**Use _generate when:**
+- You need SQL queries for database operations
+- Parameter values require complex formatting
+- No direct function exists for the user's request
+- The exact value isn't known until runtime
+
+**Use _transform when:**
+- User requests specific output formatting
+- Results need to be presented as markdown
+- Data needs summarization or restructuring
+- Output requires human-friendly formatting
+- Functions return stringified JSON that needs parsing
+
+**Available Contexts:**
+- "sql": For generating SQL queries (PostgreSQL syntax)
+- "markdown": For markdown formatting (default for _transform)
+- "json": For generating or transforming to valid JSON format
+- "general": For any other generation (defaults to markdown output)
 
 ## User Input Parameter Strategy
 When creating workflows, you need to determine what information the user must provide:
 
-**Use userInput.* for:**
+**Use userInput.field for:**
 - Information that cannot be derived from function calls
 - Data that must come from the user (IDs, text content, preferences, etc.)
 - Parameters that are the "starting point" of the workflow
+- Can be used in both direct parameters and inside _generate prompts
 
-**Use function outputs for:**
+**Use actionId.field for:**
 - Data that can be retrieved from previous function calls
 - Information that exists in the system and can be fetched
+- Can be used in both direct parameters and inside _generate prompts
 
 **Examples:**
 - "Send email to user 123" → Use literal "123", not userInput
 - "Send email to a user" → Use "userInput.userId" because we don't know which user
 - "Send custom message" → Use "userInput.message" for the message content
 - "Get user email then send email" → Use "userInput.userId" for first function, then "get_user.email" for second
+- "Query database with user's question" → Use "_generate" with "userInput.query" placeholder
 
 ## Workflow Validation
 IMPORTANT: Before finalizing any workflow, you MUST use the validate_workflow tool to verify that:
@@ -330,12 +637,16 @@ You must create workflows with BOTH actions and UI components:
 ## UI Component Generation Rules
 
 ### Input Components
+**CRITICAL**: Any userInput.* reference MUST have a corresponding inputComponent in the ui.inputComponents array.
+
 For each BASE userInput.* parameter in your workflow actions:
 1. **ONLY create UI components for base form fields** (e.g., userInput.csvData, userInput.subject)
 2. **DO NOT create UI components for array operations** (e.g., userInput.csvData[*].email)
 3. Array operations like userInput.csvData[*].email are resolved from the base CSV field
-4. Look up the parameter in the function schema to determine type and validation
-5. Use appropriate UI component types:
+4. **If using userInput.* inside _generate or _transform prompts**, you MUST add the corresponding inputComponent
+   - Example: A parameter with _generate containing {{userInput.query}} requires an inputComponent with key "userInput.query"
+5. Look up the parameter in the function schema to determine type and validation
+6. Use appropriate UI component types:
    - string → single-line text input
    - text → multi-line textarea (for longer content like messages)  
    - number → number input
@@ -459,6 +770,25 @@ inputComponents: [
 
 **Remember**: Use "userInput.csvData[*].fieldName" with "map": true to process CSV data row by row!
 
+## OUTPUT FORMAT - CRITICAL
+**YOU MUST wrap your workflow JSON in a markdown code block with 'workflow' language identifier:**
+
+\`\`\`workflow
+{
+  "type": "workflow",
+  "description": "...",
+  "actions": [...],
+  "ui": {...}
+}
+\`\`\`
+
+**DO NOT return:**
+- Raw JSON without code block wrapper
+- Escaped JSON strings (\\n, \\", etc.)
+- JSON wrapped in any other code block type
+
+**Always use the \`\`\`workflow format as shown in all examples above.**
+
 ## Important Rules:
 - NEVER put comments in the workflow JSON
 - ONLY use functions that exist in the tool_schema
@@ -467,10 +797,29 @@ inputComponents: [
 - For array outputs, use "<action_id>[*].<output_field>"
 - Every userInput.* parameter MUST have a matching UI inputComponent
 - Input component IDs must exactly match the userInput.* parameter names
-- ALWAYS validate workflows using the validate_workflow tool before providing them
+
+## CRITICAL - TOOL VERIFICATION AND VALIDATION:
+
+### BEFORE Creating a Workflow:
+1. **VERIFY TOOLS EXIST**: If you're unsure about a tool name, use list_available_tools to search for it
+   - Example: If user mentions "SQL" or "database query", call list_available_tools with searchTerm "sql" or "query"
+   - NEVER make up tool names like "nl_to_sql", "convert_text", etc. - these likely don't exist
+   - If a tool doesn't exist, use list_available_tools to find the closest alternative
+
+2. **VALIDATE THE WORKFLOW**: Always call validate_workflow before providing a workflow to the user
+   - If validation fails with "Unknown tool" error, the tool doesn't exist - find an alternative
+   - If validation fails, fix the errors and validate again
+   - Never return an unvalidated workflow
+
+### Example Tool Verification:
+If user asks: "convert text to SQL query"
+1. First call: list_available_tools with searchTerm "sql"
+2. Check the results for available SQL-related tools
+3. Use an existing tool (like "execute_query" with _generate) instead of inventing "nl_to_sql"
+4. Example: Use "_generate": "SQL query that answers: userInput.query" with proper UI input component
 
 `,
-        tools: [validateWorkflowTool]
+        tools: [listAvailableToolsTool, validateWorkflowTool]
     });
 };
 
@@ -3165,4 +3514,4 @@ export const getLinearSashiAgent = (config?: LinearAgentConfig): LinearSashiAgen
             }
         }
     };
-}; 
+};

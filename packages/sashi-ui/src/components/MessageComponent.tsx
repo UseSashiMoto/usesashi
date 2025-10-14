@@ -166,7 +166,7 @@ const WorkflowCard: React.FC<{
 
     return (
       <div className="my-4">
-        <WorkflowUICard workflow={uiWorkflowDefinition} apiUrl={apiUrl} isInChat={true} isDraggable={false} />
+        <WorkflowUICard workflow={workflowResponse} apiUrl={apiUrl} isInChat={true} isDraggable={false} />
       </div>
     );
   }
@@ -198,19 +198,7 @@ const WorkflowCard: React.FC<{
         {isExpanded && apiUrl && (
           <CardContent className="pt-0">
             <div className="border-t pt-4">
-              <WorkflowUICard
-                workflow={{
-                  workflow: workflow,
-                  entry: {
-                    entryType: 'label',
-                    description: workflow.description,
-                    payload: {},
-                  },
-                }}
-                apiUrl={apiUrl}
-                isInChat={true}
-                isDraggable={false}
-              />
+              <WorkflowUICard workflow={workflow} apiUrl={apiUrl} isInChat={true} isDraggable={false} />
             </div>
           </CardContent>
         )}
