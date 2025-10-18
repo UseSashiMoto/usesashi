@@ -1,5 +1,11 @@
 # @sashi/ui
 
+## 9.2.0
+
+### Minor Changes
+
+- 7b226c0: fixed workflow deletion
+
 ## 9.1.0
 
 ### Minor Changes
