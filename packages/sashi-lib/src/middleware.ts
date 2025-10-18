@@ -646,15 +646,35 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
             // If request was successful, return the response
             if (hubResponse.ok) {
+                // Check if response has JSON content
+                const contentType = hubResponse.headers.get('content-type');
+                const hasJsonContent = contentType && contentType.includes('application/json');
+                const hasNoContent = hubResponse.status === 204;
+
                 // For GET requests, return the JSON data
                 if (method === 'GET') {
-                    const data = await hubResponse.json();
-                    return res.json(data);
+                    if (hasJsonContent && !hasNoContent) {
+                        const data = await hubResponse.json();
+                        return res.json(data);
+                    }
+                    return res.json({ success: true });
                 }
 
                 // For other methods, return success status
-                const data = await hubResponse.json();
-                return res.status(hubResponse.status).json(data);
+                // Only parse JSON if there's actually JSON content
+                if (hasJsonContent && !hasNoContent) {
+                    try {
+                        const data = await hubResponse.json();
+                        return res.status(hubResponse.status).json(data);
+                    } catch (error) {
+                        // If JSON parsing fails, return success
+                        console.warn('Failed to parse hub response as JSON:', error);
+                        return res.status(hubResponse.status).json({ success: true });
+                    }
+                }
+
+                // No JSON content, return simple success
+                return res.status(hubResponse.status).json({ success: true });
             }
 
             // Hub request failed - provide specific error based on status code
@@ -768,7 +788,12 @@ export const createMiddleware = (options: MiddlewareOptions) => {
 
     // Delete a specific workflow
     router.delete('/workflows/:id', sessionValidation, asyncHandler(async (req, res) => {
-        return forwardToHub(req, res, `/workflows/${req.params.id}`, 'DELETE');
+        try {
+            return forwardToHub(req, res, `/workflows/${req.params.id}`, 'DELETE');
+        } catch (error) {
+            console.error('Error deleting workflow:', error);
+            return res.status(500).json({ error: 'Failed to delete workflow' });
+        }
     }));
 
     // Delete all workflows
