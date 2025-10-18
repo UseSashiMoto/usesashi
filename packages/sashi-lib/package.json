@@ -1,6 +1,6 @@
 {
     "name": "@sashimo/lib",
-    "version": "9.1.0",
+    "version": "9.2.0",
     "description": "Tool to integrate AI admin tools into your application",
     "main": "dist/index.js",
     "module": "./dist/index.mjs",
