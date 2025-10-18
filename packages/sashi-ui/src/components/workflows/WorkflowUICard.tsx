@@ -1,6 +1,14 @@
 import { Button } from '@/components/Button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -14,7 +22,7 @@ import { HEADER_API_TOKEN } from '@/utils/contants';
 import { WorkflowStorage } from '@/utils/workflowStorage';
 import { TooltipContent, TooltipProvider, TooltipTrigger } from '@radix-ui/react-tooltip';
 import axios from 'axios';
-import { Check, Code, Copy, GripVertical, Heart, Trash2, X } from 'lucide-react';
+import { AlertCircle, Check, Code, Copy, GripVertical, Heart, Trash2, X } from 'lucide-react';
 import React, { useRef, useState } from 'react';
 import { SavedWorkflow, WorkflowResponse, WorkflowResult, WorkflowUIComponent } from '../../models/payload';
 import { WorkflowResultViewer } from './WorkflowResultViewer';
@@ -60,6 +68,16 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
   const [isCopied, setIsCopied] = useState(false);
   const connectedToHub = useAppStore((state) => state.connectedToHub);
   const formRef = useRef<HTMLFormElement>(null);
+
+  // Dialog states
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showErrorDialog, setShowErrorDialog] = useState(false);
+  const [dialogError, setDialogError] = useState<{ title: string; message: string } | null>(null);
+
+  // Update isPinned when savedWorkflow changes
+  React.useEffect(() => {
+    setIsPinned(savedWorkflow?.favorited || false);
+  }, [savedWorkflow?.favorited]);
 
   // CSV parsing function
   const parseCSV = (csvText: string): Array<Record<string, any>> => {
@@ -578,13 +596,22 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
   };
 
   // Delete workflow (only for dashboard workflows)
+  const confirmDelete = () => {
+    if (!savedWorkflow) return;
+    setShowDeleteDialog(true);
+  };
+
   const deleteWorkflow = async () => {
+    console.log('Deleting workflow:', savedWorkflow);
     if (!savedWorkflow) return;
 
+    setShowDeleteDialog(false);
     const apiToken = useAppStore.getState().apiToken;
 
     try {
-      if (apiUrl && apiToken) {
+      console.log('API Token:', apiToken);
+      if (apiUrl) {
+        console.log('Deleting workflow from API:', `${apiUrl}/workflows/${savedWorkflow.id}`);
         // Delete from API
         await axios.delete(`${apiUrl}/workflows/${savedWorkflow.id}`, {
           headers: {
@@ -602,6 +629,11 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
       console.error('Error deleting from API:', error);
       const errorMessage = error.response?.data?.error || error.message || 'Failed to delete workflow';
       setSaveError(`Delete Error: ${errorMessage}`);
+      setDialogError({
+        title: 'Delete Failed',
+        message: errorMessage,
+      });
+      setShowErrorDialog(true);
     }
   };
 
@@ -610,13 +642,17 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
     if (!savedWorkflow) return;
 
     const apiToken = useAppStore.getState().apiToken;
+    const newFavoritedStatus = !savedWorkflow.favorited;
     const updatedWorkflow = {
       ...savedWorkflow,
-      favorited: !savedWorkflow.favorited,
+      favorited: newFavoritedStatus,
     };
 
+    // Optimistically update local state
+    setIsPinned(newFavoritedStatus);
+
     try {
-      if (apiUrl && apiToken) {
+      if (apiUrl) {
         // Update on API
         await axios.put(`${apiUrl}/workflows/${savedWorkflow.id}`, updatedWorkflow, {
           headers: {
@@ -626,9 +662,6 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
         console.log('Workflow favorite status updated on API');
       }
 
-      // Update local state
-      setIsPinned(!isPinned);
-
       // Notify dashboard to refresh
       if (onWorkflowChange) {
         onWorkflowChange();
@@ -637,6 +670,13 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
       console.error('Error updating favorite status on API:', error);
       const errorMessage = error.response?.data?.error || error.message || 'Failed to update favorite status';
       setSaveError(`Favorite Error: ${errorMessage}`);
+      // Revert optimistic update on error
+      setIsPinned(!newFavoritedStatus);
+      setDialogError({
+        title: 'Favorite Update Failed',
+        message: errorMessage,
+      });
+      setShowErrorDialog(true);
     }
   };
 
@@ -786,7 +826,7 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" onClick={deleteWorkflow}>
+                  <Button variant="ghost" size="icon" onClick={confirmDelete}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
@@ -1062,6 +1102,45 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
           </div>
         </CardFooter>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Workflow</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete "{savedWorkflow?.name}"?
+              <br />
+              <br />
+              This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={deleteWorkflow}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Error Dialog */}
+      <Dialog open={showErrorDialog} onOpenChange={setShowErrorDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-red-500" />
+              <DialogTitle>{dialogError?.title || 'Error'}</DialogTitle>
+            </div>
+            <DialogDescription className="pt-2">{dialogError?.message || 'An error occurred'}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setShowErrorDialog(false)}>OK</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 };
