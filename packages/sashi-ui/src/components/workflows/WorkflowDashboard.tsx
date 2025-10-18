@@ -1,6 +1,6 @@
 import { Button } from '@/components/Button';
 import { Card, CardContent } from '@/components/ui/card';
-import { SavedWorkflow, UIWorkflowDefinition, WorkflowEntryMetadata } from '@/models/payload';
+import { SavedWorkflow } from '@/models/payload';
 import { motion, Reorder } from 'framer-motion';
 import { Grid2X2, List } from 'lucide-react';
 import React, { useState } from 'react';
@@ -20,32 +20,6 @@ export const WorkflowDashboard: React.FC<WorkflowDashboardProps> = ({ workflows,
   React.useEffect(() => {
     setItems(workflows);
   }, [workflows]);
-
-  // Helper function to create UI workflow definition from saved workflow
-  const createUIWorkflowDefinition = (workflow: SavedWorkflow): UIWorkflowDefinition => {
-    // Since workflow.workflow is already a UIWorkflowDefinition, we can return it directly
-    // But we might want to update the entry description with the saved workflow name
-    const updatedEntry: WorkflowEntryMetadata = {
-      ...workflow.workflow.entry,
-      description: workflow.name,
-    };
-
-    // Create the UI workflow definition with updated entry
-    const uiWorkflowDefinition: UIWorkflowDefinition = {
-      ...workflow.workflow,
-      entry: updatedEntry,
-    };
-
-    // If there are saved results, add them to the workflow response
-    if (workflow.results && workflow.results.length > 0) {
-      uiWorkflowDefinition.workflow = {
-        ...workflow.workflow.workflow,
-        executionResults: workflow.results,
-      };
-    }
-
-    return uiWorkflowDefinition;
-  };
 
   return (
     <div className="space-y-4">
