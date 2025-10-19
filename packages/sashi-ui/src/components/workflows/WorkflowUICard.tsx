@@ -760,12 +760,10 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
         return renderCSVField(field);
       default:
         return (
-          <Input
-            placeholder={fieldLabel}
-            value={fieldValue}
-            onChange={(e) => handleInputChange(formDataKey, e.target.value)}
-            required={fieldRequired}
-          />
+          <div className="rounded-md border border-red-500 bg-red-50 p-3 text-red-700">
+            <p className="font-semibold">Invalid input type: "{fieldType}"</p>
+            <p className="text-sm mt-1">Valid types are: string, number, boolean, enum, text, csv</p>
+          </div>
         );
     }
   };

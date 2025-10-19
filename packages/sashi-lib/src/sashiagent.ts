@@ -1,7 +1,8 @@
 import { Agent, AgentInputItem, assistant, Handoff, handoff, run, tool, user } from '@openai/agents';
 import { z } from 'zod';
-import { generateSplitToolSchemas, getFunctionRegistry } from './ai-function-loader';
+import { getFunctionRegistry } from './ai-function-loader';
 import { GitHubConfig, initializeGitHubAPI } from './github-api-service';
+import { getAvailableTopics, WORKFLOW_PLANNER_KNOWLEDGE, type KnowledgeTopic } from './knowledge-base';
 import { WorkflowResponse } from './models/models';
 import { verifyWorkflow } from './utils/verifyWorkflow';
 
@@ -61,765 +62,463 @@ const checkWorkflowExecutability = (workflow: any): { isExecutable: boolean, mis
     }
 };
 
-// Workflow Planner Agent - Creates workflows (business logic only)
-const createWorkflowPlannerAgent = () => {
-    const toolSchemas = generateSplitToolSchemas(8000);
-    const toolSchemaString = toolSchemas.map((chunk, index) => {
-        return index === 0
-            ? `Available backend functions:\n${JSON.stringify(chunk, null, 2)}`
-            : `Additional backend functions (part ${index + 1}):\n${JSON.stringify(chunk, null, 2)}`;
-    }).join('\n\n');
-
-    // Tool to list all available functions
-    const listAvailableToolsTool = tool({
-        name: 'list_available_tools',
-        description: 'Get a list of all currently registered backend functions/tools. Use this to verify a tool exists before using it in a workflow.',
-        strict: false,
-        parameters: {
-            type: "object" as const,
-            properties: {
-                searchTerm: {
-                    type: "string" as const,
-                    description: "Optional search term to filter tools by name or description"
-                }
-            },
-            required: [],
-            additionalProperties: false as const
-        } as any,
-        execute: async ({ searchTerm }: { searchTerm?: string } = {}) => {
-            console.log('🔍 list_available_tools called', { searchTerm });
-
-            const functionRegistry = getFunctionRegistry();
-            const allFunctions = Array.from(functionRegistry.values());
-
-            // Filter if search term provided
-            let filteredFunctions = allFunctions;
-            if (searchTerm) {
-                const searchLower = searchTerm.toLowerCase();
-                filteredFunctions = allFunctions.filter(fn => {
-                    const name = fn.getName().toLowerCase();
-                    const desc = fn.getDescription().toLowerCase();
-                    return name.includes(searchLower) || desc.includes(searchLower);
-                });
+// Shared tool for listing available backend functions - used by multiple agents
+const listAvailableToolsTool = tool({
+    name: 'list_available_tools',
+    description: 'Get a list of all currently registered backend functions/tools. Use this to verify a tool exists before using it in a workflow.',
+    strict: false,
+    parameters: {
+        type: "object" as const,
+        properties: {
+            searchTerm: {
+                type: "string" as const,
+                description: "Optional search term to filter tools by name or description"
             }
+        },
+        required: [],
+        additionalProperties: false as const
+    } as any,
+    execute: async ({ searchTerm }: { searchTerm?: string } = {}) => {
+        console.log('🔍 list_available_tools called', { searchTerm });
 
-            // Create a simplified list with name, description, and parameters
-            const toolList = filteredFunctions.map(fn => {
-                const params = fn.getParams();
-                const paramList = params.map((param: any) => {
-                    const paramName = param.name || param.arg?.name || 'unknown';
-                    const paramType = param.type || param.arg?.type || 'any';
-                    const required = param.required !== false;
-                    return {
-                        name: paramName,
-                        type: paramType,
-                        required: required,
-                        description: param.description || param.arg?.description || ''
-                    };
-                });
+        const functionRegistry = getFunctionRegistry();
+        const allFunctions = Array.from(functionRegistry.values());
 
+        // Filter if search term provided
+        let filteredFunctions = allFunctions;
+        if (searchTerm) {
+            const searchLower = searchTerm.toLowerCase();
+            filteredFunctions = allFunctions.filter(fn => {
+                const name = fn.getName().toLowerCase();
+                const desc = fn.getDescription().toLowerCase();
+                return name.includes(searchLower) || desc.includes(searchLower);
+            });
+        }
+
+        // Create a simplified list with name, description, and parameters
+        const toolList = filteredFunctions.map(fn => {
+            const params = fn.getParams();
+            const paramList = params.map((param: any) => {
+                const paramName = param.name || param.arg?.name || 'unknown';
+                const paramType = param.type || param.arg?.type || 'any';
+                const required = param.required !== false;
                 return {
-                    name: fn.getName(),
-                    description: fn.getDescription(),
-                    parameters: paramList
+                    name: paramName,
+                    type: paramType,
+                    required: required,
+                    description: param.description || param.arg?.description || ''
                 };
             });
 
-            console.log(`✅ Found ${toolList.length} tools` + (searchTerm ? ` matching "${searchTerm}"` : ''));
-
             return {
-                success: true,
-                count: toolList.length,
-                tools: toolList,
-                message: searchTerm
-                    ? `Found ${toolList.length} tools matching "${searchTerm}"`
-                    : `Found ${toolList.length} available tools`
+                name: fn.getName(),
+                description: fn.getDescription(),
+                parameters: paramList
+            };
+        });
+
+        console.log(`✅ Found ${toolList.length} tools` + (searchTerm ? ` matching "${searchTerm}"` : ''));
+
+        return {
+            success: true,
+            count: toolList.length,
+            tools: toolList,
+            message: searchTerm
+                ? `Found ${toolList.length} tools matching "${searchTerm}"`
+                : `Found ${toolList.length} available tools`
+        };
+    }
+});
+
+// Knowledge base search tool
+const searchKnowledgeTool = tool({
+    name: 'search_knowledge',
+    description: 'Search the knowledge base for detailed documentation on workflow creation topics',
+    strict: false,
+    parameters: {
+        type: "object" as const,
+        properties: {
+            topic: {
+                type: "string" as const,
+                description: "Topic to look up for detailed guidance",
+                enum: getAvailableTopics()
+            }
+        },
+        required: ["topic"],
+        additionalProperties: false as const
+    } as any,
+    execute: async ({ topic }: { topic: KnowledgeTopic }) => {
+        console.log('📚 search_knowledge called:', { topic });
+
+        const content = WORKFLOW_PLANNER_KNOWLEDGE[topic];
+
+        if (!content) {
+            return {
+                success: false,
+                error: `Topic "${topic}" not found in knowledge base`,
+                availableTopics: getAvailableTopics()
             };
         }
-    });
 
-    const validateWorkflowTool = tool({
-        name: 'validate_workflow',
-        description: 'Validate a workflow JSON object to ensure it uses valid functions and parameters, and that UI components exist for userInput parameters',
-        strict: false,
-        parameters: {
-            type: "object" as const,
-            properties: {
-                workflow: {
-                    type: "object" as const,
-                    properties: {
-                        type: {
-                            type: "string" as const,
-                            enum: ["workflow"] as const
-                        },
-                        description: {
-                            type: "string" as const
-                        }
+        console.log('✅ Knowledge retrieved:', {
+            topic,
+            contentLength: content.length,
+            preview: content.substring(0, 100) + '...'
+        });
+
+        return {
+            success: true,
+            topic,
+            content
+        };
+    }
+});
+
+const validateWorkflowTool = tool({
+    name: 'validate_workflow',
+    description: 'Validate a workflow JSON object to ensure it uses valid functions and parameters, and that UI components exist for userInput parameters',
+    strict: false,
+    parameters: {
+        type: "object" as const,
+        properties: {
+            workflow: {
+                type: "object" as const,
+                properties: {
+                    type: {
+                        type: "string" as const,
+                        enum: ["workflow"] as const
+                    },
+                    description: {
+                        type: "string" as const
                     }
                 }
-            },
-            required: ["workflow"],
-            additionalProperties: true as const
-        } as any,
-        execute: async ({ workflow }: { workflow: WorkflowResponse }) => {
-            console.log('🔍 validate_workflow tool called with workflow:', {
-                type: workflow.type,
-                actionsCount: workflow.actions?.length || 0,
-                hasUI: !!workflow.ui,
-                inputComponents: workflow.ui?.inputComponents?.length || 0,
-                outputComponents: workflow.ui?.outputComponents?.length || 0,
-                timestamp: new Date().toISOString()
-            });
+            }
+        },
+        required: ["workflow"],
+        additionalProperties: true as const
+    } as any,
+    execute: async ({ workflow }: { workflow: WorkflowResponse }) => {
+        console.log('🔍 validate_workflow tool called with workflow:', {
+            type: workflow.type,
+            actionsCount: workflow.actions?.length || 0,
+            hasUI: !!workflow.ui,
+            inputComponents: workflow.ui?.inputComponents?.length || 0,
+            outputComponents: workflow.ui?.outputComponents?.length || 0,
+            timestamp: new Date().toISOString()
+        });
 
-            const verification = verifyWorkflow(workflow);
+        const verification = verifyWorkflow(workflow);
 
-            // Additional validation for UI components
-            const uiValidation = {
-                valid: true,
-                errors: [] as string[]
-            };
+        // Additional validation for UI components
+        const uiValidation = {
+            valid: true,
+            errors: [] as string[]
+        };
 
-            // Collect BASE userInput.* parameters from actions (not array operations)
-            const userInputParams = new Set<string>();
-            if (workflow.actions) {
-                for (const action of workflow.actions) {
-                    if (action.parameters) {
-                        for (const [key, value] of Object.entries(action.parameters)) {
-                            if (typeof value === 'string' && value.startsWith('userInput.')) {
-                                // Only collect base parameters, not array operations
-                                if (value.includes('[*]')) {
-                                    // Extract base parameter from array operation
-                                    // e.g., "userInput.csvData[*].email" -> "userInput.csvData"
-                                    const baseParam = value.split('[*]')[0];
-                                    if (baseParam) {
-                                        userInputParams.add(baseParam);
-                                    }
-                                } else {
-                                    // Regular userInput parameter
-                                    userInputParams.add(value);
+        // Collect BASE userInput.* parameters from actions (not array operations)
+        const userInputParams = new Set<string>();
+        if (workflow.actions) {
+            for (const action of workflow.actions) {
+                if (action.parameters) {
+                    for (const [key, value] of Object.entries(action.parameters)) {
+                        if (typeof value === 'string' && value.startsWith('userInput.')) {
+                            // Only collect base parameters, not array operations
+                            if (value.includes('[*]')) {
+                                // Extract base parameter from array operation
+                                // e.g., "userInput.csvData[*].email" -> "userInput.csvData"
+                                const baseParam = value.split('[*]')[0];
+                                if (baseParam) {
+                                    userInputParams.add(baseParam);
                                 }
+                            } else {
+                                // Regular userInput parameter
+                                userInputParams.add(value);
                             }
                         }
                     }
                 }
             }
+        }
 
-            // Validate inputComponents schema structure
-            if (workflow.ui && workflow.ui.inputComponents) {
-                console.log('🔍 Validating inputComponents:', workflow.ui.inputComponents);
-                workflow.ui.inputComponents.forEach((component: any, index: number) => {
-                    const componentPrefix = `inputComponent[${index}]`;
-                    console.log(`🔍 Validating ${componentPrefix}:`, component);
+        // Validate inputComponents schema structure
+        if (workflow.ui && workflow.ui.inputComponents) {
+            console.log('🔍 Validating inputComponents:', workflow.ui.inputComponents);
+            workflow.ui.inputComponents.forEach((component: any, index: number) => {
+                const componentPrefix = `inputComponent[${index}]`;
+                console.log(`🔍 Validating ${componentPrefix}:`, component);
 
-                    // Check for incorrect schema usage (component + props instead of key + label + type)
-                    if (component.component && component.props) {
-                        console.log(`❌ ${componentPrefix}: Found incorrect schema with component/props`);
-                        uiValidation.valid = false;
-                        uiValidation.errors.push(`${componentPrefix}: Using incorrect schema - use {key, label, type} instead of {component, props}`);
-                    }
-
-                    // Check required fields for inputComponents
-                    if (!component.key || typeof component.key !== 'string') {
-                        console.log(`❌ ${componentPrefix}: Missing or invalid key field`);
-                        uiValidation.valid = false;
-                        uiValidation.errors.push(`${componentPrefix}: Missing or invalid 'key' field (required string)`);
-                    }
-
-                    if (!component.label || typeof component.label !== 'string') {
-                        console.log(`❌ ${componentPrefix}: Missing or invalid label field`);
-                        uiValidation.valid = false;
-                        uiValidation.errors.push(`${componentPrefix}: Missing or invalid 'label' field (required string)`);
-                    }
-
-                    if (!component.type || typeof component.type !== 'string') {
-                        console.log(`❌ ${componentPrefix}: Missing or invalid type field`);
-                        uiValidation.valid = false;
-                        uiValidation.errors.push(`${componentPrefix}: Missing or invalid 'type' field (required string)`);
-                    }
-                });
-            }
-
-            // Check if UI components exist for each userInput parameter
-            if (userInputParams.size > 0) {
-                if (!workflow.ui || !workflow.ui.inputComponents) {
+                // Check for incorrect schema usage (component + props instead of key + label + type)
+                if (component.component && component.props) {
+                    console.log(`❌ ${componentPrefix}: Found incorrect schema with component/props`);
                     uiValidation.valid = false;
-                    uiValidation.errors.push('Workflow has userInput parameters but no UI inputComponents defined');
+                    uiValidation.errors.push(`${componentPrefix}: Using incorrect schema - use {key, label, type} instead of {component, props}`);
+                }
+
+                // Check required fields for inputComponents
+                if (!component.key || typeof component.key !== 'string') {
+                    console.log(`❌ ${componentPrefix}: Missing or invalid key field`);
+                    uiValidation.valid = false;
+                    uiValidation.errors.push(`${componentPrefix}: Missing or invalid 'key' field (required string)`);
+                }
+
+                if (!component.label || typeof component.label !== 'string') {
+                    console.log(`❌ ${componentPrefix}: Missing or invalid label field`);
+                    uiValidation.valid = false;
+                    uiValidation.errors.push(`${componentPrefix}: Missing or invalid 'label' field (required string)`);
+                }
+
+                if (!component.type || typeof component.type !== 'string') {
+                    console.log(`❌ ${componentPrefix}: Missing or invalid type field`);
+                    uiValidation.valid = false;
+                    uiValidation.errors.push(`${componentPrefix}: Missing or invalid 'type' field (required string)`);
                 } else {
-                    const componentIds = new Set(workflow.ui.inputComponents.map((c: any) => c.key).filter(Boolean));
-                    for (const param of userInputParams) {
-                        if (!componentIds.has(param)) {
+                    // Validate type is one of the supported types
+
+
+                    const validTypes = ['string', 'number', 'boolean', 'enum', 'text', 'csv'];
+                    if (!validTypes.includes(component.type)) {
+                        console.log(`❌ ${componentPrefix}: Invalid type value '${component.type}'`);
+                        uiValidation.valid = false;
+                        uiValidation.errors.push(`${componentPrefix}: Invalid type '${component.type}'. Valid types are: ${validTypes.join(', ')}`);
+                    }
+
+                    // Additional validation for enum type
+                    if (component.type === 'enum') {
+                        if (!component.enumValues || !Array.isArray(component.enumValues) || component.enumValues.length === 0) {
+                            console.log(`❌ ${componentPrefix}: enum type requires enumValues array`);
                             uiValidation.valid = false;
-                            uiValidation.errors.push(`Missing UI component for parameter: ${param}`);
+                            uiValidation.errors.push(`${componentPrefix}: type 'enum' requires a non-empty 'enumValues' array`);
                         }
+                    }
+
+                }
+            });
+        }
+
+        // Check if UI components exist for each userInput parameter
+        if (userInputParams.size > 0) {
+            if (!workflow.ui || !workflow.ui.inputComponents) {
+                uiValidation.valid = false;
+                uiValidation.errors.push('Workflow has userInput parameters but no UI inputComponents defined');
+            } else {
+                const componentIds = new Set(workflow.ui.inputComponents.map((c: any) => c.key).filter(Boolean));
+                for (const param of userInputParams) {
+                    if (!componentIds.has(param)) {
+                        uiValidation.valid = false;
+                        uiValidation.errors.push(`Missing UI component for parameter: ${param}`);
                     }
                 }
             }
-
-            // Validate outputComponents schema structure  
-            if (workflow.ui && workflow.ui.outputComponents) {
-                workflow.ui.outputComponents.forEach((component: any, index: number) => {
-                    const componentPrefix = `outputComponent[${index}]`;
-
-                    if (!component.actionId || typeof component.actionId !== 'string') {
-                        uiValidation.valid = false;
-                        uiValidation.errors.push(`${componentPrefix}: Missing or invalid 'actionId' field (required string)`);
-                    }
-
-                    if (!component.component || typeof component.component !== 'string') {
-                        uiValidation.valid = false;
-                        uiValidation.errors.push(`${componentPrefix}: Missing or invalid 'component' field (required string)`);
-                    }
-
-                    if (!component.props || typeof component.props !== 'object') {
-                        uiValidation.valid = false;
-                        uiValidation.errors.push(`${componentPrefix}: Missing or invalid 'props' field (required object)`);
-                    }
-
-                    // Check that actionId references a valid action
-                    if (component.actionId && workflow.actions) {
-                        const actionExists = workflow.actions.some((action: any) => action.id === component.actionId);
-                        if (!actionExists) {
-                            uiValidation.valid = false;
-                            uiValidation.errors.push(`${componentPrefix}: actionId '${component.actionId}' does not match any action in the workflow`);
-                        }
-                    }
-                });
-            }
-
-            const finalResult = {
-                valid: verification.valid && uiValidation.valid,
-                errors: [...verification.errors, ...uiValidation.errors],
-                workflow: workflow
-            };
-
-            console.log('🔍 Validation result:', {
-                verificationValid: verification.valid,
-                uiValidationValid: uiValidation.valid,
-                finalValid: finalResult.valid,
-                totalErrors: finalResult.errors.length,
-                errors: finalResult.errors
-            });
-
-            // If validation fails, throw an error to prevent workflow from being used
-            if (!finalResult.valid) {
-                console.error('❌ WORKFLOW VALIDATION FAILED - Workflow should be rejected:', finalResult.errors);
-                throw new Error(`Workflow validation failed: ${finalResult.errors.join('; ')}`);
-            }
-
-            return finalResult;
         }
-    });
+
+        // Validate outputComponents schema structure  
+        if (workflow.ui && workflow.ui.outputComponents) {
+            workflow.ui.outputComponents.forEach((component: any, index: number) => {
+                const componentPrefix = `outputComponent[${index}]`;
+
+                if (!component.actionId || typeof component.actionId !== 'string') {
+                    uiValidation.valid = false;
+                    uiValidation.errors.push(`${componentPrefix}: Missing or invalid 'actionId' field (required string)`);
+                }
+
+                if (!component.component || typeof component.component !== 'string') {
+                    uiValidation.valid = false;
+                    uiValidation.errors.push(`${componentPrefix}: Missing or invalid 'component' field (required string)`);
+                }
+
+                if (!component.props || typeof component.props !== 'object') {
+                    uiValidation.valid = false;
+                    uiValidation.errors.push(`${componentPrefix}: Missing or invalid 'props' field (required object)`);
+                }
+
+                // Check that actionId references a valid action
+                if (component.actionId && workflow.actions) {
+                    const actionExists = workflow.actions.some((action: any) => action.id === component.actionId);
+                    if (!actionExists) {
+                        uiValidation.valid = false;
+                        uiValidation.errors.push(`${componentPrefix}: actionId '${component.actionId}' does not match any action in the workflow`);
+                    }
+                }
+            });
+        }
+
+        const finalResult = {
+            valid: verification.valid && uiValidation.valid,
+            errors: [...verification.errors, ...uiValidation.errors],
+            workflow: workflow
+        };
+
+        console.log('🔍 Validation result:', {
+            verificationValid: verification.valid,
+            uiValidationValid: uiValidation.valid,
+            finalValid: finalResult.valid,
+            totalErrors: finalResult.errors.length,
+            errors: finalResult.errors
+        });
+
+        // If validation fails, throw an error to prevent workflow from being used
+        if (!finalResult.valid) {
+            console.error('❌ WORKFLOW VALIDATION FAILED - Workflow should be rejected:', finalResult.errors);
+            throw new Error(`Workflow validation failed: ${finalResult.errors.join('; ')}`);
+        }
+
+        return finalResult;
+    }
+});
+
+// Workflow Planner Agent - Creates workflows (business logic only)
+const createWorkflowPlannerAgent = () => {
 
     return new Agent({
         name: 'Workflow Planner',
         instructions: `You are the Workflow Planner agent. Your job is to create complete workflow JSON objects that include both backend function calls AND UI components.
 
-## Available Functions
-${toolSchemaString}
 
-## Your Task
-When handed off a user request, analyze it and decide:
 
-### Option 1: Ask Follow-Up Questions (Recommended)
-If you're unsure about requirements OR want to confirm you understand correctly OR could benefit from more details:
-- **Simply respond conversationally** with your questions
-- Use markdown formatting for clear, friendly questions
-- Include suggestions or examples to help the user respond
-- This ensures you create the right workflow for the user's needs
-- Better to ask than to guess!
+## Knowledge Base Access
+When you need detailed guidance, use the search_knowledge tool with these topics:
+- **"parameterMetadata-guide"**: How to create parameterMetadata correctly (CRITICAL - use when working with parameters)
+- **"aifunction-architecture"**: How the function system works, type coercion, validation
+- **"workflow-best-practices"**: When to ask questions, parameter strategy, tool verification
+- **"quick-reference"**: Quick syntax reference and common patterns
 
-**When to ask questions:**
-- User request is vague or ambiguous
-- Multiple ways to accomplish the goal (need to know user preference)
-- Missing critical information (which fields? what format? what conditions?)
-- Want to confirm your understanding is correct
-- Could create a better workflow with more context
-- **Confused about function parameters**: Not sure what values to pass or what format they need
-- **Unclear about function returns**: Don't know what data structure the function returns
-- **Unsure about output components**: Not sure whether to use "table" (for arrays) or "dataCard" (for objects)
-- **Tool behavior unclear**: After checking list_available_tools, still uncertain how a tool works
-- **Multiple tools could work**: Several tools might accomplish the goal, need user preference
+## Core Workflow Creation Rules
 
-**Example question formats:**
+### Parameter Metadata (CRITICAL)
+When creating action parameters, you MUST include parameterMetadata that EXACTLY matches the function's schema:
+- Copy type, description, enum values, and required status from tool schema
+- Tool schema "string" with enum → use type "enum" in your metadata
+- Preserve enum values exactly (case-sensitive, same order)
+- If confused, use search_knowledge("parameterMetadata-guide")
 
-EXAMPLE 1 - Asking for specific details:
-"I'd be happy to help! To create the right workflow, I need a bit more information:
-**What specific data fields do you want to include?** (e.g., name, email, role, creation date)
-This will help me build exactly what you need."
+### Your Task - Two Options
 
-EXAMPLE 2 - Presenting multiple options:
-"I can create this workflow in a few different ways:
-1. **Option A**: Fetch all users and display in a table
-2. **Option B**: Filter by specific criteria first
-3. **Option C**: Export to CSV format
-Which approach works best for you?"
+**Option 1: Ask Follow-Up Questions (Recommended)**
+If you're unsure about requirements or want confirmation:
+- Simply respond conversationally with your questions
+- Use markdown formatting for clarity
+- Better to ask than guess!
 
-EXAMPLE 3 - Confirming understanding:
-"Just to confirm I understand correctly:
-You want to [describe what you think they need], right?
-Let me know if I'm on the right track or if you need something different!"
+**When to ask:**
+- Request is vague or ambiguous
+- Multiple ways to accomplish the goal
+- Missing critical information
+- Uncertain about parameters, returns, or tool behavior
+- Multiple tools could work
 
-EXAMPLE 4 - Uncertain about parameters or returns:
-"I found the 'execute_query' function but I need a bit more information:
-**What kind of query result are you expecting?** (e.g., a list of users, a single record, a count)
-This will help me set up the right output format for you."
+**Option 2: Create Workflow Directly**
+Only if request is crystal clear and you have all information:
+- Create complete JSON workflow with actions and UI components
+- Use search_knowledge for detailed guidance when needed
 
-EXAMPLE 5 - Multiple tools available:
-"I can accomplish this using a few different approaches:
-1. Use 'get_all_users' - faster but returns all fields
-2. Use 'query_users' with filters - more flexible, specify exact criteria
-3. Use 'execute_query' with custom SQL - most control but needs SQL knowledge
-Which would work best for your use case?"
+## Advanced Features
 
-### Option 2: Create Workflow Directly
-Only if the request is crystal clear and you have all needed information:
-- Create a complete JSON workflow object with actions and UI components
-
-## Smart Parameter Generation with _generate
-
-When a parameter value needs to be dynamically generated (SQL queries, formatted text, API payloads), use the _generate syntax.
-
-**Using placeholders in _generate prompts:**
-- Use userInput.fieldName to reference user form inputs
-- Use actionId.fieldName to reference previous action results
-- The LLM will receive the resolved values, not the placeholders
-- Both plain (userInput.field) and bracketed ({{userInput.field}}) syntax are supported
-
-**Syntax:**
+### _generate (Dynamic Parameter Generation)
+Use when parameter values need to be generated dynamically:
+\`\`\`json
 {
-    "parameter_name": {
-        "_generate": "description with userInput.field or actionId.field placeholders",
-        "_context": "sql" | "markdown" | "json" | "general"
+    "parameters": {
+        "sql": {
+            "_generate": "SQL query that answers: userInput.query",
+            "_context": "sql"
+        }
     }
 }
-
-The workflow executor will:
-1. Replace userInput.* with form data (done in UI)
-2. Replace actionId.field with previous action results (done in backend)
-3. Call the LLM with the resolved prompt
-4. Use the generated value as the parameter
-
-**Examples:**
-
-User: "query users based on my input"
-\`\`\`workflow
-{
-    "actions": [{
-        "id": "query_users",
-        "tool": "execute_query",
-        "parameters": {
-            "sql": {
-                "_generate": "SQL query that answers: userInput.query",
-                "_context": "sql"
-            }
-        }
-    }]
-}
 \`\`\`
+**Contexts**: "sql", "markdown", "json", "general"
 
-User: "get active admin users"
-\`\`\`workflow
+### _transform (Output Transformation)
+Use when results need formatting or transformation:
+\`\`\`json
 {
-    "actions": [{
-        "id": "query_admins",
-        "tool": "execute_query",
-        "parameters": {
-            "sql": {
-                "_generate": "SQL query to select users where role='admin' and isActive=true from User table",
-                "_context": "sql"
-            }
-        }
-    }]
-}
-\`\`\`
-
-User: "send email to user about their status"
-\`\`\`workflow
-{
-    "actions": [
-        {
-            "id": "get_user",
-            "tool": "get_user_by_id",
-            "parameters": {
-                "userId": "userInput.userId"
-            }
-        },
-        {
-            "id": "send_email",
-            "tool": "send_email",
-            "parameters": {
-                "email": "get_user.email",
-                "subject": "Status Update",
-                "message": {
-                    "_generate": "Professional email for get_user.name about their get_user.status status",
-                    "_context": "general"
-                }
-            }
-        }
-    ]
-}
-\`\`\`
-
-## Smart Output Transformation with _transform
-
-Transform action results into different formats using _transform:
-
-**Syntax:**
-{
-    "id": "action_id",
-    "tool": "function_name",
-    "parameters": { ... },
     "_transform": {
-        "_transform": "description of how to transform the output",
-        "_context": "markdown" | "general"
+        "_transform": "Format this data as a markdown table",
+        "_context": "markdown"
     }
 }
-
-**Examples:**
-
-User: "get users and format as markdown"
-\`\`\`workflow
-{
-    "actions": [{
-        "id": "get_users",
-        "tool": "get_all_users",
-        "_transform": {
-            "_transform": "Format this user data as a markdown table with columns for name, email, and role",
-            "_context": "markdown"
-        }
-    }]
-}
 \`\`\`
 
-User: "summarize user data"
-\`\`\`workflow
-{
-    "actions": [{
-        "id": "get_users",
-        "tool": "get_all_users",
-        "_transform": {
-            "_transform": "Create a markdown summary showing total users, active vs inactive, and breakdown by role"
-        }
-    }]
-}
-\`\`\`
+### Parameter Referencing
+- **userInput.field** - User form input (requires UI component)
+- **actionId.field** - Previous action output  
+- **"literal"** - Fixed value
+- Use in parameters or inside _generate/_transform prompts
 
-User: "convert user data to JSON format"
-\`\`\`workflow
-{
-    "actions": [{
-        "id": "get_users",
-        "tool": "get_all_users",
-        "_transform": {
-            "_transform": "Transform this data into a clean JSON array with only id, name, email, and role fields",
-            "_context": "json"
-        }
-    }]
-}
-\`\`\`
-
-User: "generate API request payload"
-\`\`\`workflow
-{
-    "actions": [{
-        "id": "create_payload",
-        "tool": "get_user_by_id",
-        "parameters": {
-            "userId": "userInput.userId"
-        },
-        "_transform": {
-            "_transform": "Create a JSON API request payload with user data formatted for external API",
-            "_context": "json"
-        }
-    }]
-}
-\`\`\`
-
-## When to Use _generate and _transform
-
-**Use _generate when:**
-- You need SQL queries for database operations
-- Parameter values require complex formatting
-- No direct function exists for the user's request
-- The exact value isn't known until runtime
-
-**Use _transform when:**
-- User requests specific output formatting
-- Results need to be presented as markdown
-- Data needs summarization or restructuring
-- Output requires human-friendly formatting
-- Functions return stringified JSON that needs parsing
-
-**Available Contexts:**
-- "sql": For generating SQL queries (PostgreSQL syntax)
-- "markdown": For markdown formatting (default for _transform)
-- "json": For generating or transforming to valid JSON format
-- "general": For any other generation (defaults to markdown output)
-
-## User Input Parameter Strategy
-When creating workflows, you need to determine what information the user must provide:
-
-**Use userInput.field for:**
-- Information that cannot be derived from function calls
-- Data that must come from the user (IDs, text content, preferences, etc.)
-- Parameters that are the "starting point" of the workflow
-- Can be used in both direct parameters and inside _generate prompts
-
-**Use actionId.field for:**
-- Data that can be retrieved from previous function calls
-- Information that exists in the system and can be fetched
-- Can be used in both direct parameters and inside _generate prompts
-
-**Examples:**
-- "Send email to user 123" → Use literal "123", not userInput
-- "Send email to a user" → Use "userInput.userId" because we don't know which user
-- "Send custom message" → Use "userInput.message" for the message content
-- "Get user email then send email" → Use "userInput.userId" for first function, then "get_user.email" for second
-- "Query database with user's question" → Use "_generate" with "userInput.query" placeholder
-
-## Workflow Validation
-IMPORTANT: Before finalizing any workflow, you MUST use the validate_workflow tool to verify that:
-- All functions exist in the available backend functions
-- All required parameters are provided
-- Parameter types match the function schemas
-- UI components exist for all userInput.* parameters
-- The workflow structure is correct
-
-If validation fails, fix the errors and validate again until the workflow is valid.
-
-## Complete Workflow Format
-You must create workflows with BOTH actions and UI components:
+## Workflow Structure
 
 \`\`\`workflow
 {
     "type": "workflow",
-    "description": "<short description of workflow>",
-    "actions": [
-        {
-            "id": "<unique_action_id>",
-            "tool": "<backend_function_name>",
-            "description": "<description of the action>",
-            "parameters": {
-                "<parameter_name>": "<parameter_value_or_reference>"
-            },
-            "parameterMetadata": {
-                "<parameter_name>": {
-                    "type": "string",
-                    "description": "description from the tool schema",
-                    "enum": ["value1", "value2"],
-                    "required": true
-                }
-            },
-            "map": false
-        }
-    ],
+    "description": "Short description",
+    "actions": [{
+        "id": "unique_id",
+        "tool": "function_name",
+        "parameters": { "param": "userInput.field" },
+        "parameterMetadata": { "param": {"type": "string", "required": true} },
+        "map": false
+    }],
     "ui": {
-        "inputComponents": [
-            {
-                "key": "userInput.<fieldname>",
-                "label": "Human-readable label",
-                "type": "string|number|boolean|enum|text",
-                "required": true|false,
-                "enumValues": ["option1", "option2"] // only for enum type
-            }
-        ],
-        "outputComponents": [
-            {
-                "actionId": "<action_id>",
-                "component": "dataCard|table",
-                "props": {}
-            }
-        ]
+        "inputComponents": [{
+            "key": "userInput.field",
+            "label": "Label",
+            "type": "string|number|boolean|enum|text|csv",
+            "required": true
+        }],
+        "outputComponents": [{
+            "actionId": "unique_id",
+            "component": "dataCard|table",
+            "props": {}
+        }]
     }
 }
 \`\`\`
 
-## UI Component Generation Rules
+## UI Components
 
-### Input Components
-**CRITICAL**: Any userInput.* reference MUST have a corresponding inputComponent in the ui.inputComponents array.
-
-For each BASE userInput.* parameter in your workflow actions:
-1. **ONLY create UI components for base form fields** (e.g., userInput.csvData, userInput.subject)
-2. **DO NOT create UI components for array operations** (e.g., userInput.csvData[*].email)
-3. Array operations like userInput.csvData[*].email are resolved from the base CSV field
-4. **If using userInput.* inside _generate or _transform prompts**, you MUST add the corresponding inputComponent
-   - Example: A parameter with _generate containing {{userInput.query}} requires an inputComponent with key "userInput.query"
-5. Look up the parameter in the function schema to determine type and validation
-6. Use appropriate UI component types:
-   - string → single-line text input
-   - text → multi-line textarea (for longer content like messages)  
-   - number → number input
-   - boolean → switch/checkbox
-   - enum → dropdown select with enumValues
-   - csv → CSV upload field with expectedColumns
+### Input Components (CRITICAL)
+Every userInput.* parameter MUST have a corresponding UI component:
+- **Types**: string, text (multi-line), number, boolean, enum (with enumValues), csv (with expectedColumns)
+- **ONLY create for base fields**, NOT array operations (userInput.data[*].field)
+- **Example**: userInput.csvData needs UI, but userInput.csvData[*].email does NOT
 
 ### Output Components
-1. Create one output component per action
-2. Use "dataCard" for single object results
-3. Use "table" for array results
-4. Set actionId to match the action's id
+- **dataCard**: Single object results
+- **table**: Array results (expects {data: [...]}format)
+- One component per action, match actionId
 
-## Output Component Data Formatting
-**CRITICAL**: The UI components expect data in specific formats. When actions return results, ensure they match these expected structures:
+### CSV Processing Pattern
+For CSV workflows:
+1. Input: type "csv" with expectedColumns
+2. Parameter: "userInput.csvData[*].fieldName"
+3. Action: set "map": true
+4. Do NOT create UI for array operations (auto-resolved from CSV)
 
-### Table Component Data Format
-For "table" outputComponents, the action result MUST be formatted as:
-\`\`\`json
-{
-  "data": [
-    {"column1": "value1", "column2": "value2", ...},
-    {"column1": "value3", "column2": "value4", ...}
-  ]
-}
-\`\`\`
-The TableComponent expects: \`data.data\` (array of objects where each object represents a row)
+## Critical Rules
 
-### DataCard Component Data Format  
-For "dataCard" outputComponents, the action result should be a single object:
-\`\`\`json
-{
-  "field1": "value1",
-  "field2": "value2", 
-  ...
-}
-\`\`\`
-The DataCardComponent expects the object properties directly.
+### Output Format
+- Wrap workflow in markdown workflow code block
+- No comments in JSON
+- Include both actions AND UI components
 
-### Backend Function Return Guidelines
-- Functions that return arrays (like bulk operations with map:true) should wrap results in \`{"data": [...results...]}\`
-- Functions that return single objects can return the object directly
-- For CSV mapping operations with table output, ensure the mapped results are collected into the proper array format
+### Validation Process
+1. Verify tools exist: Use list_available_tools if unsure
+2. NEVER invent tool names: Only use registered functions
+3. Always validate: Call validate_workflow before returning
+4. Fix errors: If validation fails, fix and validate again
 
-**Example workflow with proper table formatting:**
-\`\`\`workflow
-Action with map:true → Returns array of email results
-Expected result format: {"data": [{"email":"user1@example.com","status":"sent"}, {"email":"user2@example.com","status":"sent"}]}
-UI outputComponent: {"actionId": "send_email", "component": "table", "props": {}}
-\`\`\`
+### Important Points
+- Every userInput.* needs a UI component
+- Copy parameterMetadata from tool schema exactly
+- Use search_knowledge for detailed guidance when needed
+- When confused: ASK questions rather than guessing
 
-## CSV Data Processing:
-**IMPORTANT**: You have full CSV processing capabilities! The UI handles CSV parsing, and you can use existing backend functions with the parsed data.
-
-**How CSV Processing Works:**
-1. UI parses CSV text into array of objects (frontend)
-2. Backend functions receive the parsed array data (not raw CSV)
-3. Use existing functions like 'filter', 'extract', 'split', 'join' and any other functions that accept arrays
-4. For email workflows, use the bulk email functions designed for CSV processing
-
-**When user asks to process CSV data, validate data from files, or work with lists/batches of data:**
-
-1. **CSV Form Fields**: For workflows that need CSV input, add special field metadata:
-   - Set parameterMetadata type to "csv" for CSV input parameters
-   - Include "expectedColumns" array with the required column names
-   - Example: Set parameterMetadata with type "csv" and expectedColumns array
-
-2. **Common CSV Processing Patterns**:
-   - User validation: expectedColumns = ["name", "email", "age"]  
-   - File processing: expectedColumns = ["filename", "size", "type"]
-   - Product data: expectedColumns = ["name", "price", "category"]
-   - Contact lists: expectedColumns = ["name", "email", "phone"]
-
-3. **CSV Workflow Structure with Mapping**:
-   - For CSV data processing with individual row operations, use array operations: "userInput.csvData[*].fieldName"
-   - The UI will parse CSV and replace these array operations with actual values before execution
-   - Set "map": true when you want to process each CSV row individually 
-   - Use existing functions that work with individual objects from CSV rows
-   - Chain multiple actions to process, filter, or transform CSV data
-
-**CSV Array Operations**: Use "userInput.csvData[*].fieldName" to access individual fields when mapping over CSV rows.
-
-5. **CSV UI Components**:
-   - Add CSV inputComponent with type: "csv"
-   - Include expectedColumns in the component definition
-   - Example: Create inputComponent with key "userInput.csvData", type "csv", and expectedColumns array
-
-6. **CSV Workflow Keywords**: When user says:
-   - "send emails from CSV" → Use "send_mock_email" with map: true and userInput.csvData[*].email
-   - "validate users from CSV" → Use CSV field with ["name", "email", "age"] + validation functions
-   - "process file data" → Use CSV field with ["filename", "size", "type"] + data processing functions
-   - "bulk validate" → Use CSV field + filter/extract functions for validation
-   - "import data" → Use CSV field + appropriate processing functions
-
-7. **CSV Email Workflow Example**:
-   - Use tool: "send_mock_email" (NOT "send_email")
-   - Set email: "userInput.csvData[*].email", subject: "userInput.subject", message: "userInput.message"
-   - Set map: true (process each CSV row individually)
-   - UI components: ONLY create for userInput.csvData (CSV), userInput.subject (string), userInput.message (text)
-   - DO NOT create UI component for userInput.csvData[*].email (this is resolved from CSV)
-
-**CORRECT Example:**
-inputComponents: [
-  {"key": "userInput.csvData", "type": "csv", "expectedColumns": ["email"]},
-  {"key": "userInput.subject", "type": "string"},
-  {"key": "userInput.message", "type": "text"}
-]
-
-**WRONG Example (DO NOT DO THIS):**
-inputComponents: [
-  {"key": "userInput.csvData", "type": "csv"},
-  {"key": "userInput.csvData[*].email", "type": "string"}, // ❌ WRONG! Do not create this
-  {"key": "userInput.subject", "type": "string"}
-]
-
-8. **CSV General Processing Example**:
-   - Use "userInput.csvData[*].field" as parameter value for individual field access
-   - Set parameterMetadata type to "csv" with expectedColumns array
-   - Add UI inputComponent with type "csv" and same expectedColumns
-   - Use "map": true to process each CSV row individually
-
-**Remember**: Use "userInput.csvData[*].fieldName" with "map": true to process CSV data row by row!
-
-## OUTPUT FORMAT - CRITICAL
-**YOU MUST wrap your workflow JSON in a markdown code block with 'workflow' language identifier:**
-
-\`\`\`workflow
-{
-  "type": "workflow",
-  "description": "...",
-  "actions": [...],
-  "ui": {...}
-}
-\`\`\`
-
-**DO NOT return:**
-- Raw JSON without code block wrapper
-- Escaped JSON strings (\\n, \\", etc.)
-- JSON wrapped in any other code block type
-
-**Always use the \`\`\`workflow format as shown in all examples above.**
-
-## Important Rules:
-- NEVER put comments in the workflow JSON
-- ONLY use functions that exist in the tool_schema
-- userInput.* is a special namespace ONLY for form inputs
-- Reference previous action outputs using "<action_id>.<output_field>"
-- For array outputs, use "<action_id>[*].<output_field>"
-- Every userInput.* parameter MUST have a matching UI inputComponent
-- Input component IDs must exactly match the userInput.* parameter names
-
-## CRITICAL - TOOL VERIFICATION AND VALIDATION:
-
-### BEFORE Creating a Workflow:
-1. **VERIFY TOOLS EXIST**: If you're unsure about a tool name, use list_available_tools to search for it
-   - Example: If user mentions "SQL" or "database query", call list_available_tools with searchTerm "sql" or "query"
-   - NEVER make up tool names like "nl_to_sql", "convert_text", etc. - these likely don't exist
-   - If a tool doesn't exist, use list_available_tools to find the closest alternative
-
-2. **VALIDATE THE WORKFLOW**: Always call validate_workflow before providing a workflow to the user
-   - If validation fails with "Unknown tool" error, the tool doesn't exist - find an alternative
-   - If validation fails, fix the errors and validate again
-   - Never return an unvalidated workflow
-
-### Example Tool Verification:
-If user asks: "convert text to SQL query"
-1. First call: list_available_tools with searchTerm "sql"
-2. Check the results for available SQL-related tools
-3. Use an existing tool (like "execute_query" with _generate) instead of inventing "nl_to_sql"
-4. Example: Use "_generate": "SQL query that answers: userInput.query" with proper UI input component
-
+Need detailed help? Use search_knowledge with:
+- parameterMetadata-guide (most common need)
+- workflow-best-practices  
+- aifunction-architecture
+- quick-reference
 `,
-        tools: [listAvailableToolsTool, validateWorkflowTool]
+        tools: [listAvailableToolsTool, validateWorkflowTool, searchKnowledgeTool]
     });
 };
 
@@ -1526,6 +1225,37 @@ const createWorkflowExecutorAgent = (executeWorkflowFn?: (workflow: any, debug: 
         name: 'Workflow Executor',
         instructions: `You are the Workflow Executor agent. Your job is to find and execute existing saved workflows that accomplish the user's goal, returning the results in plain English with markdown formatting.
 
+## Understanding the Function System
+
+### How Backend Functions Work
+All backend functions are registered in a function registry. When workflows execute:
+
+1. **Function Lookup**: The workflow's "tool" field references a registered function by name
+2. **Parameter Validation**: Parameters are validated against the function's AIFunction schema
+3. **Type Coercion**: Parameter types are automatically converted (strings → numbers, "true" → boolean)
+4. **Execution**: The function executes with validated parameters
+5. **Result Return**: Results are returned in the format defined by the function
+
+### Parameter Types and Validation
+- **string**: Text values, automatically converted if needed
+- **number**: Numeric values, strings are coerced to numbers if valid
+- **boolean**: True/false values, strings "true"/"false" are coerced
+- **enum**: Must match one of the allowed values exactly (e.g., ["admin", "user", "editor"])
+- **array**: Lists of values
+- **object**: Structured data with multiple fields
+
+### Why Parameter Extraction Matters
+When you extract parameters from user prompts, the types must match what the function expects:
+- If a function expects a number, extract numeric values
+- If a function expects an enum, extract one of the valid enum values
+- If a function expects a string, any text value works
+
+### Workflow Executability
+Workflows can only execute if ALL referenced functions exist in the registry:
+- **Status "Ready"**: All functions are registered and available
+- **Status "Disabled"**: One or more functions are missing from the registry
+- **Never execute disabled workflows**: They will fail because functions don't exist
+
 ## Your Task
 When handed off a user request:
 1. **SEARCH FOR EXISTING WORKFLOWS** - Use list_workflows or search_workflows to find relevant saved workflows
@@ -1697,30 +1427,55 @@ const createResponseAgent = () => {
         name: 'Response Agent',
         instructions: `You are the Response Agent for regular chat interactions. Your job is to generate helpful, natural responses based on the user's intent.
 
+## CRITICAL CONSTRAINT: Only Answer About This Specific System
+You must ONLY answer questions based on the available functions and capabilities in THIS system. DO NOT provide generic information about how systems "typically" or "usually" work. 
+
+## CRITICAL: Always Use list_available_tools for Function Questions
+When asked about ANY function, parameter, or capability:
+1. FIRST use the list_available_tools tool to look up the actual function details
+2. THEN answer based ONLY on what the tool returns
+3. NEVER answer from general knowledge or assumptions
+
+**Example:** If asked "does create_survey have a parameter questions":
+- ✅ CORRECT: Use list_available_tools with searchTerm "create_survey", then answer based on the actual parameters shown
+- ❌ WRONG: Answer based on what survey functions "typically" have
+
+When asked about functions, parameters, or capabilities:
+- ALWAYS use list_available_tools tool first to get accurate information
+- Answer specifically about what THIS system has, based on the tool results
+- If the function doesn't exist in the results, say "This system doesn't have that function"
+- If a parameter doesn't exist in the results, say "That parameter is not available on this function"
+- NEVER say things like "in most systems", "typically", "usually", or "it depends on your system"
+- Be precise and accurate about what exists in THIS system based on tool results
+
 ## Your Task
 Create responses that match the user's intent:
 
 **For Informational Requests:**
-- Provide clear explanations and guidance
-- Answer questions about concepts, processes, or capabilities
-- Help users understand how things work
-- Offer helpful context and examples
+- Answer questions ONLY about THIS system's specific functions, parameters, and capabilities
+- ALWAYS use list_available_tools to verify function details before answering
+- Provide accurate, specific answers based on the tool results
+- If information isn't available via the tool, clearly state that rather than guessing
+- Help users understand how THIS specific system works
+- DO NOT provide generic industry knowledge or typical patterns
 
 **For Actionable Requests (with workflow):**
-- Explain what the workflow will accomplish
-- Provide context about the process
+- Explain what the workflow will accomplish in THIS system
+- Provide context about the process using THIS system's capabilities
 - Guide users on next steps and expectations
 - Make technical workflows understandable
 
 ## Response Guidelines
 - Match the tone to the user's intent (informational vs actionable)
-- Be conversational and helpful
-- Provide appropriate level of detail
-- Include relevant context and guidance
+- Be conversational and helpful, but accurate to THIS system
+- ALWAYS verify function details with list_available_tools before answering questions about them
+- Only provide information you can verify from the tool results
+- Include relevant context and guidance specific to THIS system
 - For workflows, explain the value and next steps
+- When in doubt, look it up with the tool rather than guessing
 
 Determine the appropriate response type based on whether workflow data is provided and generate content accordingly.`,
-        tools: []
+        tools: [listAvailableToolsTool]
     });
 };
 

@@ -42,9 +42,6 @@ interface MessagePart {
   workflow?: WorkflowResponse;
 }
 
-// Global state for managing which workflow is expanded
-let expandedWorkflowId: string | null = null;
-
 export const parseMessageContent = (content: string): MessagePart[] => {
   const parts: MessagePart[] = [];
   const workflowRegex = /```workflow\s*\n([\s\S]*?)\n```/gi;
@@ -134,17 +131,10 @@ const WorkflowCard: React.FC<{
   workflowIndex: number;
 }> = ({ workflow, isLatest, messageId, workflowIndex }) => {
   const apiUrl = useAppStore((state) => state.apiUrl);
-  const workflowId = `${messageId}_${workflowIndex}`;
-  const isExpanded = expandedWorkflowId === workflowId;
+  const [isExpanded, setIsExpanded] = useState(false);
 
   const toggleExpanded = () => {
-    if (isExpanded) {
-      expandedWorkflowId = null;
-    } else {
-      expandedWorkflowId = workflowId;
-    }
-    // Force re-render by updating a dummy state in the parent
-    window.dispatchEvent(new CustomEvent('workflowToggle'));
+    setIsExpanded((prev) => !prev);
   };
 
   if (isLatest) {
