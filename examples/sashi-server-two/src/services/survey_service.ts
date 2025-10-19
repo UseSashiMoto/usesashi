@@ -227,6 +227,7 @@ const AddQuestionFunction = new AIFunction("add_question", "add a question with 
                 questionId: questionId
             }
             mockDatabase.answers.push(newAnswer)
+            newQuestion.answers.push(newAnswer)
         }
 
         console.log('📋 [Survey] Added question:', { surveyId, questionId, optionsCount: options.length })
