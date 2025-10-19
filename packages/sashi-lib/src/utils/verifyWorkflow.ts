@@ -95,6 +95,69 @@ export function verifyWorkflow(workflow: any): VerificationResult {
         });
     });
 
+    // 3. Validate action parameter references
+    const actionMap = new Map<string, any>();
+    workflow.actions.forEach((action: any) => {
+        actionMap.set(action.id, action);
+    });
+
+    workflow.actions.forEach((action: any, index: number) => {
+        // Skip if action doesn't have an id (already validated earlier)
+        if (!action.id || typeof action.id !== 'string') {
+            return;
+        }
+
+        const actionPrefix = `Action #${index + 1} (${action.id})`;
+
+        if (action.parameters) {
+            for (const [paramName, paramValue] of Object.entries(action.parameters)) {
+                if (typeof paramValue === 'string') {
+                    // Match pattern: actionId.field (but not userInput.field)
+                    const actionRefMatch = paramValue.match(/^([a-zA-Z0-9_]+)\.(.+)$/);
+
+                    if (actionRefMatch && !paramValue.startsWith('userInput.')) {
+                        const [, referencedActionId, fieldPath] = actionRefMatch;
+
+                        // Ensure we have both parts of the reference
+                        if (!referencedActionId || !fieldPath) {
+                            continue;
+                        }
+
+                        // Check if referenced action exists
+                        const referencedAction = actionMap.get(referencedActionId);
+                        if (!referencedAction) {
+                            errors.push(`${actionPrefix}: Parameter "${paramName}" references non-existent action "${referencedActionId}".`);
+                            continue;
+                        }
+
+                        // Check if referenced action comes before current action
+                        const referencedIndex = workflow.actions.indexOf(referencedAction);
+                        if (referencedIndex >= index) {
+                            errors.push(`${actionPrefix}: Parameter "${paramName}" cannot reference action "${referencedActionId}" that comes after it.`);
+                            continue;
+                        }
+
+                        // Check if field exists in return type
+                        const referencedFn = registry.get(referencedAction.tool);
+                        if (referencedFn) {
+                            const returnType = referencedFn.getReturnType();
+                            if (returnType) {
+                                const fieldExists = checkFieldExists(returnType, fieldPath);
+                                if (!fieldExists) {
+                                    const availableFields = getAvailableFields(returnType);
+                                    const suggestion = availableFields.length > 0
+                                        ? ` Available fields: ${availableFields.join(', ')}`
+                                        : '';
+                                    errors.push(`${actionPrefix}: Parameter "${paramName}" references field "${fieldPath}" that does not exist in action "${referencedActionId}" return type.${suggestion}`);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    });
+
     return {
         valid: errors.length === 0,
         errors,
@@ -113,4 +176,34 @@ function isParamRequired(param: any): boolean {
         return param.getRequired();
     }
     return param.required;
+}
+
+function checkFieldExists(returnType: any, fieldPath: string): boolean {
+    // Handle simple field access (e.g., "surveyId")
+    if (!fieldPath.includes('.') && !fieldPath.includes('[')) {
+        if (returnType instanceof AIObject) {
+            const fields = returnType.getFields();
+            return fields.some((f: any) => {
+                if (f instanceof AIObject || f instanceof AIFieldEnum) {
+                    return f.getName() === fieldPath;
+                }
+                return f.name === fieldPath;
+            });
+        }
+    }
+    // For nested paths, allow for now (more complex validation)
+    return true;
+}
+
+function getAvailableFields(returnType: any): string[] {
+    if (returnType instanceof AIObject) {
+        const fields = returnType.getFields();
+        return fields.map((f: any) => {
+            if (f instanceof AIObject || f instanceof AIFieldEnum) {
+                return f.getName();
+            }
+            return f.name;
+        }).filter(Boolean);
+    }
+    return [];
 } 
