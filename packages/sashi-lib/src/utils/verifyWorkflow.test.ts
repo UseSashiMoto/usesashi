@@ -516,4 +516,424 @@ describe('verifyWorkflow', () => {
             expect(result.errors[0]).toContain('Available fields: success, message, surveyId');
         });
     });
+
+    describe('array input type validation', () => {
+        it('should accept array type with valid subFields', () => {
+            const workflow = {
+                type: 'workflow',
+                description: 'Test array input',
+                actions: [
+                    {
+                        id: 'test_action',
+                        tool: 'get_user_by_id',
+                        parameters: { userId: 123 }
+                    }
+                ],
+                ui: {
+                    inputComponents: [
+                        {
+                            key: 'userInput.items',
+                            label: 'Items',
+                            type: 'array',
+                            required: true,
+                            subFields: [
+                                {
+                                    key: 'name',
+                                    label: 'Name',
+                                    type: 'string',
+                                    required: true
+                                },
+                                {
+                                    key: 'count',
+                                    label: 'Count',
+                                    type: 'number',
+                                    required: false
+                                }
+                            ]
+                        }
+                    ],
+                    outputComponents: []
+                }
+            };
+
+            const result = verifyWorkflow(workflow);
+            expect(result.valid).toBe(true);
+            expect(result.errors).toHaveLength(0);
+        });
+
+        it('should reject array type without subFields', () => {
+            const workflow = {
+                type: 'workflow',
+                description: 'Test array input',
+                actions: [
+                    {
+                        id: 'test_action',
+                        tool: 'get_user_by_id',
+                        parameters: { userId: 123 }
+                    }
+                ],
+                ui: {
+                    inputComponents: [
+                        {
+                            key: 'userInput.items',
+                            label: 'Items',
+                            type: 'array',
+                            required: true
+                        }
+                    ],
+                    outputComponents: []
+                }
+            };
+
+            const result = verifyWorkflow(workflow);
+            expect(result.valid).toBe(false);
+            expect(result.errors.some((e: string) => e.includes('array') && e.includes('subFields'))).toBe(true);
+        });
+
+        it('should reject array type with empty subFields', () => {
+            const workflow = {
+                type: 'workflow',
+                description: 'Test array input',
+                actions: [
+                    {
+                        id: 'test_action',
+                        tool: 'get_user_by_id',
+                        parameters: { userId: 123 }
+                    }
+                ],
+                ui: {
+                    inputComponents: [
+                        {
+                            key: 'userInput.items',
+                            label: 'Items',
+                            type: 'array',
+                            required: true,
+                            subFields: []
+                        }
+                    ],
+                    outputComponents: []
+                }
+            };
+
+            const result = verifyWorkflow(workflow);
+            expect(result.valid).toBe(false);
+            expect(result.errors.some((e: string) => e.includes('array') && e.includes('subFields'))).toBe(true);
+        });
+
+        it('should validate nested arrays', () => {
+            const workflow = {
+                type: 'workflow',
+                description: 'Test nested array input',
+                actions: [
+                    {
+                        id: 'test_action',
+                        tool: 'get_user_by_id',
+                        parameters: { userId: 123 }
+                    }
+                ],
+                ui: {
+                    inputComponents: [
+                        {
+                            key: 'userInput.sections',
+                            label: 'Sections',
+                            type: 'array',
+                            required: true,
+                            subFields: [
+                                {
+                                    key: 'title',
+                                    label: 'Section Title',
+                                    type: 'string',
+                                    required: true
+                                },
+                                {
+                                    key: 'items',
+                                    label: 'Items',
+                                    type: 'array',
+                                    required: true,
+                                    subFields: [
+                                        {
+                                            key: 'itemName',
+                                            label: 'Item Name',
+                                            type: 'string',
+                                            required: true
+                                        },
+                                        {
+                                            key: 'quantity',
+                                            label: 'Quantity',
+                                            type: 'number',
+                                            required: false
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ],
+                    outputComponents: []
+                }
+            };
+
+            const result = verifyWorkflow(workflow);
+            expect(result.valid).toBe(true);
+            expect(result.errors).toHaveLength(0);
+        });
+
+        it('should reject nested array without subFields', () => {
+            const workflow = {
+                type: 'workflow',
+                description: 'Test nested array input',
+                actions: [
+                    {
+                        id: 'test_action',
+                        tool: 'get_user_by_id',
+                        parameters: { userId: 123 }
+                    }
+                ],
+                ui: {
+                    inputComponents: [
+                        {
+                            key: 'userInput.sections',
+                            label: 'Sections',
+                            type: 'array',
+                            required: true,
+                            subFields: [
+                                {
+                                    key: 'title',
+                                    label: 'Section Title',
+                                    type: 'string',
+                                    required: true
+                                },
+                                {
+                                    key: 'items',
+                                    label: 'Items',
+                                    type: 'array',
+                                    required: true
+                                    // Missing subFields
+                                }
+                            ]
+                        }
+                    ],
+                    outputComponents: []
+                }
+            };
+
+            const result = verifyWorkflow(workflow);
+            expect(result.valid).toBe(false);
+            expect(result.errors.some((e: string) => e.includes('subFields[1]: type \'array\' requires a non-empty \'subFields\' array'))).toBe(true);
+        });
+
+        it('should validate all subField types', () => {
+            const workflow = {
+                type: 'workflow',
+                description: 'Test all subField types',
+                actions: [
+                    {
+                        id: 'test_action',
+                        tool: 'get_user_by_id',
+                        parameters: { userId: 123 }
+                    }
+                ],
+                ui: {
+                    inputComponents: [
+                        {
+                            key: 'userInput.items',
+                            label: 'Items',
+                            type: 'array',
+                            required: true,
+                            subFields: [
+                                {
+                                    key: 'stringField',
+                                    label: 'String',
+                                    type: 'string',
+                                    required: true
+                                },
+                                {
+                                    key: 'numberField',
+                                    label: 'Number',
+                                    type: 'number',
+                                    required: true
+                                },
+                                {
+                                    key: 'booleanField',
+                                    label: 'Boolean',
+                                    type: 'boolean',
+                                    required: false
+                                },
+                                {
+                                    key: 'enumField',
+                                    label: 'Enum',
+                                    type: 'enum',
+                                    enumValues: ['Option1', 'Option2'],
+                                    required: true
+                                },
+                                {
+                                    key: 'textField',
+                                    label: 'Text',
+                                    type: 'text',
+                                    required: false
+                                },
+                                {
+                                    key: 'csvField',
+                                    label: 'CSV',
+                                    type: 'csv',
+                                    expectedColumns: ['col1', 'col2'],
+                                    required: false
+                                }
+                            ]
+                        }
+                    ],
+                    outputComponents: []
+                }
+            };
+
+            const result = verifyWorkflow(workflow);
+            expect(result.valid).toBe(true);
+            expect(result.errors).toHaveLength(0);
+        });
+
+        it('should reject subField with missing key', () => {
+            const workflow = {
+                type: 'workflow',
+                description: 'Test subField validation',
+                actions: [
+                    {
+                        id: 'test_action',
+                        tool: 'get_user_by_id',
+                        parameters: { userId: 123 }
+                    }
+                ],
+                ui: {
+                    inputComponents: [
+                        {
+                            key: 'userInput.items',
+                            label: 'Items',
+                            type: 'array',
+                            required: true,
+                            subFields: [
+                                {
+                                    label: 'Name',
+                                    type: 'string',
+                                    required: true
+                                }
+                            ]
+                        }
+                    ],
+                    outputComponents: []
+                }
+            };
+
+            const result = verifyWorkflow(workflow);
+            expect(result.valid).toBe(false);
+            expect(result.errors.some((e: string) => e.includes('subFields[0]: Missing or invalid \'key\' field'))).toBe(true);
+        });
+
+        it('should reject subField with missing label', () => {
+            const workflow = {
+                type: 'workflow',
+                description: 'Test subField validation',
+                actions: [
+                    {
+                        id: 'test_action',
+                        tool: 'get_user_by_id',
+                        parameters: { userId: 123 }
+                    }
+                ],
+                ui: {
+                    inputComponents: [
+                        {
+                            key: 'userInput.items',
+                            label: 'Items',
+                            type: 'array',
+                            required: true,
+                            subFields: [
+                                {
+                                    key: 'name',
+                                    type: 'string',
+                                    required: true
+                                }
+                            ]
+                        }
+                    ],
+                    outputComponents: []
+                }
+            };
+
+            const result = verifyWorkflow(workflow);
+            expect(result.valid).toBe(false);
+            expect(result.errors.some((e: string) => e.includes('subFields[0]: Missing or invalid \'label\' field'))).toBe(true);
+        });
+
+        it('should reject subField with invalid type', () => {
+            const workflow = {
+                type: 'workflow',
+                description: 'Test subField validation',
+                actions: [
+                    {
+                        id: 'test_action',
+                        tool: 'get_user_by_id',
+                        parameters: { userId: 123 }
+                    }
+                ],
+                ui: {
+                    inputComponents: [
+                        {
+                            key: 'userInput.items',
+                            label: 'Items',
+                            type: 'array',
+                            required: true,
+                            subFields: [
+                                {
+                                    key: 'name',
+                                    label: 'Name',
+                                    type: 'invalid_type',
+                                    required: true
+                                }
+                            ]
+                        }
+                    ],
+                    outputComponents: []
+                }
+            };
+
+            const result = verifyWorkflow(workflow);
+            expect(result.valid).toBe(false);
+            expect(result.errors.some((e: string) => e.includes('Invalid type \'invalid_type\''))).toBe(true);
+        });
+
+        it('should reject enum subField without enumValues', () => {
+            const workflow = {
+                type: 'workflow',
+                description: 'Test subField validation',
+                actions: [
+                    {
+                        id: 'test_action',
+                        tool: 'get_user_by_id',
+                        parameters: { userId: 123 }
+                    }
+                ],
+                ui: {
+                    inputComponents: [
+                        {
+                            key: 'userInput.items',
+                            label: 'Items',
+                            type: 'array',
+                            required: true,
+                            subFields: [
+                                {
+                                    key: 'status',
+                                    label: 'Status',
+                                    type: 'enum',
+                                    required: true
+                                }
+                            ]
+                        }
+                    ],
+                    outputComponents: []
+                }
+            };
+
+            const result = verifyWorkflow(workflow);
+            expect(result.valid).toBe(false);
+            expect(result.errors.some((e: string) => e.includes('type \'enum\' requires a non-empty \'enumValues\' array'))).toBe(true);
+        });
+    });
 }); 

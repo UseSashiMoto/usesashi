@@ -158,6 +158,88 @@ export function verifyWorkflow(workflow: any): VerificationResult {
         }
     });
 
+    // 4. Validate UI input components (including array types)
+    if (workflow.ui && workflow.ui.inputComponents) {
+        workflow.ui.inputComponents.forEach((component: any, index: number) => {
+            const componentPrefix = `inputComponent[${index}]`;
+
+            // Validate required properties
+            if (!component.key || typeof component.key !== 'string') {
+                errors.push(`${componentPrefix}: Missing or invalid 'key' field (required string)`);
+            }
+
+            if (!component.label || typeof component.label !== 'string') {
+                errors.push(`${componentPrefix}: Missing or invalid 'label' field (required string)`);
+            }
+
+            if (!component.type || typeof component.type !== 'string') {
+                errors.push(`${componentPrefix}: Missing or invalid 'type' field (required string)`);
+            } else {
+                // Validate type is one of the supported types
+                const validTypes = ['string', 'number', 'boolean', 'enum', 'text', 'csv', 'array'];
+                if (!validTypes.includes(component.type)) {
+                    errors.push(`${componentPrefix}: Invalid type '${component.type}'. Valid types are: ${validTypes.join(', ')}`);
+                }
+
+                // Additional validation for enum type
+                if (component.type === 'enum') {
+                    if (!component.enumValues || !Array.isArray(component.enumValues) || component.enumValues.length === 0) {
+                        errors.push(`${componentPrefix}: type 'enum' requires a non-empty 'enumValues' array`);
+                    }
+                }
+
+                // Additional validation for array type
+                if (component.type === 'array') {
+                    if (!component.subFields || !Array.isArray(component.subFields) || component.subFields.length === 0) {
+                        errors.push(`${componentPrefix}: type 'array' requires a non-empty 'subFields' array`);
+                    } else {
+                        // Recursively validate subFields
+                        const validateSubFields = (subFields: any[], prefix: string) => {
+                            subFields.forEach((subField: any, subIndex: number) => {
+                                const subFieldPrefix = `${prefix}.subFields[${subIndex}]`;
+
+                                // Validate required properties
+                                if (!subField.key || typeof subField.key !== 'string') {
+                                    errors.push(`${subFieldPrefix}: Missing or invalid 'key' field (required string)`);
+                                }
+
+                                if (!subField.label || typeof subField.label !== 'string') {
+                                    errors.push(`${subFieldPrefix}: Missing or invalid 'label' field (required string)`);
+                                }
+
+                                if (!subField.type || typeof subField.type !== 'string') {
+                                    errors.push(`${subFieldPrefix}: Missing or invalid 'type' field (required string)`);
+                                } else {
+                                    if (!validTypes.includes(subField.type)) {
+                                        errors.push(`${subFieldPrefix}: Invalid type '${subField.type}'. Valid types are: ${validTypes.join(', ')}`);
+                                    }
+
+                                    // Validate enum subField
+                                    if (subField.type === 'enum') {
+                                        if (!subField.enumValues || !Array.isArray(subField.enumValues) || subField.enumValues.length === 0) {
+                                            errors.push(`${subFieldPrefix}: type 'enum' requires a non-empty 'enumValues' array`);
+                                        }
+                                    }
+
+                                    // Recursive validation for nested arrays
+                                    if (subField.type === 'array') {
+                                        if (!subField.subFields || !Array.isArray(subField.subFields) || subField.subFields.length === 0) {
+                                            errors.push(`${subFieldPrefix}: type 'array' requires a non-empty 'subFields' array`);
+                                        } else {
+                                            validateSubFields(subField.subFields, subFieldPrefix);
+                                        }
+                                    }
+                                }
+                            });
+                        };
+
+                        validateSubFields(component.subFields, componentPrefix);
+                    }
+                }
+            }
+        });
+    }
+
     return {
         valid: errors.length === 0,
         errors,
