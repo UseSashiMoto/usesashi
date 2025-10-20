@@ -1,5 +1,11 @@
 # sashi-lib
 
+## 9.3.0
+
+### Minor Changes
+
+- 827024e: added the ability to use array input type
+
 ## 9.2.0
 
 ### Minor Changes
