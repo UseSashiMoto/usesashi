@@ -42,12 +42,10 @@ export interface Survey {
 const mockDatabase: {
     surveys: Survey[]
     pages: SurveyPage[]
-    questions: SurveyQuestion[]
     answers: SurveyAnswer[]
 } = {
     surveys: [],
     pages: [],
-    questions: [],
     answers: []
 }
 
@@ -205,7 +203,13 @@ const AddQuestionFunction = new AIFunction("add_question", "add a question with 
             answers: []
         }
 
-        mockDatabase.questions.push(newQuestion)
+        mockDatabase.pages.push({
+            id: page.id,
+            type: 'custom',
+            title: questionText,
+            surveyId: surveyId,
+            questions: []
+        })
 
         // Parse and add answers
         const options = answerOptions.split(',').map(s => s.trim()).filter(s => s.length > 0)
@@ -254,19 +258,21 @@ const GetSurveyFunction = new AIFunction("get_survey_by_id", "retrieve a survey 
         if (!survey) {
             throw new Error('Survey not found')
         }
+        console.log('🔍 [Survey] Survey:', JSON.stringify(survey, null, 2));
 
-        const questions = mockDatabase.questions.filter(q => {
-            const page = mockDatabase.pages.find(p => p.id === q.pageId && p.surveyId === id)
+        const pages = mockDatabase.pages.filter(q => {
+            const page = mockDatabase.surveys.find(p => p.id === q.surveyId)
             return !!page
         })
+        console.log('🔍 [Survey] Questions:', JSON.stringify(pages, null, 2));
 
-        console.log('📋 [Survey] Retrieved survey:', { id, questionCount: questions.length })
+        console.log('📋 [Survey] Retrieved survey:', { id, questionCount: pages.length })
 
         return {
             id: survey.id,
             title: survey.title,
             subtitle: survey.subtitle,
-            questionCount: questions.length
+            questionCount: pages.length
         }
     })
 
@@ -275,16 +281,14 @@ const ListSurveysFunction = new AIFunction("list_surveys", "list all surveys wit
     .returns(new AIArray("surveys", "array of all surveys", SurveyInfoObject))
     .implement(async () => {
         const surveyInfos = mockDatabase.surveys.map(survey => {
-            const questions = mockDatabase.questions.filter(q => {
-                const page = mockDatabase.pages.find(p => p.id === q.pageId && p.surveyId === survey.id)
-                return !!page
+            const pages = mockDatabase.pages.filter(q => {
+                return q.surveyId === survey.id
             })
-
             return {
                 id: survey.id,
                 title: survey.title,
                 subtitle: survey.subtitle,
-                questionCount: questions.length
+                questionCount: pages.length
             }
         })
 
@@ -312,11 +316,10 @@ const DeleteSurveyFunction = new AIFunction("delete_survey", "delete a survey an
         }
 
         // Delete cascade: answers -> questions -> pages -> survey
-        const pageIds = mockDatabase.pages.filter(p => p.surveyId === id).map(p => p.id)
-        const questionIds = mockDatabase.questions.filter(q => pageIds.includes(q.pageId)).map(q => q.id)
+        const pages = mockDatabase.pages.filter(p => p.surveyId === id)
+        const questionIds = pages.flatMap(p => p.questions?.map(q => q.id) || [])
 
         mockDatabase.answers = mockDatabase.answers.filter(a => !questionIds.includes(a.questionId))
-        mockDatabase.questions = mockDatabase.questions.filter(q => !pageIds.includes(q.pageId))
         mockDatabase.pages = mockDatabase.pages.filter(p => p.surveyId !== id)
         mockDatabase.surveys.splice(surveyIndex, 1)
 

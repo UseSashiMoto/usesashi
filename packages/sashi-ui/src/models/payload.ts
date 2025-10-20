@@ -131,10 +131,11 @@ export interface WorkflowUIElement {
 export interface WorkflowUIComponent {
   key: string;
   label: string;
-  type: 'string' | 'number' | 'boolean' | 'enum' | 'text' | 'csv';
+  type: 'string' | 'number' | 'boolean' | 'enum' | 'text' | 'csv' | 'array';
   required: boolean;
   enumValues?: string[];
   expectedColumns?: string[]; // For CSV fields
+  subFields?: WorkflowUIComponent[]; // For array - recursive structure
 }
 
 export interface WorkflowOutputComponent {

@@ -352,6 +352,10 @@ export class AIFunction {
         return this._params;
     }
 
+    getReturnType(): AIField<any> | AIObject | AIArray | undefined {
+        return this._returnType;
+    }
+
     getRepo(): string | undefined {
         return this._repo;
     }

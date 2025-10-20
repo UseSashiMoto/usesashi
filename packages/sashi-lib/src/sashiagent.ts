@@ -275,7 +275,7 @@ const validateWorkflowTool = tool({
                     // Validate type is one of the supported types
 
 
-                    const validTypes = ['string', 'number', 'boolean', 'enum', 'text', 'csv'];
+                    const validTypes = ['string', 'number', 'boolean', 'enum', 'text', 'csv', 'array'];
                     if (!validTypes.includes(component.type)) {
                         console.log(`❌ ${componentPrefix}: Invalid type value '${component.type}'`);
                         uiValidation.valid = false;
@@ -288,6 +288,63 @@ const validateWorkflowTool = tool({
                             console.log(`❌ ${componentPrefix}: enum type requires enumValues array`);
                             uiValidation.valid = false;
                             uiValidation.errors.push(`${componentPrefix}: type 'enum' requires a non-empty 'enumValues' array`);
+                        }
+                    }
+
+                    // Additional validation for array type
+                    if (component.type === 'array') {
+                        if (!component.subFields || !Array.isArray(component.subFields) || component.subFields.length === 0) {
+                            console.log(`❌ ${componentPrefix}: array type requires subFields array`);
+                            uiValidation.valid = false;
+                            uiValidation.errors.push(`${componentPrefix}: type 'array' requires a non-empty 'subFields' array`);
+                        } else {
+                            // Recursively validate subFields
+                            const validateSubFields = (subFields: any[], prefix: string) => {
+                                subFields.forEach((subField: any, subIndex: number) => {
+                                    const subFieldPrefix = `${prefix}.subFields[${subIndex}]`;
+
+                                    // Validate required properties
+                                    if (!subField.key || typeof subField.key !== 'string') {
+                                        uiValidation.valid = false;
+                                        uiValidation.errors.push(`${subFieldPrefix}: Missing or invalid 'key' field (required string)`);
+                                    }
+
+                                    if (!subField.label || typeof subField.label !== 'string') {
+                                        uiValidation.valid = false;
+                                        uiValidation.errors.push(`${subFieldPrefix}: Missing or invalid 'label' field (required string)`);
+                                    }
+
+                                    if (!subField.type || typeof subField.type !== 'string') {
+                                        uiValidation.valid = false;
+                                        uiValidation.errors.push(`${subFieldPrefix}: Missing or invalid 'type' field (required string)`);
+                                    } else {
+                                        if (!validTypes.includes(subField.type)) {
+                                            uiValidation.valid = false;
+                                            uiValidation.errors.push(`${subFieldPrefix}: Invalid type '${subField.type}'. Valid types are: ${validTypes.join(', ')}`);
+                                        }
+
+                                        // Validate enum subField
+                                        if (subField.type === 'enum') {
+                                            if (!subField.enumValues || !Array.isArray(subField.enumValues) || subField.enumValues.length === 0) {
+                                                uiValidation.valid = false;
+                                                uiValidation.errors.push(`${subFieldPrefix}: type 'enum' requires a non-empty 'enumValues' array`);
+                                            }
+                                        }
+
+                                        // Recursive validation for nested arrays
+                                        if (subField.type === 'array') {
+                                            if (!subField.subFields || !Array.isArray(subField.subFields) || subField.subFields.length === 0) {
+                                                uiValidation.valid = false;
+                                                uiValidation.errors.push(`${subFieldPrefix}: type 'array' requires a non-empty 'subFields' array`);
+                                            } else {
+                                                validateSubFields(subField.subFields, subFieldPrefix);
+                                            }
+                                        }
+                                    }
+                                });
+                            };
+
+                            validateSubFields(component.subFields, componentPrefix);
                         }
                     }
 
@@ -461,7 +518,7 @@ Use when results need formatting or transformation:
         "inputComponents": [{
             "key": "userInput.field",
             "label": "Label",
-            "type": "string|number|boolean|enum|text|csv",
+            "type": "string|number|boolean|enum|text|csv|array",
             "required": true
         }],
         "outputComponents": [{
@@ -477,9 +534,49 @@ Use when results need formatting or transformation:
 
 ### Input Components (CRITICAL)
 Every userInput.* parameter MUST have a corresponding UI component:
-- **Types**: string, text (multi-line), number, boolean, enum (with enumValues), csv (with expectedColumns)
+- **Types**: string, text (multi-line), number, boolean, enum (with enumValues), csv (with expectedColumns), array (with subFields)
 - **ONLY create for base fields**, NOT array operations (userInput.data[*].field)
 - **Example**: userInput.csvData needs UI, but userInput.csvData[*].email does NOT
+
+### Array Type (Repeatable Subforms)
+For repeatable form sections where users need to input multiple items:
+- **Type**: "array"
+- **subFields**: Array of inputComponents (supports all types, including nested arrays)
+- **Required**: true/false for the array itself
+- **Minimum items**: 1 (hardcoded, users can't remove the last item)
+
+Example - Survey questions:
+\`\`\`json
+{
+  "key": "userInput.questions",
+  "label": "Survey Questions",
+  "type": "array",
+  "required": true,
+  "subFields": [
+    {
+      "key": "questionText",
+      "label": "Question",
+      "type": "text",
+      "required": true
+    },
+    {
+      "key": "answerType",
+      "label": "Answer Type",
+      "type": "enum",
+      "enumValues": ["Multiple Choice", "Text", "Rating"],
+      "required": true
+    },
+    {
+      "key": "options",
+      "label": "Options (comma separated)",
+      "type": "string",
+      "required": false
+    }
+  ]
+}
+\`\`\`
+
+Result: \`[{questionText: "Q1", answerType: "Multiple Choice", options: "A,B,C"}, {questionText: "Q2", answerType: "Text", options: ""}]\`
 
 ### Output Components
 - **dataCard**: Single object results

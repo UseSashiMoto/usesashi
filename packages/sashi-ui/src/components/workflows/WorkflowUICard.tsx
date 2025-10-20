@@ -126,6 +126,25 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
   };
 
   // Form field validation
+  // Recursive helper to validate array items
+  const validateArrayItem = (item: any, subFields: WorkflowUIComponent[]): boolean => {
+    return subFields.every((subField) => {
+      if (subField.required) {
+        const subValue = item[subField.key];
+        if (subField.type === 'array') {
+          // Recursive validation for nested arrays
+          return (
+            Array.isArray(subValue) &&
+            subValue.length >= 1 &&
+            subValue.every((subItem: any) => validateArrayItem(subItem, subField.subFields || []))
+          );
+        }
+        return subValue !== undefined && subValue !== '' && subValue !== null;
+      }
+      return true;
+    });
+  };
+
   const isFormValid = () => {
     // Check if we have the new UI format with inputComponents
     if (workflow.ui?.inputComponents) {
@@ -134,6 +153,15 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
           // Extract the key from userInput.* format (e.g., "userInput.userId" -> "userId")
           const fieldKey = field.key.startsWith('userInput.') ? field.key.substring('userInput.'.length) : field.key;
           const value = formData[fieldKey];
+
+          // Handle array fields
+          if (field.type === 'array') {
+            if (!Array.isArray(value) || value.length < 1) {
+              return false;
+            }
+            // Validate each array item's subfields recursively
+            return value.every((item: any) => validateArrayItem(item, field.subFields || []));
+          }
 
           // Handle CSV fields specifically
           if (field.type === 'csv') {
@@ -289,6 +317,205 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
             )}
           </div>
         )}
+      </div>
+    );
+  };
+
+  // Render array field with repeatable subforms
+  const renderArrayField = (field: WorkflowUIComponent) => {
+    const formDataKey = field.key.startsWith('userInput.') ? field.key.substring('userInput.'.length) : field.key;
+
+    // Initialize with at least one empty item (hardcoded minimum of 1)
+    const arrayData = formData[formDataKey] || [{}];
+
+    const addItem = () => {
+      const newArrayData = [...arrayData, {}];
+      handleInputChange(formDataKey, newArrayData);
+    };
+
+    const removeItem = (index: number) => {
+      // Enforce minimum of 1 item
+      if (arrayData.length > 1) {
+        const newArrayData = arrayData.filter((_: any, i: number) => i !== index);
+        handleInputChange(formDataKey, newArrayData);
+      }
+    };
+
+    const updateItem = (index: number, itemKey: string, value: any) => {
+      const newArrayData = [...arrayData];
+      newArrayData[index] = { ...newArrayData[index], [itemKey]: value };
+      handleInputChange(formDataKey, newArrayData);
+    };
+
+    // Recursive function to render any subfield type
+    const renderSubField = (subField: WorkflowUIComponent, value: any, onChange: (value: any) => void) => {
+      switch (subField.type) {
+        case 'string':
+          return (
+            <Input
+              type="text"
+              placeholder={subField.label}
+              value={value || ''}
+              onChange={(e) => onChange(e.target.value)}
+              required={subField.required}
+            />
+          );
+        case 'number':
+          return (
+            <Input
+              type="number"
+              placeholder={subField.label}
+              value={value || ''}
+              onChange={(e) => onChange(parseFloat(e.target.value))}
+              required={subField.required}
+            />
+          );
+        case 'boolean':
+          return (
+            <div className="flex items-center space-x-2">
+              <Switch
+                checked={!!value}
+                onCheckedChange={(checked) => onChange(checked)}
+                id={`switch-${subField.key}`}
+              />
+              <Label htmlFor={`switch-${subField.key}`}>{value ? 'Enabled' : 'Disabled'}</Label>
+            </div>
+          );
+        case 'enum':
+          return (
+            <Select value={value || ''} onValueChange={(val) => onChange(val)}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder={subField.label} />
+              </SelectTrigger>
+              <SelectContent
+                position="popper"
+                side="bottom"
+                align="start"
+                sideOffset={4}
+                className="z-[9999] max-h-[200px] overflow-y-auto"
+              >
+                {subField.enumValues?.map((enumValue: string) => (
+                  <SelectItem key={enumValue} value={enumValue}>
+                    {enumValue}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          );
+        case 'text':
+          return (
+            <Textarea
+              placeholder={subField.label}
+              value={value || ''}
+              onChange={(e) => onChange(e.target.value)}
+              required={subField.required}
+            />
+          );
+        case 'csv':
+          // For CSV in arrays, we need to handle it specially
+          return (
+            <Textarea
+              placeholder={`Paste CSV data here...`}
+              value={value || ''}
+              onChange={(e) => onChange(e.target.value)}
+              required={subField.required}
+              className="min-h-[120px] font-mono text-sm"
+            />
+          );
+        case 'array':
+          // Recursive array rendering
+          const nestedArrayData = value || [{}];
+          return (
+            <div className="space-y-2 pl-4 border-l-2 border-gray-200">
+              {nestedArrayData.map((nestedItem: any, nestedIndex: number) => (
+                <div key={nestedIndex} className="border border-gray-200 rounded-md p-3 space-y-2 bg-gray-50">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-xs font-medium">Item {nestedIndex + 1}</span>
+                    {nestedArrayData.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          const updatedNestedArray = nestedArrayData.filter((_: any, i: number) => i !== nestedIndex);
+                          onChange(updatedNestedArray);
+                        }}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </div>
+                  {subField.subFields?.map((nestedSubField) => {
+                    const nestedValue = nestedItem[nestedSubField.key] || '';
+                    return (
+                      <div key={nestedSubField.key} className="space-y-1">
+                        <Label className="text-xs">
+                          {nestedSubField.label}
+                          {nestedSubField.required && <span className="text-red-500 ml-1">*</span>}
+                        </Label>
+                        {renderSubField(nestedSubField, nestedValue, (newValue) => {
+                          const updatedNestedArray = [...nestedArrayData];
+                          updatedNestedArray[nestedIndex] = {
+                            ...updatedNestedArray[nestedIndex],
+                            [nestedSubField.key]: newValue,
+                          };
+                          onChange(updatedNestedArray);
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  onChange([...nestedArrayData, {}]);
+                }}
+                className="w-full"
+              >
+                + Add Item
+              </Button>
+            </div>
+          );
+        default:
+          return <div className="text-xs text-red-500">Invalid subfield type: {subField.type}</div>;
+      }
+    };
+
+    return (
+      <div className="space-y-3">
+        {arrayData.map((item: any, index: number) => (
+          <div key={index} className="border border-gray-300 rounded-md p-4 space-y-3 bg-white">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-sm font-medium">Item {index + 1}</span>
+              {arrayData.length > 1 && (
+                <Button type="button" variant="ghost" size="sm" onClick={() => removeItem(index)}>
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+
+            {field.subFields?.map((subField) => {
+              const subFieldValue = item[subField.key] || '';
+
+              return (
+                <div key={subField.key} className="space-y-2">
+                  <Label>
+                    {subField.label}
+                    {subField.required && <span className="text-red-500 ml-1">*</span>}
+                  </Label>
+                  {renderSubField(subField, subFieldValue, (value) => updateItem(index, subField.key, value))}
+                </div>
+              );
+            })}
+          </div>
+        ))}
+
+        <Button type="button" variant="outline" onClick={addItem} className="w-full">
+          + Add Item
+        </Button>
       </div>
     );
   };
@@ -758,11 +985,13 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
         );
       case 'csv':
         return renderCSVField(field);
+      case 'array':
+        return renderArrayField(field);
       default:
         return (
           <div className="rounded-md border border-red-500 bg-red-50 p-3 text-red-700">
             <p className="font-semibold">Invalid input type: "{fieldType}"</p>
-            <p className="text-sm mt-1">Valid types are: string, number, boolean, enum, text, csv</p>
+            <p className="text-sm mt-1">Valid types are: string, number, boolean, enum, text, csv, array</p>
           </div>
         );
     }
