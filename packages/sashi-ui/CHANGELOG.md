@@ -1,5 +1,11 @@
 # @sashi/ui
 
+## 9.4.0
+
+### Minor Changes
+
+- 93acd59: improve workflow instruction confidence
+
 ## 9.3.0
 
 ### Minor Changes
