@@ -469,4 +469,7 @@ describe('Tool Schema Generation', () => {
             expect(schema.tools.some(tool => tool.function.name === "hidden_function")).toBe(false);
         });
     });
+
+
+
 });
