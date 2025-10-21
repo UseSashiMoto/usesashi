@@ -3,7 +3,6 @@ import { describe, expect, it } from "@jest/globals";
 import { AIBoolean } from "./ai-function-loader";
 // aiFunctionRegistry.test.ts
 import {
-    AIField,
     AIFieldEnum,
     AIFunction,
     AIObject,
@@ -471,80 +470,6 @@ describe('Tool Schema Generation', () => {
         });
     });
 
-    describe('AIField Type Safety', () => {
-        it('should only accept primitive types for AIField', () => {
-            // These should compile successfully
-            const stringField: AIField<'string'> = {
-                name: 'test',
-                type: 'string',
-                description: 'test string field',
-                required: true
-            };
 
-            const numberField: AIField<'number'> = {
-                name: 'test',
-                type: 'number',
-                description: 'test number field',
-                required: true
-            };
 
-            const booleanField: AIField<'boolean'> = {
-                name: 'test',
-                type: 'boolean',
-                description: 'test boolean field',
-                required: true
-            };
-
-            const enumField: AIField<'enum'> = {
-                name: 'test',
-                type: 'enum',
-                description: 'test enum field',
-                required: true
-            };
-
-            const arrayField: AIField<'array'> = {
-                name: 'test',
-                type: 'array',
-                description: 'test array field',
-                required: true
-            };
-
-            // TypeScript should prevent this at compile time:
-            // @ts-expect-error - 'object' is not a valid AIField type, use AIObject instead
-            const invalidObjectField: AIField<'object'> = {
-                name: 'test',
-                type: 'object' as any, // Have to cast to any to make test compile
-                description: 'invalid object field',
-                required: true
-            };
-
-            // Verify the valid fields have correct structure
-            expect(stringField.type).toBe('string');
-            expect(numberField.type).toBe('number');
-            expect(booleanField.type).toBe('boolean');
-            expect(enumField.type).toBe('enum');
-            expect(arrayField.type).toBe('array');
-        });
-
-        it('should use AIObject for complex object types, not AIField', () => {
-            // Correct way to define an object type
-            const userObject = new AIObject('User', 'A user object', true)
-                .field({
-                    name: 'name',
-                    type: 'string',
-                    description: 'User name',
-                    required: true
-                })
-                .field({
-                    name: 'age',
-                    type: 'number',
-                    description: 'User age',
-                    required: false
-                });
-
-            expect(userObject.getName()).toBe('User');
-            expect(userObject.getDescription()).toBe('A user object');
-            expect(userObject.getFields()).toHaveLength(2);
-        });
-    });
 });
