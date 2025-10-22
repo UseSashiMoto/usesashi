@@ -40,23 +40,35 @@ const processMarkdown = (content: string): string => {
   // Process code blocks first (multiline)
   processed = processed.replace(/```(\w+)?\n([\s\S]*?)\n```/g, (match, language, code) => {
     const highlightedCode = highlightCode(code, language);
-    return `<pre class="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg border overflow-x-auto"><code class="text-sm font-mono">${highlightedCode}</code></pre>`;
+    return `<pre class="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg border border-gray-300 dark:border-gray-700 overflow-x-auto"><code class="text-sm font-mono text-gray-900 dark:text-gray-100">${highlightedCode}</code></pre>`;
   });
 
   // Process inline code
   processed = processed.replace(
     /`([^`]+)`/g,
-    '<code class="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono border">$1</code>'
+    '<code class="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100">$1</code>'
   );
 
   // Process headers
-  processed = processed.replace(/^### (.*$)/gm, '<h3 class="text-lg font-bold mb-2 mt-4">$1</h3>');
-  processed = processed.replace(/^## (.*$)/gm, '<h2 class="text-xl font-bold mb-3 mt-4">$1</h2>');
-  processed = processed.replace(/^# (.*$)/gm, '<h1 class="text-2xl font-bold mb-4 mt-4">$1</h1>');
+  processed = processed.replace(
+    /^### (.*$)/gm,
+    '<h3 class="text-lg font-bold mb-2 mt-4 text-gray-900 dark:text-gray-100">$1</h3>'
+  );
+  processed = processed.replace(
+    /^## (.*$)/gm,
+    '<h2 class="text-xl font-bold mb-3 mt-4 text-gray-900 dark:text-gray-100">$1</h2>'
+  );
+  processed = processed.replace(
+    /^# (.*$)/gm,
+    '<h1 class="text-2xl font-bold mb-4 mt-4 text-gray-900 dark:text-gray-100">$1</h1>'
+  );
 
   // Process bold and italic
-  processed = processed.replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold">$1</strong>');
-  processed = processed.replace(/\*(.*?)\*/g, '<em class="italic">$1</em>');
+  processed = processed.replace(
+    /\*\*(.*?)\*\*/g,
+    '<strong class="font-semibold text-gray-900 dark:text-gray-100">$1</strong>'
+  );
+  processed = processed.replace(/\*(.*?)\*/g, '<em class="italic text-gray-800 dark:text-gray-200">$1</em>');
 
   // Process links
   processed = processed.replace(
@@ -65,11 +77,11 @@ const processMarkdown = (content: string): string => {
   );
 
   // Process lists
-  processed = processed.replace(/^- (.*$)/gm, '<li class="ml-4">$1</li>');
+  processed = processed.replace(/^- (.*$)/gm, '<li class="ml-4 text-gray-800 dark:text-gray-200">$1</li>');
   processed = processed.replace(/(<li[\s\S]*?<\/li>)/g, '<ul class="list-disc list-inside space-y-1 mb-2">$1</ul>');
 
   // Process numbered lists
-  processed = processed.replace(/^\d+\. (.*$)/gm, '<li class="ml-4">$1</li>');
+  processed = processed.replace(/^\d+\. (.*$)/gm, '<li class="ml-4 text-gray-800 dark:text-gray-200">$1</li>');
 
   // Process blockquotes
   processed = processed.replace(
@@ -78,12 +90,12 @@ const processMarkdown = (content: string): string => {
   );
 
   // Process line breaks (keep double line breaks as paragraphs)
-  processed = processed.replace(/\n\n/g, '</p><p class="mb-2">');
+  processed = processed.replace(/\n\n/g, '</p><p class="mb-2 text-gray-800 dark:text-gray-200">');
   processed = processed.replace(/\n/g, '<br>');
 
   // Wrap in paragraph if doesn't start with a block element
   if (!processed.match(/^<(h[1-6]|pre|ul|ol|blockquote|div)/)) {
-    processed = `<p class="mb-2">${processed}</p>`;
+    processed = `<p class="mb-2 text-gray-800 dark:text-gray-200">${processed}</p>`;
   }
 
   return processed;

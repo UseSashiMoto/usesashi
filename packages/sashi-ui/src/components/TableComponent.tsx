@@ -1,4 +1,3 @@
-
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { motion } from 'framer-motion';
 import * as React from 'react';
@@ -11,7 +10,8 @@ interface TableProps {
 }
 
 export const TableComponent: React.FC<TableProps> = ({ data, caption }) => {
-  if (!data || !data.data || data.data.length === 0) return <p>No data available.</p>;
+  if (!data || !data.data || data.data.length === 0)
+    return <p className="text-gray-800 dark:text-gray-200">No data available.</p>;
 
   const tableData = data.data;
   const headers = Object.keys(tableData[0]);

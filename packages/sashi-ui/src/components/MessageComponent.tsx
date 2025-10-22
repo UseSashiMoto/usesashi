@@ -258,7 +258,7 @@ const MessageComponent = React.memo<MessageProps>(
         </div>
       );
     } else {
-      visualizationComponent = <p>Invalid content type</p>;
+      visualizationComponent = <p className="text-gray-800 dark:text-gray-200">Invalid content type</p>;
     }
 
     return (

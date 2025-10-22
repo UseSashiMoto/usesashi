@@ -426,9 +426,12 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
           // Recursive array rendering
           const nestedArrayData = value || [{}];
           return (
-            <div className="space-y-2 pl-4 border-l-2 border-gray-200">
+            <div className="space-y-2 pl-4 border-l-2 border-gray-200 dark:border-gray-700">
               {nestedArrayData.map((nestedItem: any, nestedIndex: number) => (
-                <div key={nestedIndex} className="border border-gray-200 rounded-md p-3 space-y-2 bg-gray-50">
+                <div
+                  key={nestedIndex}
+                  className="border border-gray-200 dark:border-gray-700 rounded-md p-3 space-y-2 bg-gray-50 dark:bg-gray-800"
+                >
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-xs font-medium">Item {nestedIndex + 1}</span>
                     {nestedArrayData.length > 1 && (
@@ -487,7 +490,10 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
     return (
       <div className="space-y-3">
         {arrayData.map((item: any, index: number) => (
-          <div key={index} className="border border-gray-300 rounded-md p-4 space-y-3 bg-white">
+          <div
+            key={index}
+            className="border border-gray-300 dark:border-gray-700 rounded-md p-4 space-y-3 bg-white dark:bg-gray-800"
+          >
             <div className="flex justify-between items-center mb-2">
               <span className="text-sm font-medium">Item {index + 1}</span>
               {arrayData.length > 1 && (
