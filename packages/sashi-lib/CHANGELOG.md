@@ -1,5 +1,11 @@
 # sashi-lib
 
+## 9.5.0
+
+### Minor Changes
+
+- 9057724: dark mode changes
+
 ## 9.4.0
 
 ### Minor Changes
