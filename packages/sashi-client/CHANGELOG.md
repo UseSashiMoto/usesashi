@@ -1,5 +1,11 @@
 # @sashi/client
 
+## 9.6.0
+
+### Minor Changes
+
+- 2213590: update because breaking
+
 ## 9.5.0
 
 ### Minor Changes
