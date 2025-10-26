@@ -1,5 +1,11 @@
 # @sashi/ui
 
+## 9.6.0
+
+### Minor Changes
+
+- 1a4d37c: fixed the scroll issue and major homepage rewrite including message cache, multi line input, etc.
+
 ## 9.5.0
 
 ### Minor Changes
