@@ -1,15 +1,14 @@
-import { Button } from '@/components/Button';
 import { AutoExpandingTextarea } from '@/components/AutoExpandingTextarea';
-import { MessageList } from '@/components/MessageList';
+import { Button } from '@/components/Button';
 import { Layout } from '@/components/Layout';
-import { sendExecuteWorkflow } from '@/services/workflow.service';
+import { MessageList } from '@/components/MessageList';
+import { GeneralResponse, PayloadObject } from '@/models/payload';
+import useAppStore from '@/store/chat-store';
+import { MessageItem } from '@/store/models';
 import { PaperPlaneIcon } from '@radix-ui/react-icons';
 import axios from 'axios';
 import { X } from 'lucide-react';
-import React, { useEffect, useState, useRef, useCallback } from 'react';
-import useAppStore from '@/store/chat-store';
-import { MessageItem } from '@/store/models';
-import { GeneralResponse, PayloadObject } from '@/models/payload';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 function getUniqueId() {
   return Math.random().toString(36).substring(2) + new Date().getTime().toString(36);
@@ -54,12 +53,7 @@ export const HomePage = () => {
   }, [clearMessages]);
 
   // Send message to API
-  const sendMessage = async (payload: {
-    tools?: any[];
-    inquiry?: string;
-    previous: any;
-    type: string;
-  }) => {
+  const sendMessage = async (payload: { tools?: any[]; inquiry?: string; previous: any; type: string }) => {
     console.log('🚀 [DEBUG] Sending request to:', `${apiUrl}/chat`);
     console.log('📦 [DEBUG] Payload:', JSON.stringify(payload, null, 2));
 
@@ -139,7 +133,6 @@ export const HomePage = () => {
 
       setMessageItems((prev) => [...prev, newAssistantMessage]);
       addMessage(newAssistantMessage);
-
     } catch (error: any) {
       clearTimeout(timeoutWarning);
       setLoadingTimeout(false);
@@ -227,9 +220,7 @@ export const HomePage = () => {
           <MessageList
             messages={messageItems}
             isLoading={loading}
-            loadingContent={
-              loadingTimeout ? '⏱️ This is taking longer than usual...' : undefined
-            }
+            loadingContent={loadingTimeout ? '⏱️ This is taking longer than usual...' : undefined}
             onRetry={handleRetry}
           />
         </div>
@@ -265,23 +256,12 @@ export const HomePage = () => {
               />
 
               {/* Send button */}
-              <Button
-                type="submit"
-                disabled={loading || !inputText.trim()}
-                className="flex-shrink-0"
-                size="sm"
-              >
+              <Button type="submit" disabled={loading || !inputText.trim()} className="flex-shrink-0" size="sm">
                 <PaperPlaneIcon width={20} height={20} />
               </Button>
 
               {/* Clear button */}
-              <Button
-                type="button"
-                onClick={handleClearMessages}
-                variant="ghost"
-                className="flex-shrink-0"
-                size="sm"
-              >
+              <Button type="button" onClick={handleClearMessages} variant="ghost" className="flex-shrink-0" size="sm">
                 <X width={20} height={20} />
               </Button>
             </div>
@@ -296,4 +276,3 @@ export const HomePage = () => {
     </Layout>
   );
 };
-
