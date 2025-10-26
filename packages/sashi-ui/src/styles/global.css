@@ -103,12 +103,22 @@
 }
 
 @layer base {
+  html {
+    @apply overflow-hidden;
+    height: 100%;
+  }
   * {
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground overflow-hidden;
     font-feature-settings: 'rlig' 1, 'calt' 1;
+    height: 100%;
+    position: fixed;
+    width: 100%;
+  }
+  #__next {
+    height: 100%;
   }
 }
 
@@ -159,4 +169,65 @@
 
 .animate-pulse-green {
   animation: pulse-green 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Prevent unwanted scroll-to-top on input focus */
+input,
+textarea,
+select,
+button {
+  scroll-margin-top: 100px;
+  scroll-margin-bottom: 100px;
+}
+
+/* Smooth but controlled scrolling */
+* {
+  scroll-behavior: auto;
+}
+
+/* Prevent body scroll when modals/dropdowns are open */
+body.modal-open {
+  overflow: hidden;
+}
+
+/* Ensure select dropdowns don't cause page jump */
+[data-radix-popper-content-wrapper] {
+  z-index: 9999 !important;
+}
+
+/* Prevent scroll anchoring issues */
+* {
+  overflow-anchor: none;
+}
+
+/* Auto-expanding textarea styling */
+textarea {
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+/* Custom scrollbar for textarea */
+textarea::-webkit-scrollbar {
+  width: 6px;
+}
+
+textarea::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+textarea::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+textarea::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.dark textarea::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.dark textarea::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
 }

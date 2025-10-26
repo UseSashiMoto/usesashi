@@ -1,5 +1,6 @@
 import {
     AIArray,
+    AIFieldEnum,
     AIFunction,
     AIObject,
     registerFunctionIntoAI
@@ -128,7 +129,7 @@ export const removeUser = async (id: number) => {
 export const updateUser = async (id: number, user: Partial<User>) => {
     const existingUser = myDB.getById(id)
     if (!existingUser) throw new Error(`User with id ${id} not found`)
-    
+
     const updatedUser = { ...existingUser.data, ...user }
     myDB.update(id, updatedUser)
     return myDB.getById(id)
@@ -370,7 +371,38 @@ const GetActiveUsersFunction = new AIFunction("get_active_users", "retrieve all 
         return activeUsers.map((user) => ({ ...user.data, id: user.id }))
     })
 
+const ChangeUserRoleFunction = new AIFunction(
+    "change_user_type",
+    "change a user type"
+)
+    .args(
+        {
+            name: "userId",
+            description: "a users id",
+            type: "string",
+            required: true,
+        },
+        new AIFieldEnum(
+            "type",
+            "the type to change the user to",
+            ["CASE_MANAGER", "COMMUNITY_ENGAGEMENT"],
+            true
+        )
+    )
+    .returns({
+        name: "userid",
+        description: "the user id",
+        type: "string",
+    })
+    .implement(async (userId: string, role: string) => {
+        // Implementation to change the user's role
+        console.log("Changing role for user", userId, "to", role)
+        return userId
+    })
+
+
 // Register all functions
+registerFunctionIntoAI("change_user_type", ChangeUserRoleFunction)
 registerFunctionIntoAI("get_user_by_id", GetUserByIdFunction)
 registerFunctionIntoAI("get_all_users", GetAllUsersFunction)
 registerFunctionIntoAI("create_user", CreateUserFunction)
