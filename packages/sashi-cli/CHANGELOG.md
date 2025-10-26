@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.7.0
+
+### Minor Changes
+
+- 1a4d37c: fixed the scroll issue and major homepage rewrite including message cache, multi line input, etc.
+
 ## 3.6.0
 
 ### Minor Changes
