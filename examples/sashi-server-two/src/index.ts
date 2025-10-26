@@ -79,8 +79,7 @@ app.use(
     "/sashi",
     createMiddleware({
         apiSecretKey: process.env.HUB_API_SECRET_KEY,
-        openAIKey: process.env.OPENAI_API_KEY || '',
-        hubUrl: process.env.HUB_URL || 'http://localhost:3050',
+        openAIKey: process.env.OPENAI_API_KEY || ''
     })
 )
 

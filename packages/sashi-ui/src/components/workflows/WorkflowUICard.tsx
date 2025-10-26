@@ -239,6 +239,10 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
           }}
           required={field.required}
           className="min-h-[120px] font-mono text-sm"
+          onFocus={(e) => {
+            e.preventDefault();
+            e.target.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+          }}
         />
 
         {/* Validation messages */}
@@ -358,6 +362,10 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
               value={value || ''}
               onChange={(e) => onChange(e.target.value)}
               required={subField.required}
+              onFocus={(e) => {
+                e.preventDefault();
+                e.target.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+              }}
             />
           );
         case 'number':
@@ -368,6 +376,10 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
               value={value || ''}
               onChange={(e) => onChange(parseFloat(e.target.value))}
               required={subField.required}
+              onFocus={(e) => {
+                e.preventDefault();
+                e.target.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+              }}
             />
           );
         case 'boolean':
@@ -383,8 +395,24 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
           );
         case 'enum':
           return (
-            <Select value={value || ''} onValueChange={(val) => onChange(val)}>
-              <SelectTrigger className="w-full">
+            <Select
+              value={value || ''}
+              onValueChange={(val) => onChange(val)}
+              onOpenChange={(open) => {
+                if (open) {
+                  document.body.style.overflow = 'hidden';
+                } else {
+                  document.body.style.overflow = '';
+                }
+              }}
+            >
+              <SelectTrigger
+                className="w-full"
+                onFocus={(e) => {
+                  e.preventDefault();
+                  e.currentTarget.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+                }}
+              >
                 <SelectValue placeholder={subField.label} />
               </SelectTrigger>
               <SelectContent
@@ -393,6 +421,9 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
                 align="start"
                 sideOffset={4}
                 className="z-[9999] max-h-[200px] overflow-y-auto"
+                onCloseAutoFocus={(e) => {
+                  e.preventDefault();
+                }}
               >
                 {subField.enumValues?.map((enumValue: string) => (
                   <SelectItem key={enumValue} value={enumValue}>
@@ -409,6 +440,10 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
               value={value || ''}
               onChange={(e) => onChange(e.target.value)}
               required={subField.required}
+              onFocus={(e) => {
+                e.preventDefault();
+                e.target.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+              }}
             />
           );
         case 'csv':
@@ -420,6 +455,10 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
               onChange={(e) => onChange(e.target.value)}
               required={subField.required}
               className="min-h-[120px] font-mono text-sm"
+              onFocus={(e) => {
+                e.preventDefault();
+                e.target.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+              }}
             />
           );
         case 'array':
@@ -934,6 +973,10 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
             value={fieldValue}
             onChange={(e) => handleInputChange(formDataKey, e.target.value)}
             required={fieldRequired}
+            onFocus={(e) => {
+              e.preventDefault();
+              e.target.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+            }}
           />
         );
       case 'number':
@@ -944,6 +987,10 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
             value={fieldValue}
             onChange={(e) => handleInputChange(formDataKey, parseFloat(e.target.value))}
             required={fieldRequired}
+            onFocus={(e) => {
+              e.preventDefault();
+              e.target.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+            }}
           />
         );
       case 'boolean':
@@ -960,8 +1007,25 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
       case 'enum':
         return (
           <div className="relative overflow-visible">
-            <Select value={fieldValue} onValueChange={(value) => handleInputChange(formDataKey, value)}>
-              <SelectTrigger className="w-full">
+            <Select
+              value={fieldValue}
+              onValueChange={(value) => handleInputChange(formDataKey, value)}
+              onOpenChange={(open) => {
+                if (open) {
+                  // Prevent body scroll when dropdown opens
+                  document.body.style.overflow = 'hidden';
+                } else {
+                  document.body.style.overflow = '';
+                }
+              }}
+            >
+              <SelectTrigger
+                className="w-full"
+                onFocus={(e) => {
+                  e.preventDefault();
+                  e.currentTarget.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+                }}
+              >
                 <SelectValue placeholder={fieldLabel} />
               </SelectTrigger>
               <SelectContent
@@ -970,6 +1034,9 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
                 align="start"
                 sideOffset={4}
                 className="z-[9999] max-h-[200px] overflow-y-auto"
+                onCloseAutoFocus={(e) => {
+                  e.preventDefault();
+                }}
               >
                 {fieldEnumValues.map((value: string) => (
                   <SelectItem key={value} value={value}>
@@ -987,6 +1054,10 @@ export const WorkflowUICard: React.FC<WorkflowUICardProps> = ({
             value={fieldValue}
             onChange={(e) => handleInputChange(formDataKey, e.target.value)}
             required={fieldRequired}
+            onFocus={(e) => {
+              e.preventDefault();
+              e.target.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+            }}
           />
         );
       case 'csv':
