@@ -1,5 +1,11 @@
 # sashi-lib
 
+## 9.7.0
+
+### Minor Changes
+
+- cbecb5c: made to changes to embedding the sashi-ui
+
 ## 9.6.0
 
 ### Minor Changes
