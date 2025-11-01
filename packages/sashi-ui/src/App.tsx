@@ -6,6 +6,7 @@ import { Toaster } from './components/ui/toaster';
 import { AuditLogsPage } from './pages/AuditLogsPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { HomePage } from './pages/HomePage';
+import { NotFoundPage } from './pages/NotFoundPage';
 import { SettingPage } from './pages/SettingPage';
 import useAppStore from './store/chat-store';
 import { HEADER_SESSION_TOKEN } from './utils/contants';
@@ -43,7 +44,8 @@ type PagesProps = {
   sessionToken: string;
 };
 export const App = ({ apiUrl: oldApiUrl, sessionToken: initialSessionToken, baseName }: PagesProps) => {
-  const pathName = baseName || oldApiUrl.replace(/^https?:\/\/[^\/]+/, '').replace(/^[^\/]+/, '');
+  const pathName = baseName ? baseName : oldApiUrl.replace(/^https?:\/\/[^\/]+/, '').replace(/^[^\/]+/, '') + '/bot';
+
   const apiUrl = useAppStore((state) => state.apiUrl);
   const setAPIUrl = useAppStore((state) => state.setAPIUrl);
   const sessionToken = useAppStore((state) => state.sessionToken);
@@ -177,6 +179,10 @@ export const App = ({ apiUrl: oldApiUrl, sessionToken: initialSessionToken, base
     return null;
   }
 
+  // Compute and validate router base name against current location
+  const routerBaseName = `${pathName}`;
+  const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
+
   const router = createBrowserRouter(
     [
       {
@@ -195,9 +201,13 @@ export const App = ({ apiUrl: oldApiUrl, sessionToken: initialSessionToken, base
         path: '/audit-logs',
         element: <AuditLogsPage />,
       },
+      {
+        path: '*',
+        element: <NotFoundPage variant="routeNotFound" currentPath={pathname} />,
+      },
     ],
     {
-      basename: `${pathName}/bot`,
+      basename: routerBaseName,
     }
   );
 
