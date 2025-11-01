@@ -43,7 +43,8 @@ type PagesProps = {
   sessionToken: string;
 };
 export const App = ({ apiUrl: oldApiUrl, sessionToken: initialSessionToken, baseName }: PagesProps) => {
-  const pathName = baseName || oldApiUrl.replace(/^https?:\/\/[^\/]+/, '').replace(/^[^\/]+/, '');
+  const pathName = baseName ? baseName : oldApiUrl.replace(/^https?:\/\/[^\/]+/, '').replace(/^[^\/]+/, '') + '/bot';
+
   const apiUrl = useAppStore((state) => state.apiUrl);
   const setAPIUrl = useAppStore((state) => state.setAPIUrl);
   const sessionToken = useAppStore((state) => state.sessionToken);
@@ -197,7 +198,7 @@ export const App = ({ apiUrl: oldApiUrl, sessionToken: initialSessionToken, base
       },
     ],
     {
-      basename: `${pathName}/bot`,
+      basename: `${pathName}`,
     }
   );
 
