@@ -11,7 +11,7 @@ function getBaseUrl() {
 const Pages = () => {
     console.log("connecting to api at", getBaseUrl())
     return (
-        <div>
+        <div className="h-full">
             <SashiApp
                 sessionToken="userone-session-token"
                 apiUrl={getBaseUrl()}

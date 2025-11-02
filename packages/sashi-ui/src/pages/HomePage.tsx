@@ -213,9 +213,9 @@ export const HomePage = () => {
   return (
     <Layout>
       {/* Main container - full height with flexbox */}
-      <div className="flex flex-col h-screen bg-white dark:bg-zinc-900 overflow-hidden">
-        {/* Content area - takes remaining space */}
-        <div className="flex-1 flex flex-col min-h-0 justify-center">
+      <div className="flex flex-col h-full bg-white dark:bg-zinc-900 relative">
+        {/* Content area - takes remaining space with scrolling */}
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
           {/* Message list - handles its own scrolling */}
           <MessageList
             messages={messageItems}
@@ -225,21 +225,21 @@ export const HomePage = () => {
           />
         </div>
 
-        {/* Fixed input area at bottom */}
-        <div className="flex-shrink-0 border-t dark:border-zinc-800 bg-white dark:bg-zinc-900">
-          {/* Debug panel */}
-          {debug && (
-            <div className="px-4 py-2 bg-gray-100 dark:bg-gray-800 text-xs">
-              <div className="max-w-[500px] mx-auto">
-                <div className="font-bold mb-1">🐛 Debug Panel</div>
-                <div>API: {apiUrl || 'Not configured'}</div>
-                <div>Connected: {connectedToHub ? 'Yes' : 'No'}</div>
-                <div>Messages: {messageItems.length}</div>
-              </div>
+        {/* Debug panel - absolutely positioned above form, doesn't affect form height */}
+        {debug && (
+          <div className="absolute bottom-[72px] left-0 right-0 px-4 py-2 bg-gray-100 dark:bg-gray-800 text-xs border-t dark:border-zinc-700 z-20">
+            <div className="max-w-[500px] mx-auto">
+              <div className="font-bold mb-1">🐛 Debug Panel</div>
+              <div>API: {apiUrl || 'Not configured'}</div>
+              <div>Connected: {connectedToHub ? 'Yes' : 'No'}</div>
+              <div>Messages: {messageItems.length}</div>
             </div>
-          )}
+          </div>
+        )}
 
-          {/* Input form */}
+        {/* Fixed input area at bottom - only form, no debug panel */}
+        <div className="flex-shrink-0 border-t dark:border-zinc-800 bg-white dark:bg-zinc-900 relative z-10">
+          {/* Input form - only this affects the bottom container height */}
           <form onSubmit={handleSubmit} className="px-4 py-4">
             <div className="max-w-[500px] mx-auto flex gap-2 items-end">
               {/* Textarea */}
@@ -267,11 +267,6 @@ export const HomePage = () => {
             </div>
           </form>
         </div>
-      </div>
-
-      {/* Hidden status for tests */}
-      <div style={{ display: 'none' }} data-testid="connected-status">
-        {connectedToHub ? 'Connected' : 'Not Connected'}
       </div>
     </Layout>
   );

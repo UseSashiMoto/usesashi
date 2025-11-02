@@ -10,7 +10,6 @@ import { ChevronDown, ChevronUp, ExternalLink, Github, History, HomeIcon, Messag
 import React, { useEffect, useMemo, useState, type FC, type PropsWithChildren } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from './Button';
-import { ThemeSwitcher } from './ThemeSwitcher';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { ScrollArea } from './ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
@@ -229,9 +228,9 @@ export const Layout: FC<{} & PropsWithChildren> = ({ children }) => {
 
   return (
     <Toast.Provider swipeDirection="right">
-      <div className="grid xl:grid-cols-[auto,1fr]">
-        <div className="hidden w-64 xl:block">
-          <div className="sticky top-0 isolate flex h-full max-h-screen min-h-screen flex-col justify-between overflow-hidden border-r border-brand-50 px-4 pt-8 pb-4 shadow-sm dark:border-slate-700 dark:bg-black">
+      <div className="grid xl:grid-cols-[auto,1fr] h-full overflow-hidden">
+        <div className="hidden w-64 xl:block h-full">
+          <div className="sticky top-0 isolate flex h-full flex-col justify-between border-r border-brand-50 px-4 pt-8 pb-4 shadow-sm dark:border-slate-700 dark:bg-black overflow-y-auto">
             <svg
               viewBox="0 0 1108 632"
               aria-hidden="true"
@@ -455,14 +454,12 @@ export const Layout: FC<{} & PropsWithChildren> = ({ children }) => {
                   </Link>
                 )}
               </div>
-
-              <ThemeSwitcher />
             </div>
           </div>
         </div>
 
         <div className="bg-white  dark:bg-[#121212]">
-          <div className="max-w-[1280px]">{children}</div>
+          <div className="max-w-[1280px] h-full">{children}</div>
         </div>
       </div>
       <Toast.Viewport className="fixed bottom-0 right-0 z-[2147483647] m-0 flex max-w-[100vw] list-none flex-col gap-2 p-6 outline-none" />
