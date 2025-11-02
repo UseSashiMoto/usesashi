@@ -212,10 +212,10 @@ export const App = ({ apiUrl: oldApiUrl, sessionToken: initialSessionToken, base
   );
 
   return (
-    <>
+    <div className="h-full">
       <RouterProvider router={router} />
       <Toaster />
       {debugMode && <DebugOverlay />}
-    </>
+    </div>
   );
 };
